@@ -2,9 +2,35 @@ from typing import Optional, List, Dict, Callable, Union, Type, Any
 from autogen.trace.nodes import MessageNode, Node, trace
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
+import inspect
+
+def trace(fun):
+    if inspect.isclass(fun):
+        if issubclass(fun, ConversableAgent):
+            return trace_ConversableAgent(fun)
+    # it should be a function
+    return trace_operator(fun)
 
 
-def traceAgent(AgentCls):
+def trace_operator(fun):
+    # trace a function
+    # The wrapped function returns a message node
+    assert callable(fun), "fun must be a callable"
+    def wrapper(*args, **kwargs):
+        # call the function with the data
+        result = fun(*args, **kwargs)
+        # wrap the inputs and outputs as Nodes if they're not
+        m_args = (Node(v) for v in args if not isinstance(v, Node))
+        m_kwargs = {k: Node(v) for k, v in kwargs.items() if not isinstance(v, Node)}
+        mapping = inspect.getsource(fun)  # TODO how to describe the mapping and inputs?
+        # get the source code
+        # inspect.getdoc(fun)
+        m_result = MessageNode(result, mapping, args=m_args, kwargs=m_kwargs) if not isinstance(result, MessageNode) else result # TODO
+        return m_result
+    return wrapper
+
+
+def trace_ConversableAgent(AgentCls):
     """ return a decorated Agent class that will automatically learn
         from its experiences"""
 
@@ -106,3 +132,19 @@ def traceAgent(AgentCls):
             raise NotImplementedError
 
     return _Agent
+
+
+
+if __name__=='__main__':
+
+
+    x = 'hello'
+    @trace
+    def test(x):
+        return x+' world'
+
+    y = test(x)
+    print(y)
+    print('Parent', y.parent)
+    print('Children', y.children)
+    print('Level', y._level)
