@@ -10,25 +10,6 @@ import copy
 # from autogen.trace.nodes import Node
 
 
-import inspect
-
-def trace(fun):
-    # trace a function
-    # The wrapped function returns a message node
-    def wrapper(*args, **kwargs):
-        # call the function with the data
-        result = fun(*args, **kwargs)
-        # wrap the inputs and outputs as Nodes if they're not
-        m_args = (Node(v) for v in args if not isinstance(v, Node))
-        m_kwargs = {k: Node(v) for k, v in kwargs.items() if not isinstance(v, Node)}
-        mapping = inspect.getsource(fun)  # TODO how to describe the mapping and inputs?
-        # get the source code
-        # inspect.getdoc(fun)
-        m_result = MessageNode(result, mapping, m_args, m_kwargs) if not isinstance(result, MessageNode) else result # TODO
-        return m_result
-    return wrapper
-
-
 class Registry:
     """ A global registry of all the nodes. """
 
@@ -141,19 +122,3 @@ class MessageNode(Node):
     #         output = Node(attr)
     #         output.register_mapping(f"{output.name}={self.name}.{name}", self)
     #         return attr
-
-
-if __name__=='__main__':
-
-
-    x = Node('hello')
-
-    @trace
-    def test(x):
-        return x+' world'
-
-    y = test(x)
-    print(y)
-    print('Parent', y.parent)
-    print('Children', y.children)
-    print('Level', y._level)
