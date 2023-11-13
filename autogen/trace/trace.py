@@ -1,8 +1,14 @@
-from typing import Optional, List, Dict, Callable, Union, Type, Any
-from autogen.trace.nodes import MessageNode, Node, trace
+from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
+from autogen.trace.nodes import MessageNode, Node, ParameterNode
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
+
+def node(message):
+    # wrap the message as a Node if it's not
+    if isinstance(message, Node):
+        return message
+    return Node(message)
 
 def trace(fun):
     if inspect.isclass(fun):
@@ -20,8 +26,8 @@ def trace_operator(fun):
         # call the function with the data
         result = fun(*args, **kwargs)
         # wrap the inputs and outputs as Nodes if they're not
-        m_args = (Node(v) for v in args if not isinstance(v, Node))
-        m_kwargs = {k: Node(v) for k, v in kwargs.items() if not isinstance(v, Node)}
+        m_args = (node(v) for v in args)
+        m_kwargs = {k: node(v) for k, v in kwargs.items()}
         mapping = inspect.getsource(fun)  # TODO how to describe the mapping and inputs?
         # get the source code
         # inspect.getdoc(fun)
@@ -39,26 +45,30 @@ def trace_ConversableAgent(AgentCls):
 
     class _Agent(AgentCls):
 
-        def initiate_chat(
-            self,
-            recipient: ConversableAgent,
-            clear_history: Optional[bool] = True,
-            silent: Optional[bool] = False,
-            **context,
-        ):
-            self._prepare_chat(recipient, clear_history)
-            self.send(Node(self.generate_init_message(**context)), recipient, silent=silent)
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+        @property
+        def _oai_messages(self):
+            return self.__oai_system_message.data
+
+        @_oai_messages.setter
+        def _oai_messages(self, value):  # This is the parameter
+            self.__oai_system_message = ParameterNode(value)
+
+        def generate_init_message(self, **context) -> Union[str, Dict]:
+            return node(super().generate_init_message(**context))
 
         # Modify the send and receive methods to use the MessageNode type
         def send(
             self,
-            message: Node,
+            message: Union[Dict, str, Node],
             recipient: Agent,
             request_reply: Optional[bool] = None,
             silent: Optional[bool] = False,
         ) -> bool:
-            assert isinstance(message, Node), "message must be a Node type"
-            super().send(message, recipient, request_reply, silent)
+            assert message is not None
+            super().send(node(message), recipient, request_reply, silent)
 
         async def a_send(
             self,
@@ -118,9 +128,9 @@ def trace_ConversableAgent(AgentCls):
         ) -> Union[str, Dict, None]:
             if messages is not None:
                 assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
-            reply = super().generate_reply([m.data for m in messages], sender, exclude)
-            if reply is not None:
-                reply = MessageNode(reply, f'generate_reply(messages)', args=messages)
+            reply = super().generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
+            if reply is not None and not isinstance(reply, Node):
+                reply = MessageNode(reply, f'generate_reply(messages)', args=messages)  # TODO
             return reply
 
         async def a_generate_reply(
@@ -130,6 +140,40 @@ def trace_ConversableAgent(AgentCls):
             exclude: Optional[List[Callable]] = None,
         ) -> Union[str, Dict, None]:
             raise NotImplementedError
+
+        def generate_oai_reply(
+            self,
+            messages: Optional[List[Dict]] = None,
+            sender: Optional[Agent] = None,
+            config: Optional[Any] = None,
+        ) -> Tuple[bool, Union[str, Dict, None]]:
+            flag, reply = super().generate_oai_reply(messages, sender, config)
+            if reply is not None:
+                m_messages = [node(m) for m in messages]
+                reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
+            return flag, reply
+
+
+
+            # """Generate a reply using autogen.oai."""
+            # client = self.client if config is None else config
+            # if client is None:
+            #     return False, None
+            # if messages is None:
+            #     messages = self._oai_messages[sender]
+            #     assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
+            #     messages = [m.data for m in messages]
+
+            # # XXX
+            # # TODO: #1143 handle token limit exceeded error
+            # response = client.create(
+            #     context=messages[-1].pop("context", None), messages=self._oai_system_message.data + messages
+            # )
+            # reply = client.extract_text_or_function_call(response)[0]
+            # reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=messages, kwargs={'system_message': self._oai_system_message})
+            # return True, reply
+            # end of XXX
+            # return True, client.extract_text_or_function_call(response)[0]
 
     return _Agent
 

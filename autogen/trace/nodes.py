@@ -1,6 +1,7 @@
 import copy
 
 from dataclasses import dataclass
+import warnings
 
 
 from typing import Optional, List, Dict, Callable, Union, Type, Any
@@ -36,6 +37,7 @@ GRAPH = Registry()
 class Node:
     """ An abstract data node in a polytree. """
     def __init__(self, value, *, name=None) -> None:
+        assert value is not None, "value cannot be None."
         self._parent = None
         self._children = []
         self._level = 0
@@ -82,15 +84,21 @@ class Node:
     def __str__(self) -> str:
         return f'Node: ({self.name}, dtype={type(self.data)})'
 
+    def __getattr__(self, name):
+        # If attribute cannot be found, try to get it from the data
+        warnings.warn(f"Attribute {name} not found in {self.name}. Attempting to get it from the data.")
+        return self._data.__getattribute__(name)
 
-    # # TODO
-    # def __add__(self, other):
-    #     if not isinstance(other, Node):
-    #         other = Node(other)
-    #     mapping = f"output=x+y"
-    #     breakpoint()
-    #     output = MessageNode(self.data+other.data, mapping, kwargs=dict(x=self, y=other))
-    #     return output
+    def __contains__(self, key):
+        return key in self._data
+
+    def __getitem__(self, key):
+        warnings.warn(f"Attempting to get {key} from {self.name}.")
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        warnings.warn(f"Attemping to set {key} in {self.name}.")
+        self._data[key] = value
 
 
 
