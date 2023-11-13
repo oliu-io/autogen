@@ -46,15 +46,18 @@ def trace_ConversableAgent(AgentCls):
     class _Agent(AgentCls):
 
         def __init__(self, *args, **kwargs):
+            self.__oai_system_message = None
             super().__init__(*args, **kwargs)
 
         @property
         def _oai_system_message(self):
-            return self.__oai_system_message.data
+            return [self.__oai_system_message.data]  # XXX Not sure why _oai_system_message is a list of length 1
 
         @_oai_system_message.setter
         def _oai_system_message(self, value):  # This is the parameter
-            self.__oai_system_message = ParameterNode(value)
+            assert isinstance(value, list)
+            assert len(value) == 1  # XXX Not sure why _oai_system_message is a list of length 1
+            self.__oai_system_message = ParameterNode(value[0])
 
         def generate_init_message(self, **context) -> Union[str, Dict]:
             return node(super().generate_init_message(**context))
@@ -152,28 +155,6 @@ def trace_ConversableAgent(AgentCls):
                 m_messages = [node(m) for m in messages]
                 reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
             return flag, reply
-
-
-
-            # """Generate a reply using autogen.oai."""
-            # client = self.client if config is None else config
-            # if client is None:
-            #     return False, None
-            # if messages is None:
-            #     messages = self._oai_messages[sender]
-            #     assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
-            #     messages = [m.data for m in messages]
-
-            # # XXX
-            # # TODO: #1143 handle token limit exceeded error
-            # response = client.create(
-            #     context=messages[-1].pop("context", None), messages=self._oai_system_message.data + messages
-            # )
-            # reply = client.extract_text_or_function_call(response)[0]
-            # reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=messages, kwargs={'system_message': self._oai_system_message})
-            # return True, reply
-            # end of XXX
-            # return True, client.extract_text_or_function_call(response)[0]
 
     return _Agent
 
