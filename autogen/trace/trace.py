@@ -49,11 +49,11 @@ def trace_ConversableAgent(AgentCls):
             super().__init__(*args, **kwargs)
 
         @property
-        def _oai_messages(self):
+        def _oai_system_message(self):
             return self.__oai_system_message.data
 
-        @_oai_messages.setter
-        def _oai_messages(self, value):  # This is the parameter
+        @_oai_system_message.setter
+        def _oai_system_message(self, value):  # This is the parameter
             self.__oai_system_message = ParameterNode(value)
 
         def generate_init_message(self, **context) -> Union[str, Dict]:
