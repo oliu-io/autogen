@@ -1,1 +1,1 @@
-from autogen.trace.trace import trace
+from autogen.trace.trace import trace, node
