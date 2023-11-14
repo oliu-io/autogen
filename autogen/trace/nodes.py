@@ -15,21 +15,20 @@ class Graph:
     TRACE = True
 
     def __init__(self):
-        self._nodes = {} # a lookup table to find nodes by name
+        self._nodes = defaultdict(list)  # a lookup table to find nodes by name
         self._levels = defaultdict(list)  # a lookup table to find nodes at a certain level # TODO do we need this?
 
     def register(self, node):
         assert isinstance(node, Node)
         assert len(node.name.split(':'))==2
-        if node.name in self._nodes:
-            # increment the id
-            name, id = node.name.split(':')
-            node._name = name + ':' + str(int(id)+1)
-        self._nodes[node.name] = node
+        name, id = node.name.split(':')
+        self._nodes[name].append(node)
+        node._name = name + ':' + str(len(self._nodes[name])-1)
         self._levels[node._level].append(node)
 
     def get(self, name):
-        return self._nodes[name]
+        name, id = name.split(':')
+        return self._nodes[name][id]
 
     @property
     def leaves(self):
