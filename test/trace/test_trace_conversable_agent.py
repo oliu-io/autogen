@@ -56,6 +56,11 @@ def test_trigger(retain_graph=False):
     pytest.raises(ValueError, agent._match_trigger, 1, agent1)
 
 
+    ##### Test for trace #####
+    # Test optimizer
+    from autogen.trace.optimizers import DummyOptimizer
+    optimizer = DummyOptimizer(agent1.parameters)
+
     ## Test backward
     def propagate(child, parent, feedback):
         import copy
@@ -63,13 +68,14 @@ def test_trigger(retain_graph=False):
     output = agent1.last_message()
     dummy_feedback = 'Dummy feedback'
     output.backward(dummy_feedback, propagate, retain_graph=retain_graph)
+    optimizer.step()  # TODO somehow it's not traced to the parameters
 
     # check a path from output to input
     node = output
     while True:
         if retain_graph or len(node.parents)==0:
             assert all([v == dummy_feedback for v in node._feedback.values()])
-        print(f'Node {node.name} at level {node.level}: Feedback {node._feedback}')
+        print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node._feedback}')
         if len(node.parents)>0:
             node = node.parents[0]
         else:
