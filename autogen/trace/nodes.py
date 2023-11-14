@@ -95,6 +95,8 @@ class AbstractNode:
     def __str__(self) -> str:
         return f'Node: ({self.name}, dtype={type(self.data)})'
 
+    def __lt__(self, other):  # for heapq (since it is a min heap)
+        return -self._level < -other._level
 
 class Node(AbstractNode):
     """ Node for Autogen messages and prompts"""
@@ -172,14 +174,15 @@ class MessageNode(Node):
             raise AttributeError(f"{self} has been backwarded.")
 
         self._feedback['user'] = feedback
-        queue = [(-self._level, self)]  # priority queue
+        queue = [self]  # priority queue
         while True:
             try:
-                _, node = heapq.heappop(queue)
+                node = heapq.heappop(queue)
+                assert isinstance(node, Node)
                 for parent in node.parents:
                     parent_feedback = propagate(node, parent, feedback)  # propagate information from child to parent
                     parent._add_feedback(node, parent_feedback)
-                    heapq.heappush(queue, (-parent._level, parent))  # put parent in the priority queue
+                    heapq.heappush(queue, parent)  # put parent in the priority queue
                 if not retain_graph and len(node.parents)>0:
                     node._del_feedback()  # delete feedback to save memory
             except IndexError:  # queue is empty
