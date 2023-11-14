@@ -11,12 +11,13 @@ import copy
 # from autogen.trace.nodes import Node
 from collections import defaultdict
 
-class Registry:
-    """ A global registry of all the nodes. """
+class Graph:
+    """ Directed Acyclic Graph. A global registry of all the nodes.
+    """
 
     def __init__(self):
         self._nodes = {} # a lookup table to find nodes by name
-        self._levels = defaultdict(list)  # a lookup table to find nodes at a certain level # TODO should this be a list?
+        self._levels = defaultdict(list)  # a lookup table to find nodes at a certain level # TODO do we need this?
 
     def register(self, node):
         assert isinstance(node, Node)
@@ -31,13 +32,17 @@ class Registry:
     def get(self, name):
         return self._nodes[name]
 
+    @property
+    def leaves(self):
+        return self._levels[0]
+
     def __str__(self):
         return str(self._nodes)
 
-GRAPH = Registry()
+GRAPH = Graph()
 
 class AbstractNode:
-    """ An abstract data node in a directed graph (child --> paraent).
+    """ An abstract data node in a directed graph (parent --> paraent).
     """
     def __init__(self, value, *, name=None, trainable=False) -> None:
         self._parents = []
@@ -56,28 +61,28 @@ class AbstractNode:
         return self._data
 
     @property
-    def children(self):
-        return self._children
+    def parents(self):
+        return self._parents
 
     @property
-    def parents(self):
+    def children(self):
         return self._parents
 
     @property
     def name(self):
         return self._name
 
-    def add_parent(self, parent):
-        assert isinstance(parent, Node), f"{parent} is not a Node."
-        parent.add_child(self)
-
     def add_child(self, child):
+        assert child is not self, "Cannot add self as a child."
         assert isinstance(child, Node), f"{child} is not a Node."
-        assert self not in child.parents, f"{self} is already a parent of {child}."
-        child._parents.append(self)
-        assert child not in self.children, f"{child} is already a child of {self}."
-        self._children.append(child)
-        self._update_level(max(self._level, child._level+1))  # Update the level, because the child is added
+        child.add_parent(self)
+
+    def add_parent(self, parent):
+        assert parent is not self, "Cannot add self as a parent."
+        assert isinstance(parent, Node), f"{parent} is not a Node."
+        parent._children.append(self)
+        self._parents.append(parent)
+        self._update_level(max(self._level, parent._level+1))  # Update the level, because the parent is added
 
     def _update_level(self, new_level):
         GRAPH._levels[self._level].remove(self)
@@ -138,7 +143,6 @@ class ParameterNode(Node):
         super().__init__(value, name=name, trainable=trainable)
 
 
-
 class MessageNode(Node):
     """ Output of an operator. """
     def __init__(self, value, mapping, *, args=None, kwargs=None, name=None) -> None:
@@ -147,17 +151,6 @@ class MessageNode(Node):
         self._args = () if args is None else args
         self._kwargs = {} if kwargs is None else kwargs
         for v in self._args:
-            self.add_child(v)
+            self.add_parent(v)
         for v in self._kwargs.values():
-            self.add_child(v)
-
-    # def __getattr__(self, name):
-    #     # If attribute cannot be found, try to get it from the data
-    #     attr = self._data.__getattribute__(name)  # TODO
-    #     # TODO add assertion
-    #     if callable(attr):
-    #         return trace(attr) # TODO
-    #     else:
-    #         output = Node(attr)
-    #         output.register_mapping(f"{output.name}={self.name}.{name}", self)
-    #         return attr
+            self.add_parent(v)
