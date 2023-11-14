@@ -107,7 +107,6 @@ class Node(AbstractNode):
         self.trainable = trainable
         self._feedback = dict()  # (analogous to gradient) this is the (synthetic) feedback from the user
 
-
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
         self._feedback[child.name] = feedback

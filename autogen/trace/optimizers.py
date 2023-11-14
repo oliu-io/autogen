@@ -15,6 +15,10 @@ class Optimizer:
     def _step(self, value, feedback):
         raise NotImplementedError
 
+    def zero_feedback(self):
+        for p in self.parameters:
+            p._feedback = {}
+
 
 class DummyOptimizer(Optimizer):
     # FOR TESTING PURPOSES ONLY
