@@ -107,13 +107,6 @@ class Node(AbstractNode):
         self.trainable = trainable
         self._feedback = dict()  # (analogous to gradient) this is the (synthetic) feedback from the user
 
-    @property
-    def _has_all_feedback(self):
-        """ Whether the node has feedback from all children. """
-        for child in self.children:
-            if self._feedback.get(child.name) is None:
-                return False
-        return True
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
