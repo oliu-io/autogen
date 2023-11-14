@@ -6,7 +6,7 @@ from autogen.agentchat.agent import Agent
 import copy
 # from autogen.trace.nodes import Node
 from collections import defaultdict, deque
-
+import heapq
 
 
 class Graph:
@@ -46,7 +46,7 @@ class AbstractNode:
         self._parents = []
         self._children = []
         self._level = 0  # leaves are at level 0
-        self._name = str(type(value).__name__)+':0' if name is None else  name+':0'
+        self._name = str(type(value).__name__)+':0' if name is None else  name+':0'  # name:version
         if isinstance(value, Node):  # copy constructor
             self._data = copy.deepcopy(value._data)
             self._name = value._name
@@ -136,11 +136,10 @@ class Node(AbstractNode):
         return NotImplemented
 
     def __getitem__(self, key):
-        warnings.warn(f"Attempting to get {key} from {self.name}.")
         return self._data[key]
 
     def __setitem__(self, key, value):
-        warnings.warn(f"Attemping to set {key} in {self.name}.")
+        warnings.warn(f"Attemping to set {key} in {self.name}. In-place operation is not traced.")
         self._data[key] = value
 
     def __delitem__(self, key):
@@ -181,17 +180,15 @@ class MessageNode(Node):
             raise AttributeError(f"{self} has been backwarded.")
 
         self._feedback['user'] = feedback
-        queue = deque([self])
+        queue = [(-self._level, self)]  # priority queue
         while True:
             try:
-                node = queue.pop()  # node has accumulated feedback from all children
-                assert node._has_all_feedback, f"{node} does not have feedback from all children."
+                _, node = heapq.heappop(queue)
                 for parent in node.parents:
                     parent_feedback = propagate(node, parent, feedback)  # propagate information from child to parent
                     parent._add_feedback(node, parent_feedback)
-                    if parent._has_all_feedback:
-                        queue.append(parent)
+                    heapq.heappush(queue, (-parent._level, parent))  # put parent in the priority queue
                 if not retain_graph and len(node.parents)>0:
-                    node._del_feedback()
+                    node._del_feedback()  # delete feedback to save memory
             except IndexError:  # queue is empty
                 break
