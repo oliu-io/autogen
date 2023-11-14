@@ -56,12 +56,12 @@ def test_trigger():
 
 
     ## Test backward
-    def backward(child, parent, feedback):
+    def propagate(child, parent, feedback):
         import copy
         return copy.copy(feedback)
     output = agent1.last_message()
     dummy_feedback = 'Dummy feedback'
-    output.backward(dummy_feedback, backward)
+    output.backward(dummy_feedback, propagate)
     # check a path from output to input
     node = output
     while True:
