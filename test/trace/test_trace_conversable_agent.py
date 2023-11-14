@@ -56,16 +56,16 @@ def test_trigger():
 
 
     ## Test backward
-    def backward(child, parent):
+    def backward(child, parent, feedback):
         import copy
-        parent._feedback = copy.copy(child._feedback)
+        return copy.copy(feedback)
     output = agent1.last_message()
     dummy_feedback = 'Dummy feedback'
     output.backward(dummy_feedback, backward)
     # check a path from output to input
     node = output
     while True:
-        assert node._feedback == dummy_feedback
+        assert all([v == dummy_feedback for v in node._feedback.values()])
         print(f'Node {node.name} at level {node.level}: Feedback {node._feedback}')
         if len(node.parents)>0:
             node = node.parents[0]

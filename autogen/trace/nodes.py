@@ -63,7 +63,7 @@ class AbstractNode:
 
     @property
     def children(self):
-        return self._parents
+        return self._children
 
     @property
     def name(self):
@@ -104,7 +104,19 @@ class Node(AbstractNode):
         assert  isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node), f"Value {value} must be a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
-        self._feedback = None  # (analogous to gradient) this is the (synthetic) feedback from the user
+        self._feedback = dict()  # (analogous to gradient) this is the (synthetic) feedback from the user
+
+    @property
+    def _has_all_feedback(self):
+        """ Whether the node has feedback from all children. """
+        for child in self.children:
+            if self._feedback.get(child.name) is None:
+                return False
+        return True
+
+    def _add_feedback(self, child, feedback):
+        """ Add feedback from a child. """
+        self._feedback[child.name] = feedback
 
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
@@ -160,17 +172,16 @@ class MessageNode(Node):
 
     def backward(self, feedback, propagate):
         """ Backward pass. """
-        self._feedback = feedback
+        self._feedback['user'] = feedback
         queue = deque([self])
         while True:
             try:
-                node = queue.pop()
+                node = queue.pop()  # node has accumulated feedback from all children
+                assert node._has_all_feedback, f"{node} does not have feedback from all children."
+                for parent in node.parents:
+                    parent_feedback = propagate(node, parent, feedback)  # propagate information from child to parent
+                    parent._add_feedback(node, parent_feedback)
+                    if parent._has_all_feedback:
+                        queue.append(parent)
             except IndexError:  # queue is empty
                 break
-
-            if len(node.children)>0 and any([child._feedback is not None for child in node.children]):
-                queue.append(node)
-            else:  # if all children have feedback, then we can propagate
-                for parent in node.parents:
-                    propagate(node, parent)  # propagate information from child to parent
-                    queue.append(parent)
