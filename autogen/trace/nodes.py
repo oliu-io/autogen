@@ -1,15 +1,12 @@
-import copy
 
-from dataclasses import dataclass
 import warnings
-
-
 from typing import Optional, List, Dict, Callable, Union, Type, Any
 from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.agentchat.agent import Agent
 import copy
 # from autogen.trace.nodes import Node
-from collections import defaultdict
+from collections import defaultdict, deque
+
 
 class Graph:
     """ Directed Acyclic Graph. A global registry of all the nodes.
@@ -42,7 +39,7 @@ class Graph:
 GRAPH = Graph()
 
 class AbstractNode:
-    """ An abstract data node in a directed graph (parent --> paraent).
+    """ An abstract data node in a directed graph (parents <-- children).
     """
     def __init__(self, value, *, name=None, trainable=False) -> None:
         self._parents = []
@@ -72,6 +69,10 @@ class AbstractNode:
     def name(self):
         return self._name
 
+    @property
+    def level(self):
+        return self._level
+
     def add_child(self, child):
         assert child is not self, "Cannot add self as a child."
         assert isinstance(child, Node), f"{child} is not a Node."
@@ -92,6 +93,7 @@ class AbstractNode:
 
     def __str__(self) -> str:
         return f'Node: ({self.name}, dtype={type(self.data)})'
+
 
 class Node(AbstractNode):
     """ Node for Autogen messages and prompts"""
@@ -155,3 +157,20 @@ class MessageNode(Node):
             self.add_parent(v)
         for v in self._kwargs.values():
             self.add_parent(v)
+
+    def backward(self, feedback, propagate):
+        """ Backward pass. """
+        self._feedback = feedback
+        queue = deque([self])
+        while True:
+            try:
+                node = queue.pop()
+            except IndexError:  # queue is empty
+                break
+
+            if len(node.children)>0 and any([child._feedback is not None for child in node.children]):
+                queue.append(node)
+            else:  # if all children have feedback, then we can propagate
+                for parent in node.parents:
+                    propagate(node, parent)  # propagate information from child to parent
+                    queue.append(parent)

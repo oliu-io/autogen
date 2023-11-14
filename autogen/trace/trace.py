@@ -59,6 +59,10 @@ def trace_ConversableAgent(AgentCls):
             assert len(value) == 1  # XXX Not sure why _oai_system_message is a list of length 1
             self.__oai_system_message = ParameterNode(value[0])
 
+        @property
+        def parameters(self):
+            return [self.__oai_system_message]
+
         def generate_init_message(self, **context) -> Union[str, Dict]:
             return node(super().generate_init_message(**context))
 
