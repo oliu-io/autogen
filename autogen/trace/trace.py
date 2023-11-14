@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.nodes import MessageNode, Node, ParameterNode
+from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
@@ -17,6 +17,11 @@ def trace(fun):
     # it should be a function
     return trace_operator(fun)
 
+class stop_trace():
+    def __enter__(self):
+        GRAPH.TRACE = False
+    def __exit__(self, type, value, traceback):
+        GRAPH.TRACE = True
 
 def trace_operator(fun):
     # trace a function

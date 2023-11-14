@@ -8,9 +8,11 @@ import copy
 from collections import defaultdict, deque
 
 
+
 class Graph:
     """ Directed Acyclic Graph. A global registry of all the nodes.
     """
+    TRACE = True
 
     def __init__(self):
         self._nodes = {} # a lookup table to find nodes by name
@@ -118,6 +120,9 @@ class Node(AbstractNode):
         """ Add feedback from a child. """
         self._feedback[child.name] = feedback
 
+    def _del_feedback(self):
+        self._feedback = None  # This saves memory and prevents backward from being called twice
+
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
         if type(self._data) == dict:  # If attribute cannot be found, try to get it from the data
@@ -162,16 +167,20 @@ class MessageNode(Node):
     """ Output of an operator. """
     def __init__(self, value, mapping, *, args=None, kwargs=None, name=None) -> None:
         super().__init__(value, name=name)
-        self._mapping = mapping
-        self._args = () if args is None else args
-        self._kwargs = {} if kwargs is None else kwargs
-        for v in self._args:
-            self.add_parent(v)
-        for v in self._kwargs.values():
-            self.add_parent(v)
+        if GRAPH.TRACE:
+            self._mapping = mapping
+            self._args = () if args is None else args
+            self._kwargs = {} if kwargs is None else kwargs
+            for v in self._args:
+                self.add_parent(v)
+            for v in self._kwargs.values():
+                self.add_parent(v)
 
-    def backward(self, feedback, propagate):
+    def backward(self, feedback, propagate, retain_graph=False):
         """ Backward pass. """
+        if self._feedback is None:  # This node has been backwarded
+            raise AttributeError(f"{self} has been backwarded.")
+
         self._feedback['user'] = feedback
         queue = deque([self])
         while True:
@@ -183,5 +192,7 @@ class MessageNode(Node):
                     parent._add_feedback(node, parent_feedback)
                     if parent._has_all_feedback:
                         queue.append(parent)
+                if not retain_graph and len(node.parents)>0:
+                    node._del_feedback()
             except IndexError:  # queue is empty
                 break

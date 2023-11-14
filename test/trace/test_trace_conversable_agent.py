@@ -1,6 +1,6 @@
 import pytest
 from autogen.agentchat import ConversableAgent
-from autogen.trace import trace
+from autogen.trace import trace, stop_trace
 
 
 ConversableAgent = trace(ConversableAgent)
@@ -17,7 +17,8 @@ def conversable_agent():
     )
 
 
-def test_trigger():
+def test_trigger(retain_graph=False):
+
     agent = ConversableAgent("a0", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent.register_reply(agent1, lambda recipient, messages, sender, config: (True, "hello"))
@@ -61,11 +62,13 @@ def test_trigger():
         return copy.copy(feedback)
     output = agent1.last_message()
     dummy_feedback = 'Dummy feedback'
-    output.backward(dummy_feedback, propagate)
+    output.backward(dummy_feedback, propagate, retain_graph=retain_graph)
+
     # check a path from output to input
     node = output
     while True:
-        assert all([v == dummy_feedback for v in node._feedback.values()])
+        if retain_graph or len(node.parents)==0:
+            assert all([v == dummy_feedback for v in node._feedback.values()])
         print(f'Node {node.name} at level {node.level}: Feedback {node._feedback}')
         if len(node.parents)>0:
             node = node.parents[0]
@@ -265,7 +268,11 @@ async def test_a_generate_reply_raises_on_messages_and_sender_none(conversable_a
 
 
 if __name__ == "__main__":
-    test_trigger()
+    test_trigger(retain_graph=False)
+    with stop_trace():
+        test_trigger()
+    test_trigger(retain_graph=True)
+
     # test_context()
     # test_max_consecutive_auto_reply()
     # test_conversable_agent(pytest.monkeypatch)
