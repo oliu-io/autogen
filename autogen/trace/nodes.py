@@ -86,6 +86,7 @@ class AbstractNode:
 
     def _update_level(self, new_level):
         GRAPH._levels[self._level].remove(self)
+        self._level = new_level
         GRAPH._levels[new_level].append(self)
         assert all([ len(GRAPH._levels[i])>0 for i in range(len(GRAPH._levels)) ]), "Some levels are empty."
 
