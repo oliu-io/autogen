@@ -125,11 +125,11 @@ class ConversableAgent(Agent):
         self._default_auto_reply = default_auto_reply
         self._reply_func_list = []
         self.reply_at_receive = defaultdict(bool)
-        self.register_reply([Agent, None], self.generate_oai_reply)
-        self.register_reply([Agent, None], self.generate_code_execution_reply)
-        self.register_reply([Agent, None], self.generate_function_call_reply)
-        self.register_reply([Agent, None], self.generate_async_function_call_reply)
-        self.register_reply([Agent, None], self.check_termination_and_human_reply)
+        self.register_reply([Agent, None], ConversableAgent.generate_oai_reply)
+        self.register_reply([Agent, None], ConversableAgent.generate_code_execution_reply)
+        self.register_reply([Agent, None], ConversableAgent.generate_function_call_reply)
+        self.register_reply([Agent, None], ConversableAgent.generate_async_function_call_reply)
+        self.register_reply([Agent, None], ConversableAgent.check_termination_and_human_reply)
 
     def register_reply(
         self,
@@ -880,7 +880,7 @@ class ConversableAgent(Agent):
             if asyncio.coroutines.iscoroutinefunction(reply_func):
                 continue
             if self._match_trigger(reply_func_tuple["trigger"], sender):
-                final, reply = reply_func(messages=messages, sender=sender, config=reply_func_tuple["config"])
+                final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
                 if final:
                     return reply
         return self._default_auto_reply
