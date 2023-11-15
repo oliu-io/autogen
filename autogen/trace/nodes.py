@@ -111,10 +111,43 @@ class Node(AbstractNode):
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
+        if self._feedback is None:
+            raise AttributeError(f"{self} has been backwarded.")
         self._feedback[child.name] = feedback
 
     def _del_feedback(self):
         self._feedback = None  # This saves memory and prevents backward from being called twice
+
+    def backward(self, feedback, propagate, retain_graph=False):
+        """ Backward pass.
+
+            feedback: feedback given to the current node
+            propagate: a function that takes in a node and a feedback, and returns a dict of {parent: parent_feedback}.
+
+                def propagate(node, feedback):
+                    return {parent: propagated feedback for parent in node.parents}
+
+        """
+        if self._feedback is None:  # This node has been backwarded
+            raise AttributeError(f"{self} has been backwarded.")
+
+        self._feedback['user'] = feedback
+        if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
+            return
+
+        queue = [self]  # priority queue
+        while True:
+            try:
+                node = heapq.heappop(queue)
+                assert isinstance(node, Node)
+                propagated_feedback = propagate(node, feedback)  # propagate information from child to parent
+                for parent, parent_feedback in propagated_feedback.items():
+                    parent._add_feedback(node, parent_feedback)
+                    heapq.heappush(queue, parent)  # put parent in the priority queue
+                if not retain_graph and len(node.parents)>0:
+                    node._del_feedback()  # delete feedback to save memory
+            except IndexError:  # queue is empty
+                break
 
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
@@ -158,8 +191,10 @@ class ParameterNode(Node):
 class MessageNode(Node):
     """ Output of an operator. """
     def __init__(self, value, mapping, *, args=None, kwargs=None, name=None) -> None:
+        # TODO maybe name the node after the mapping, once we figure out the syntax of mapping
         super().__init__(value, name=name)
         if GRAPH.TRACE:
+            # Add parents if we are tracing
             self._mapping = mapping
             self._args = () if args is None else args
             self._kwargs = {} if kwargs is None else kwargs
@@ -167,23 +202,3 @@ class MessageNode(Node):
                 self.add_parent(v)
             for v in self._kwargs.values():
                 self.add_parent(v)
-
-    def backward(self, feedback, propagate, retain_graph=False):
-        """ Backward pass. """
-        if self._feedback is None:  # This node has been backwarded
-            raise AttributeError(f"{self} has been backwarded.")
-
-        self._feedback['user'] = feedback
-        queue = [self]  # priority queue
-        while True:
-            try:
-                node = heapq.heappop(queue)
-                assert isinstance(node, Node)
-                for parent in node.parents:
-                    parent_feedback = propagate(node, parent, feedback)  # propagate information from child to parent
-                    parent._add_feedback(node, parent_feedback)
-                    heapq.heappush(queue, parent)  # put parent in the priority queue
-                if not retain_graph and len(node.parents)>0:
-                    node._del_feedback()  # delete feedback to save memory
-            except IndexError:  # queue is empty
-                break

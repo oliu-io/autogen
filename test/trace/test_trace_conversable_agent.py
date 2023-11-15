@@ -62,9 +62,9 @@ def test_trigger(retain_graph=False):
     optimizer = DummyOptimizer(agent1.parameters)
 
     ## Test backward
-    def propagate(child, parent, feedback):
+    def propagate(node, feedback):
         import copy
-        return copy.copy(feedback)
+        return {parent: copy.copy(feedback) for parent in node.parents}
     output = agent1.last_message()
     dummy_feedback = 'Dummy feedback'
     output.backward(dummy_feedback, propagate, retain_graph=retain_graph)

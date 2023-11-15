@@ -10,7 +10,8 @@ class Optimizer:
 
     def step(self):
         for p in self.parameters:
-            p._data = self._step(p._data, p._feedback)  # NOTE: This is an in-place update
+            if p.trainable:
+                p._data = self._step(p._data, p._feedback)  # NOTE: This is an in-place update
 
     def _step(self, value, feedback):
         raise NotImplementedError
