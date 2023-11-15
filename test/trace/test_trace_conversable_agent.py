@@ -1,6 +1,6 @@
 import pytest
 from autogen.agentchat import ConversableAgent
-from autogen.trace import trace, stop_trace
+from autogen.trace import trace, no_trace
 
 
 ConversableAgent = trace(ConversableAgent)
@@ -275,7 +275,7 @@ async def test_a_generate_reply_raises_on_messages_and_sender_none(conversable_a
 
 if __name__ == "__main__":
     test_trigger(retain_graph=False)
-    with stop_trace():
+    with no_trace():
         test_trigger()
     test_trigger(retain_graph=True)
 

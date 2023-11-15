@@ -39,6 +39,22 @@ class Graph:
 
 GRAPH = Graph()
 
+class UsedNodes:
+    """ For keeping track which nodes are read/used in an operator."""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.nodes = set()
+
+    def add(self, node):
+        self.nodes.add(node)
+
+    def __contains__(self, node):
+        return node in self.nodes
+
+USED_NODES = UsedNodes()
+
 class AbstractNode:
     """ An abstract data node in a directed graph (parents <-- children).
     """
@@ -56,6 +72,7 @@ class AbstractNode:
 
     @property
     def data(self):
+        USED_NODES.add(self)
         return self._data
 
     @property
@@ -151,35 +168,35 @@ class Node(AbstractNode):
 
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
-        if type(self._data) == dict:  # If attribute cannot be found, try to get it from the data
-            return self._data.__getattribute__(name)
+        if type(self.data) == dict:  # If attribute cannot be found, try to get it from the data
+            return self.data.__getattribute__(name)
         else:
             raise AttributeError(f"{self} has no attribute {name}.")
 
     def __len__(self):
-        return len(self._data)
+        return len(self.data)
 
     def __length_hint__(self):
         return NotImplemented
 
     def __getitem__(self, key):
-        return self._data[key]
+        return self.data[key]
 
     def __setitem__(self, key, value):
         warnings.warn(f"Attemping to set {key} in {self.name}. In-place operation is not traced.")
-        self._data[key] = value
+        self.data[key] = value
 
     def __delitem__(self, key):
-        del self._data[key]
+        del self.data[key]
 
     def __iter__(self):
-        return iter(self._data)
+        return iter(self.data)
 
     def __reverse__(self):
-        return reversed(self._data)
+        return reversed(self.data)
 
     def __contains__(self, key):
-        return key in self._data
+        return key in self.data
 
 # TODO
 class ParameterNode(Node):

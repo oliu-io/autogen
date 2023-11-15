@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH
+from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH, USED_NODES
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
@@ -17,11 +17,23 @@ def trace(fun):
     # it should be a function
     return trace_operator(fun)
 
-class stop_trace():
+class no_trace():
     def __enter__(self):
         GRAPH.TRACE = False
     def __exit__(self, type, value, traceback):
         GRAPH.TRACE = True
+
+
+class trace_node_usage:
+    """ A context manager to track which nodes are used in an operator. After
+         leaving the context, the nodes used in the operator can be found in
+         USED_NODES.nodes.
+    """
+    def __enter__(self):
+        USED_NODES.reset()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
 
 def trace_operator(fun):
     # trace a function
@@ -140,9 +152,10 @@ def trace_ConversableAgent(AgentCls):
         ) -> Union[str, Dict, None]:
             if messages is not None:
                 assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
-            reply = super().generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
+            with trace_node_usage():
+                reply = super().generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
             if reply is not None and not isinstance(reply, Node):
-                reply = MessageNode(reply, f'generate_reply(messages)', args=messages)  # TODO
+                reply = MessageNode(reply, f'generate_reply(messages)', args=USED_NODES.nodes)  # TODO
             return reply
 
         async def a_generate_reply(
@@ -153,17 +166,17 @@ def trace_ConversableAgent(AgentCls):
         ) -> Union[str, Dict, None]:
             raise NotImplementedError
 
-        def generate_oai_reply(
-            self,
-            messages: Optional[List[Dict]] = None,
-            sender: Optional[Agent] = None,
-            config: Optional[Any] = None,
-        ) -> Tuple[bool, Union[str, Dict, None]]:
-            flag, reply = super().generate_oai_reply(messages, sender, config)
-            if reply is not None:
-                m_messages = [node(m) for m in messages]
-                reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
-            return flag, reply
+        # def generate_oai_reply(
+        #     self,
+        #     messages: Optional[List[Dict]] = None,
+        #     sender: Optional[Agent] = None,
+        #     config: Optional[Any] = None,
+        # ) -> Tuple[bool, Union[str, Dict, None]]:
+        #     flag, reply = super().generate_oai_reply(messages, sender, config)
+        #     if reply is not None:
+        #         m_messages = [node(m) for m in messages]
+        #         reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
+        #     return flag, reply
 
     return _Agent
 

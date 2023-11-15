@@ -31,7 +31,9 @@ assert all([v == feedback for v in optimizer.parameters[0]._feedback.values()]) 
 node = last_message
 while True:
     assert all([v == feedback for v in node._feedback.values()])
-    print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node._feedback}')
+    # print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node._feedback}')
+    print(f'Node {node.name} at level {node.level}: Feedback {node._feedback}')
+
     if len(node.parents)>0:
         node = node.parents[0]
     else:
