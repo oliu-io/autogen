@@ -23,7 +23,6 @@ class no_trace():
     def __exit__(self, type, value, traceback):
         GRAPH.TRACE = True
 
-
 class trace_node_usage:
     """ A context manager to track which nodes are used in an operator. After
          leaving the context, the nodes used in the operator can be found in
@@ -31,9 +30,10 @@ class trace_node_usage:
     """
     def __enter__(self):
         USED_NODES.reset()
+        USED_NODES.open = True
 
     def __exit__(self, exc_type, exc_value, traceback):
-        pass
+        USED_NODES.open = False
 
 def trace_operator(fun):
     # trace a function

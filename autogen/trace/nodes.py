@@ -46,9 +46,11 @@ class UsedNodes:
 
     def reset(self):
         self.nodes = set()
+        self.open = False
 
     def add(self, node):
-        self.nodes.add(node)
+        if self.open:
+            self.nodes.add(node)
 
     def __contains__(self, node):
         return node in self.nodes
