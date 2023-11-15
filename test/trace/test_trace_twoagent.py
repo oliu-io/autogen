@@ -15,9 +15,9 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 ## A simple demonstration of using backward and optimizer
 from autogen.trace.optimizers import DummyOptimizer
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
-def propagate(child, parent, feedback):
+def propagate(child, feedback):
     # a dummy function for testing
-    return copy.copy(feedback)
+    return {parent: copy.copy(feedback) for parent in child.parents}
 feedback = 'Great job.'
 last_message = assistant.last_message()
 optimizer.zero_feedback()
