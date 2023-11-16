@@ -117,11 +117,16 @@ class AbstractNode:
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'{self.name}'
-
-    def __repr__(self) -> str:
         return f'Node: ({self.name}, dtype={type(self.data)})'
+    def __eq__(self, other):
+        # this makes it possible to store node as key in a dict
+        # feedback[node.child] = feedback
+        return hasattr(other, 'name') and self.name == other.name
 
+    def __hash__(self):
+        # hash should do it over str(self) or repr(self)
+        # choose whichever one makes most sense
+        return hash(self.__str__())
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
 
@@ -214,6 +219,10 @@ class ParameterNode(Node):
     def __init__(self, value, *, name=None, trainable=True) -> None:
         super().__init__(value, name=name, trainable=trainable)
 
+    def __str__(self) -> str:
+        # str(node) allows us to look up in the feedback dictionary easily
+        return f'ParameterNode: ({self.name}, dtype={type(self.data)})'
+
 
 class MessageNode(Node):
     """ Output of an operator. """
@@ -229,3 +238,7 @@ class MessageNode(Node):
                 self.add_parent(v)
             for v in self._kwargs.values():
                 self.add_parent(v)
+
+    def __str__(self) -> str:
+        # str(node) allows us to look up in the feedback dictionary easily
+        return f'MessageNode: ({self.name}, dtype={type(self.data)})'
