@@ -53,6 +53,52 @@ def trace_operator(fun):
     return wrapper
 
 
+def compatability(fun):
+
+    if not inspect.isclass(fun):  # do nothing
+        assert callable(fun), "fun must be a callable"
+        return fun
+
+    assert issubclass(fun, ConversableAgent)
+    traced_Cls = trace_ConversableAgent(fun)
+
+    class CompatibleAgent(traced_Cls):
+        # Just add no_trace to all public methods that may create MessageNodes
+
+        def send(
+            self,
+            message: Union[Dict, str, Node],
+            recipient: Agent,
+            request_reply: Optional[bool] = None,
+            silent: Optional[bool] = False,
+        ):
+            with no_trace():
+                super().send(message, recipient, request_reply, silent)
+
+        def receive(
+            self,
+            message: Node,
+            sender: Agent,
+            request_reply: Optional[bool] = None,
+            silent: Optional[bool] = False,
+        ):
+            with no_trace():
+                super().receive(message, sender, request_reply, silent)
+
+        def generate_reply(
+            self,
+            messages: Optional[List[Node]] = None,
+            sender: Optional[Agent] = None,
+            exclude: Optional[List[Callable]] = None,
+        ) -> Union[Node, None]:
+            with no_trace():
+                return super().generate_reply(messages, sender, exclude)
+
+    return CompatibleAgent
+
+
+
+
 def trace_ConversableAgent(AgentCls):
     """ return a decorated Agent class that will automatically learn
         from its experiences"""
@@ -60,7 +106,7 @@ def trace_ConversableAgent(AgentCls):
     # make all the messages the MessageNode type
     assert issubclass(AgentCls, ConversableAgent)
 
-    class _Agent(AgentCls):
+    class TracedAgent(AgentCls):
 
         def __init__(self, *args, **kwargs):
             self.__oai_system_message = None
@@ -90,7 +136,7 @@ def trace_ConversableAgent(AgentCls):
             recipient: Agent,
             request_reply: Optional[bool] = None,
             silent: Optional[bool] = False,
-        ) -> bool:
+        ):
             assert message is not None
             super().send(node(message), recipient, request_reply, silent)
 
@@ -149,7 +195,7 @@ def trace_ConversableAgent(AgentCls):
             messages: Optional[List[Node]] = None,
             sender: Optional[Agent] = None,
             exclude: Optional[List[Callable]] = None,
-        ) -> Union[str, Dict, None]:
+        ) -> Union[Node, None]:
             if messages is not None:
                 assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
             with trace_node_usage():
@@ -178,7 +224,7 @@ def trace_ConversableAgent(AgentCls):
         #         reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
         #     return flag, reply
 
-    return _Agent
+    return TracedAgent
 
 
 
