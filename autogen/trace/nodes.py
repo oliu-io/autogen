@@ -117,7 +117,8 @@ class AbstractNode:
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'Node: ({self.name}, dtype={type(self.data)})'
+        return f'Node: ({self.name}, dtype={type(self._data)})'
+
     def __eq__(self, other):
         # this makes it possible to store node as key in a dict
         # feedback[node.child] = feedback
@@ -127,6 +128,7 @@ class AbstractNode:
         # hash should do it over str(self) or repr(self)
         # choose whichever one makes most sense
         return hash(self.__str__())
+
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
 
@@ -221,7 +223,7 @@ class ParameterNode(Node):
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'ParameterNode: ({self.name}, dtype={type(self.data)})'
+        return f'ParameterNode: ({self.name}, dtype={type(self._data)})'
 
 
 class MessageNode(Node):
@@ -241,4 +243,4 @@ class MessageNode(Node):
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'MessageNode: ({self.name}, dtype={type(self.data)})'
+        return f'MessageNode: ({self.name}, dtype={type(self._data)})'
