@@ -1,6 +1,6 @@
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 from autogen.agentchat.contrib.math_user_proxy_agent import MathUserProxyAgent
-from autogen.trace.trace import trace
+from autogen.trace.trace import trace, compatability
 import copy
 import random
 #from ...include import testbed_utils
@@ -38,6 +38,10 @@ assistant = trace(AssistantAgent)(
         "config_list": config_list,
     },
 )
+
+# If you do not want to trace the mathproxyagent, you can use the following line instead.
+# Beware that the backward and optimizer methods further below may not work properly if you do not trace the mathproxyagent.
+#mathproxyagent = compatability(MathUserProxyAgent)(
 mathproxyagent = trace(MathUserProxyAgent)(
     "mathproxyagent",
     human_input_mode="NEVER",
