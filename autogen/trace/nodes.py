@@ -93,6 +93,10 @@ class AbstractNode:
     def level(self):
         return self._level
 
+    @property
+    def is_root(self):
+        return len(self.parents) == 0
+
     def add_child(self, child):
         assert child is not self, "Cannot add self as a child."
         assert isinstance(child, Node), f"{child} is not a Node."
@@ -112,6 +116,10 @@ class AbstractNode:
         assert all([ len(GRAPH._levels[i])>0 for i in range(len(GRAPH._levels)) ]), "Some levels are empty."
 
     def __str__(self) -> str:
+        # str(node) allows us to look up in the feedback dictionary easily
+        return f'{self.name}'
+
+    def __repr__(self) -> str:
         return f'Node: ({self.name}, dtype={type(self.data)})'
 
     def __lt__(self, other):  # for heapq (since it is a min heap)
