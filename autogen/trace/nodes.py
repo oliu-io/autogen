@@ -126,7 +126,7 @@ class AbstractNode:
     def __hash__(self):
         # hash should do it over str(self) or repr(self)
         # choose whichever one makes most sense
-        return hash(str(self))
+        return hash(self.__str__())
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
 
