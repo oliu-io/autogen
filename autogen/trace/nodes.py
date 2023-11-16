@@ -119,15 +119,15 @@ class AbstractNode:
         # str(node) allows us to look up in the feedback dictionary easily
         return f'Node: ({self.name}, dtype={type(self._data)})'
 
-    def __eq__(self, other):
-        # this makes it possible to store node as key in a dict
-        # feedback[node.child] = feedback
-        return hasattr(other, 'name') and self.name == other.name
+    # def __eq__(self, other):
+    #     # this makes it possible to store node as key in a dict
+    #     # feedback[node.child] = feedback
+    #     return hasattr(other, 'name') and self.name == other.name
 
-    def __hash__(self):
-        # hash should do it over str(self) or repr(self)
-        # choose whichever one makes most sense
-        return hash(self.__str__())
+    # def __hash__(self):
+    #     # hash should do it over str(self) or repr(self)
+    #     # choose whichever one makes most sense
+    #     return hash(self.__str__())
 
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
@@ -147,7 +147,7 @@ class Node(AbstractNode):
         """ Add feedback from a child. """
         if self._feedback is None:
             raise AttributeError(f"{self} has been backwarded.")
-        self._feedback[child.name] = feedback
+        self._feedback[child] = feedback
 
     def _del_feedback(self):
         self._feedback = None  # This saves memory and prevents backward from being called twice
@@ -174,7 +174,7 @@ class Node(AbstractNode):
             try:
                 node = heapq.heappop(queue)
                 assert isinstance(node, Node)
-                propagated_feedback = propagate(node, feedback)  # propagate information from child to parent
+                propagated_feedback = propagate(node, node._feedback)  # propagate information from child to parent
                 for parent, parent_feedback in propagated_feedback.items():
                     parent._add_feedback(node, parent_feedback)
                     heapq.heappush(queue, parent)  # put parent in the priority queue

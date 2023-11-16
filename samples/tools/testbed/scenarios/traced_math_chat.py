@@ -88,7 +88,8 @@ from autogen.trace.optimizers import DummyOptimizer
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
 def propagate(child, feedback):
     # a dummy function for testing
-    return {parent: copy.copy(feedback) for parent in child.parents}
+    summary =''.join([ f'{str(k)}:{v}' for k,v in feedback.items()])
+    return {parent: summary for parent in child.parents}
 feedback = 'Great job.'
 last_message = assistant.last_message()
 optimizer.zero_feedback()
@@ -98,10 +99,10 @@ optimizer.step()
 # Test check a path from output to input
 print()
 assert feedback in optimizer.parameters[0]
-assert all([v == feedback for v in optimizer.parameters[0]._feedback.values()])  # make sure feedback is propagated to the parameter
+assert all([feedback in v for v in optimizer.parameters[0]._feedback.values()])  # make sure feedback is propagated to the parameter
 node = last_message
 while True:
-    assert all([v == feedback for v in node._feedback.values()])
+    assert all([ feedback in v for v in node._feedback.values()])
     # print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node._feedback}')
     print(f'Node {node.name} at level {node.level}: Feedback {node._feedback}')
 
