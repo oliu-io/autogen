@@ -134,7 +134,7 @@ class AbstractNode:
 
 class Node(AbstractNode):
     """ Node for Autogen messages and prompts"""
-    def __init__(self, value, *, name=None, trainable=False) -> None:
+    def __init__(self, value, *, name=None, trainable=False, description="This is a Node in a computational graph.") -> None:
         # TODO only take in a dict with a certain structure
         if isinstance(value, str):
             warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
@@ -142,6 +142,11 @@ class Node(AbstractNode):
         super().__init__(value, name=name)
         self.trainable = trainable
         self._feedback = dict()  # (analogous to gradient) this is the (synthetic) feedback from the user
+        self._description = description # Infomation to describe of the node
+
+    @property
+    def description(self):
+        return self._description  # TODO return a textual description of the node
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
@@ -218,8 +223,8 @@ class Node(AbstractNode):
 # TODO
 class ParameterNode(Node):
     # This is a shorthand of a trainable Node.
-    def __init__(self, value, *, name=None, trainable=True) -> None:
-        super().__init__(value, name=name, trainable=trainable)
+    def __init__(self, value, *, name=None, trainable=True, description="This is a ParameterNode in a computational graph.") -> None:
+        super().__init__(value, name=name, trainable=trainable, description=description)
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
@@ -228,12 +233,11 @@ class ParameterNode(Node):
 
 class MessageNode(Node):
     """ Output of an operator. """
-    def __init__(self, value, mapping, *, args=None, kwargs=None, name=None) -> None:
+    def __init__(self, value, *, args=None, kwargs=None, name=None, description="This is a MessageNode in a computational graph.") -> None:
         # TODO maybe name the node after the mapping, once we figure out the syntax of mapping
-        super().__init__(value, name=name)
+        super().__init__(value, name=name, description=description)
         if GRAPH.TRACE:
             # Add parents if we are tracing
-            self._mapping = mapping
             self._args = () if args is None else args
             self._kwargs = {} if kwargs is None else kwargs
             for v in self._args:

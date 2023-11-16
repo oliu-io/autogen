@@ -48,7 +48,7 @@ def trace_operator(fun):
         mapping = inspect.getsource(fun)  # TODO how to describe the mapping and inputs?
         # get the source code
         # inspect.getdoc(fun)
-        m_result = MessageNode(result, mapping, args=m_args, kwargs=m_kwargs) if not isinstance(result, MessageNode) else result # TODO
+        m_result = MessageNode(result, description=mapping, args=m_args, kwargs=m_kwargs) if not isinstance(result, MessageNode) else result # TODO
         return m_result
     return wrapper
 
@@ -154,7 +154,7 @@ def trace_ConversableAgent(AgentCls):
             output = super()._append_oai_message(message.data, role, conversation_id)
             # replace with the MessageNode
             data = self._oai_messages[conversation_id][-1]
-            m_data = MessageNode(data, f'identity(message)', kwargs={'message': message})
+            m_data = MessageNode(data, description=f'identity(message)', kwargs={'message': message})
             self._oai_messages[conversation_id][-1] = m_data
             return output
 
@@ -180,7 +180,7 @@ def trace_ConversableAgent(AgentCls):
         def _process_received_message(self, message: Node, sender, silent):
             assert isinstance(message, Node), "message must be a Node type"
             data = self._message_to_dict(message.data)
-            message = MessageNode(data, f'_message_to_dict(message)', kwargs={'message': message})
+            message = MessageNode(data, description=f'_message_to_dict(message)', kwargs={'message': message})
             # When the agent receives a message, the role of the message is "user". (If 'role' exists and is 'function', it will remain unchanged.)
             valid = self._append_oai_message(message, "user", sender)  # message is a Node type
             if not valid:
@@ -201,7 +201,7 @@ def trace_ConversableAgent(AgentCls):
             with trace_node_usage():
                 reply = super().generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
             if reply is not None and not isinstance(reply, Node):
-                reply = MessageNode(reply, f'generate_reply(messages)', args=USED_NODES.nodes)  # TODO
+                reply = MessageNode(reply, description=f'generate_reply(messages)', args=USED_NODES.nodes)  # TODO
             return reply
 
         async def a_generate_reply(
@@ -221,7 +221,7 @@ def trace_ConversableAgent(AgentCls):
         #     flag, reply = super().generate_oai_reply(messages, sender, config)
         #     if reply is not None:
         #         m_messages = [node(m) for m in messages]
-        #         reply = MessageNode(reply, f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
+        #         reply = MessageNode(reply, description=f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
         #     return flag, reply
 
     return TracedAgent
