@@ -88,7 +88,7 @@ from autogen.trace.optimizers import DummyOptimizer
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
 def propagate(child, feedback):
     # a dummy function for testing
-    summary =''.join([ f'{str(k)}:{v}' for k,v in feedback.items()])
+    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in feedback.items()])  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
 feedback = 'Great job.'
 last_message = assistant.last_message()
