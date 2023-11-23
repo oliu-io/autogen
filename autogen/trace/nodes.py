@@ -183,7 +183,7 @@ class Node(AbstractNode):
             try:
                 node = heapq.heappop(queue)
                 assert isinstance(node, Node)
-                propagated_feedback = propagate(node, node._feedback)  # propagate information from child to parent
+                propagated_feedback = propagate(node)  # propagate information from child to parent
                 for parent, parent_feedback in propagated_feedback.items():
                     parent._add_feedback(node, parent_feedback)
                     heapq.heappush(queue, parent)  # put parent in the priority queue

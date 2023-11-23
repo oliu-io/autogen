@@ -86,9 +86,9 @@ mathproxyagent.initiate_chat(assistant, problem=math_problem)
 ## Using backward and optimizer from the trace_twoagent sample code
 from autogen.trace.optimizers import DummyOptimizer
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
-def propagate(child, feedback):
+def propagate(child):
     # a dummy function for testing
-    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in feedback.items()])  # we only take the first feedback for testing purposes
+    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
 feedback = 'Great job.'
 last_message = assistant.last_message()

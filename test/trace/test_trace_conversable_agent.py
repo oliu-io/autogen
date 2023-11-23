@@ -62,9 +62,9 @@ def test_trigger(retain_graph=False):
     optimizer = DummyOptimizer(agent1.parameters)
 
     ## Test backward
-    def propagate(child, feedback):
+    def propagate(child):
         # a dummy function for testing
-        summary =''.join([ f'{str(k)}:{v[0]}' for k,v in feedback.items()])  # we only take the first feedback for testing purposes
+        summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
         return {parent: summary for parent in child.parents}
     output = agent1.last_message()
     dummy_feedback = 'Dummy feedback'
@@ -75,8 +75,8 @@ def test_trigger(retain_graph=False):
     node = output
     while True:
         if retain_graph or len(node.parents)==0:
-            assert all([dummy_feedback in v[0] for v in node._feedback.values()])
-        print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node._feedback}')
+            assert all([dummy_feedback in v[0] for v in node.feedback.values()])
+        print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node.feedback}')
         if len(node.parents)>0:
             node = node.parents[0]
         else:

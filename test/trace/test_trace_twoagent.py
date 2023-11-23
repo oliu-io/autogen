@@ -15,9 +15,9 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 ## A simple demonstration of using backward and optimizer
 from autogen.trace.optimizers import DummyOptimizer
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
-def propagate(child, feedback):
+def propagate(child):
     # a dummy function for testing
-    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in feedback.items()])  # we only take the first feedback for testing purposes
+    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
 feedback = 'Great job.'
 last_message = assistant.last_message()
@@ -27,12 +27,12 @@ optimizer.step()
 
 # Test check a path from output to input
 assert feedback in optimizer.parameters[0]
-assert all([feedback in v[0] for v in optimizer.parameters[0]._feedback.values()])  # make sure feedback is propagated to the parameter
+assert all([feedback in v[0] for v in optimizer.parameters[0].feedback.values()])  # make sure feedback is propagated to the parameter
 node = last_message
 while True:
-    assert all([ feedback in v[0] for v in node._feedback.values()])
-    # print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node._feedback}')
-    print(f'Node {node.name} at level {node.level}: Feedback {node._feedback}')
+    assert all([ feedback in v[0] for v in node.feedback.values()])
+    # print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node.feedback}')
+    print(f'Node {node.name} at level {node.level}: Feedback {node.feedback}')
 
     if len(node.parents)>0:
         node = node.parents[0]
