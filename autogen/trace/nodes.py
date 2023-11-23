@@ -141,8 +141,12 @@ class Node(AbstractNode):
         assert  isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node), f"Value {value} must be a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
-        self._feedback = dict()  # (analogous to gradient) this is the (synthetic) feedback from the user
+        self._feedback = defaultdict(list)  # (analogous to gradient) this is the (synthetic) feedback from the user
         self._description = description # Infomation to describe of the node
+
+    @property
+    def feedback(self):
+        return self._feedback
 
     @property
     def description(self):
@@ -150,9 +154,10 @@ class Node(AbstractNode):
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
-        if self._feedback is None:
+        if self.feedback is None:
             raise AttributeError(f"{self} has been backwarded.")
-        self._feedback[child] = feedback
+        print(self, self._feedback)
+        self.feedback[child].append(feedback)
 
     def _del_feedback(self):
         self._feedback = None  # This saves memory and prevents backward from being called twice
@@ -170,7 +175,7 @@ class Node(AbstractNode):
         if self._feedback is None:  # This node has been backwarded
             raise AttributeError(f"{self} has been backwarded.")
 
-        self._feedback['user'] = feedback
+        self._add_feedback('user', feedback)
         if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
             return
 

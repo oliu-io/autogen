@@ -1,5 +1,6 @@
 
 from autogen.trace.nodes import ParameterNode
+from collections import defaultdict
 
 class Optimizer:
 
@@ -18,7 +19,7 @@ class Optimizer:
 
     def zero_feedback(self):
         for p in self.parameters:
-            p._feedback = {}
+            p._feedback = defaultdict(list)
 
 
 class DummyOptimizer(Optimizer):
@@ -35,6 +36,5 @@ class DummyOptimizer(Optimizer):
             base = value
         else:
             raise NotImplementedError
-        new = base + ' '.join(list(feedback.values()))
-
+        new = base + ' '.join([  ' '.join(l) for l in feedback.values()])
         return new
