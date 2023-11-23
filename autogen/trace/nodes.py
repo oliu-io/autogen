@@ -156,7 +156,6 @@ class Node(AbstractNode):
         """ Add feedback from a child. """
         if self.feedback is None:
             raise AttributeError(f"{self} has been backwarded.")
-        print(self, self._feedback)
         self.feedback[child].append(feedback)
 
     def _del_feedback(self):
