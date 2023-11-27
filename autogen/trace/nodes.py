@@ -194,7 +194,8 @@ class Node(AbstractNode):
                 propagated_feedback = propagate(node)  # propagate information from child to parent
                 for parent, parent_feedback in propagated_feedback.items():
                     parent._add_feedback(node, parent_feedback)
-                    heapq.heappush(queue, parent)  # put parent in the priority queue
+                    if len(parent.parents) > 0:
+                        heapq.heappush(queue, parent)  # put parent in the priority queue
 
                 node._del_feedback()  # delete feedback to save memory
                 if not retain_graph and len(node.parents)>0:
