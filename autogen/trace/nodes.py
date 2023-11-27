@@ -147,6 +147,7 @@ class Node(AbstractNode):
         self.trainable = trainable
         self._feedback = defaultdict(list)  # (analogous to gradient) this is the (synthetic) feedback from the user
         self._description = description # Infomation to describe of the node
+        self._backwarded = False
 
     @property
     def feedback(self):
@@ -165,7 +166,7 @@ class Node(AbstractNode):
     def _del_feedback(self):
         self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
 
-    def backward(self, feedback, propagate, retain_graph=False):
+    def backward(self, feedback: str, propagate, retain_graph=False):
         """ Backward pass.
 
             feedback: feedback given to the current node
@@ -175,15 +176,13 @@ class Node(AbstractNode):
                     return {parent: propagated feedback for parent in node.parents}
 
         """
-        if self._feedback is None:  # This node has been backwarded
+        # if self._feedback is None:  # This node has been backwarded
+        #     raise AttributeError(f"{self} has been backwarded.")
+        if self._backwarded:
             raise AttributeError(f"{self} has been backwarded.")
 
-        if type(feedback) is str:
-            self._add_feedback('user', feedback)
-        else:
-            # feedback can be a MessageNode from an assistant
-            # or from a UserProxy agent
-            self._add_feedback('user', feedback.data['content'])
+        assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
+
         if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
             return
 
@@ -196,8 +195,11 @@ class Node(AbstractNode):
                 for parent, parent_feedback in propagated_feedback.items():
                     parent._add_feedback(node, parent_feedback)
                     heapq.heappush(queue, parent)  # put parent in the priority queue
+
+                node._del_feedback()  # delete feedback to save memory
                 if not retain_graph and len(node.parents)>0:
-                    node._del_feedback()  # delete feedback to save memory
+                    node._backwarded = True  # set backwarded to True
+
             except IndexError:  # queue is empty
                 break
 
