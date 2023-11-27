@@ -174,7 +174,12 @@ class Node(AbstractNode):
         if self._feedback is None:  # This node has been backwarded
             raise AttributeError(f"{self} has been backwarded.")
 
-        self._add_feedback('user', feedback)
+        if type(feedback) is str:
+            self._add_feedback('user', feedback)
+        else:
+            # feedback can be a MessageNode from an assistant
+            # or from a UserProxy agent
+            self._add_feedback('user', feedback.data['content'])
         if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
             return
 

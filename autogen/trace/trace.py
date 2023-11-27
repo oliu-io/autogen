@@ -3,6 +3,7 @@ from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH, USED_NO
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
+from dill.source import getsource
 
 def node(message):
     # wrap the message as a Node if it's not
@@ -45,7 +46,7 @@ def trace_operator(fun):
         # wrap the inputs and outputs as Nodes if they're not
         m_args = (node(v) for v in args)
         m_kwargs = {k: node(v) for k, v in kwargs.items()}
-        mapping = inspect.getsource(fun)  # TODO how to describe the mapping and inputs?
+        mapping = getsource(fun)  # TODO how to describe the mapping and inputs?
         # get the source code
         # inspect.getdoc(fun)
         m_result = MessageNode(result, description=mapping, args=m_args, kwargs=m_kwargs) if not isinstance(result, MessageNode) else result # TODO
