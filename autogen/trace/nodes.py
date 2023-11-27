@@ -97,6 +97,10 @@ class AbstractNode:
     def is_root(self):
         return len(self.parents) == 0
 
+    @property
+    def is_leaf(self):
+        return len(self.children) == 0
+
     def add_child(self, child):
         assert child is not self, "Cannot add self as a child."
         assert isinstance(child, Node), f"{child} is not a Node."

@@ -19,8 +19,14 @@ class Optimizer:
 
     def zero_feedback(self):
         for p in self.parameters:
+            # trace the children of parameters and clean their feedback
             p._feedback = defaultdict(list)
-
+            q = []
+            q.extend(p._children)
+            while q:
+                node = q.pop()
+                node._feedback = defaultdict(list)
+                q.extend(node._children)
 
 class DummyOptimizer(Optimizer):
     # FOR TESTING PURPOSES ONLY
