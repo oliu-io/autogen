@@ -163,7 +163,7 @@ class Node(AbstractNode):
         self.feedback[child].append(feedback)
 
     def _del_feedback(self):
-        self._feedback = None  # This saves memory and prevents backward from being called twice
+        self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
 
     def backward(self, feedback, propagate, retain_graph=False):
         """ Backward pass.

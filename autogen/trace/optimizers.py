@@ -21,12 +21,6 @@ class Optimizer:
         for p in self.parameters:
             # trace the children of parameters and clean their feedback
             p._feedback = defaultdict(list)
-            q = []
-            q.extend(p._children)
-            while q:
-                node = q.pop()
-                node._feedback = defaultdict(list)
-                q.extend(node._children)
 
 class DummyOptimizer(Optimizer):
     # FOR TESTING PURPOSES ONLY
@@ -44,3 +38,10 @@ class DummyOptimizer(Optimizer):
             raise NotImplementedError
         new = base + ' '.join([  ' '.join(l) for l in feedback.values()])
         return new
+
+# This is used for propagate
+class FeedbackEnhancer:
+    def __init__(self, parameters, *args, **kwargs):
+        assert type(parameters) is list
+        assert all([isinstance(p, ParameterNode) for p in parameters])
+        self.parameters = parameters

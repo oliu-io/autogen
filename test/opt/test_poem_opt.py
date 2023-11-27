@@ -1,7 +1,6 @@
 """
 In this file, we should have:
-2. Redefine propagate to only get the last feedback message
-   - where would FeedbackEnhance go? (10 min)
+2. Add FeedbackEnhance
 3. An optimizer that optimizes...with an agent call (20 min)
 """
 
@@ -21,6 +20,7 @@ assert config_list[0]["model"] == "gpt-3.5-turbo-0613"
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
+# TODO: like the chessboard, PoemAgent needs to call this before
 class PoemExtractAgent(AssistantAgent):
 
     def __init__(self):
@@ -52,11 +52,23 @@ user_agent = trace(VerbalGymUserAgent)(env_name="verbal-poem-Haiku-v0",
 init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(student_agent, message=init_obs)
 
+# ======= Now with the env reward, we can optimize =======
+
+
 optimizer = DummyOptimizer(student_agent.parameters)  # This just concatenates the feedback into the parameter
-def propagate(child):
-    # a dummy function for testing
-    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
-    return {parent: summary for parent in child.parents}
+
+# use closure to safely add an agent...
+def info_propagate(info_merge_agent=None):
+    def propagate(child):
+        # a dummy function for testing
+        summary = ''.join([f'{str(k)}:{v[0]}' for k, v in
+                           child.feedback.items()])  # we only take the first feedback for testing purposes
+        return {parent: summary for parent in child.parents}
+
+    return propagate
+
+propagate = info_propagate(None)
+
 feedback = user_agent.last_message()
 last_message = student_agent.last_message()
 optimizer.zero_feedback()
