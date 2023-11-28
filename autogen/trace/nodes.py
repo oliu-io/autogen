@@ -271,3 +271,7 @@ class MessageNode(Node):
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
         return f'MessageNode: ({self.name}, dtype={type(self._data)})'
+
+    @property
+    def data(self):
+        return copy.deepcopy(super().data)

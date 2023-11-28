@@ -24,6 +24,21 @@ class no_trace():
     def __exit__(self, type, value, traceback):
         GRAPH.TRACE = True
 
+def compatability(fun):
+    if not inspect.isclass(fun):  # do nothing
+        # TODO what to do here?
+        assert callable(fun), "fun must be a callable"
+        return fun
+    assert issubclass(fun, ConversableAgent), "fun must be a ConversableAgent or a callable method."
+    traced_Cls = trace_ConversableAgent(fun)
+    @for_all_methods
+    def no_trace_decorator(fun):
+        def wrapper(*args, **kwargs):
+            with no_trace():
+                return fun(*args, **kwargs)
+        return wrapper
+    return no_trace_decorator(traced_Cls)
+
 
 def trace_node_usage(fun, agent=None, description=None):
     """ A decorator to track which nodes are used in an operator. After
@@ -81,49 +96,6 @@ def trace_operator(fun):
         return m_result
     return wrapper
 
-
-def compatability(fun):
-
-    if not inspect.isclass(fun):  # do nothing
-        assert callable(fun), "fun must be a callable"
-        return fun
-
-    assert issubclass(fun, ConversableAgent)
-    traced_Cls = trace_ConversableAgent(fun)
-
-    class CompatibleAgent(traced_Cls):
-        # Just add no_trace to all public methods that may create MessageNodes
-
-        def send(
-            self,
-            message: Union[Dict, str, Node],
-            recipient: Agent,
-            request_reply: Optional[bool] = None,
-            silent: Optional[bool] = False,
-        ):
-            with no_trace():
-                super().send(message, recipient, request_reply, silent)
-
-        def receive(
-            self,
-            message: Node,
-            sender: Agent,
-            request_reply: Optional[bool] = None,
-            silent: Optional[bool] = False,
-        ):
-            with no_trace():
-                super().receive(message, sender, request_reply, silent)
-
-        def generate_reply(
-            self,
-            messages: Optional[List[Node]] = None,
-            sender: Optional[Agent] = None,
-            exclude: Optional[List[Callable]] = None,
-        ) -> Union[Node, None]:
-            with no_trace():
-                return super().generate_reply(messages, sender, exclude)
-
-    return CompatibleAgent
 
 
 
