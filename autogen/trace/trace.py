@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH, USED_NODES
+from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH, USED_NODES, NAME_SCOPES
 from autogen.agentchat.agent import Agent
 from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
@@ -24,17 +24,45 @@ class no_trace():
     def __exit__(self, type, value, traceback):
         GRAPH.TRACE = True
 
-class trace_node_usage:
-    """ A context manager to track which nodes are used in an operator. After
+
+def trace_node_usage(fun, agent=None, description=None):
+    """ A decorator to track which nodes are used in an operator. After
          leaving the context, the nodes used in the operator can be found in
          USED_NODES.nodes.
     """
-    def __enter__(self):
+    description = description or f'{fun.__name__}(*args, **kwargs)'  # TODO
+    def wrapper(*args, **kwargs):
+        assert not USED_NODES.open, "trace_node_usage can't be nested"  # TODO Is this the right behavior?
         USED_NODES.reset()
         USED_NODES.open = True
-
-    def __exit__(self, exc_type, exc_value, traceback):
+        output = fun(*args, **kwargs)
         USED_NODES.open = False
+        # USED_NODES contains the nodes used in the operator fun
+        if output is not None and not isinstance(output, Node):
+            output = MessageNode(output, description=description, args=USED_NODES.nodes)  # TODO
+        return output
+    return wrapper
+
+def for_all_methods(decorator):
+    """ Applying a decorator to all methods of a class. """
+    def decorate(cls):
+        for attr in cls.__dict__: # there's propably a better way to do this
+            if callable(getattr(cls, attr)) and not attr.startswith("__"):
+                setattr(cls, attr, decorator(getattr(cls, attr)))
+        return cls
+    return decorate
+
+@for_all_methods
+def trace_agent_scope(fun):
+    # When a method of an agent is called, the agent's name is added to the scope.
+    def wrapper(self, *args, **kwargs):
+        assert isinstance(self, ConversableAgent)
+        NAME_SCOPES.append(self.name)
+        output = fun(self, *args, **kwargs)
+        NAME_SCOPES.pop()
+        return output
+    return wrapper
+
 
 def trace_operator(fun):
     # trace a function
@@ -107,6 +135,7 @@ def trace_ConversableAgent(AgentCls):
     # make all the messages the MessageNode type
     assert issubclass(AgentCls, ConversableAgent)
 
+    @trace_agent_scope
     class TracedAgent(AgentCls):
 
         def __init__(self, *args, **kwargs):
@@ -199,10 +228,8 @@ def trace_ConversableAgent(AgentCls):
         ) -> Union[Node, None]:
             if messages is not None:
                 assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
-            with trace_node_usage():
-                reply = super().generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
-            if reply is not None and not isinstance(reply, Node):
-                reply = MessageNode(reply, description=f'generate_reply(messages)', args=USED_NODES.nodes)  # TODO
+            generate_reply = trace_node_usage(super().generate_reply, description=f'generate_reply(messages)')
+            reply = generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
             return reply
 
         async def a_generate_reply(
@@ -212,18 +239,6 @@ def trace_ConversableAgent(AgentCls):
             exclude: Optional[List[Callable]] = None,
         ) -> Union[str, Dict, None]:
             raise NotImplementedError
-
-        # def generate_oai_reply(
-        #     self,
-        #     messages: Optional[List[Dict]] = None,
-        #     sender: Optional[Agent] = None,
-        #     config: Optional[Any] = None,
-        # ) -> Tuple[bool, Union[str, Dict, None]]:
-        #     flag, reply = super().generate_oai_reply(messages, sender, config)
-        #     if reply is not None:
-        #         m_messages = [node(m) for m in messages]
-        #         reply = MessageNode(reply, description=f'generate_oai_reply(*messages, system_message=system_message)', args=m_messages, kwargs={'system_message': self.__oai_system_message}) # XXX
-        #     return flag, reply
 
     return TracedAgent
 

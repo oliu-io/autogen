@@ -8,6 +8,7 @@ import copy
 from collections import defaultdict, deque
 import heapq
 
+NAME_SCOPES = []  # A stack of name scopes
 
 class Graph:
     """ Directed Acyclic Graph. A global registry of all the nodes.
@@ -22,6 +23,8 @@ class Graph:
         assert isinstance(node, Node)
         assert len(node.name.split(':'))==2
         name, id = node.name.split(':')
+        if len(NAME_SCOPES)>0:
+            name = NAME_SCOPES[-1] + '/' + name
         self._nodes[name].append(node)
         node._name = name + ':' + str(len(self._nodes[name])-1)
         self._levels[node._level].append(node)
@@ -51,6 +54,9 @@ class UsedNodes:
     def add(self, node):
         if self.open:
             self.nodes.add(node)
+
+    def __len__(self):
+        return len(self.nodes)
 
     def __contains__(self, node):
         return node in self.nodes
@@ -182,6 +188,7 @@ class Node(AbstractNode):
             raise AttributeError(f"{self} has been backwarded.")
 
         assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
+        self._add_feedback('user', feedback)
 
         if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
             return
