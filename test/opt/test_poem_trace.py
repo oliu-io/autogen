@@ -62,7 +62,7 @@ def propagate(child):
 feedback = user_agent.last_message()
 last_message = student_agent.last_message()
 optimizer.zero_feedback()
-last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
+last_message.backward(feedback['content'], propagate, retain_graph=True)  # Set retain_graph for testing
 optimizer.step()
 
 feedback_content = feedback.data['content']

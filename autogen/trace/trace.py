@@ -40,23 +40,26 @@ def compatability(fun):
     return no_trace_decorator(traced_Cls)
 
 
-def trace_node_usage(fun, agent=None, description=None):
+def trace_node_usage(description=None):
     """ A decorator to track which nodes are used in an operator. After
          leaving the context, the nodes used in the operator can be found in
          USED_NODES.nodes.
     """
-    description = description or f'{fun.__name__}(*args, **kwargs)'  # TODO
-    def wrapper(*args, **kwargs):
-        assert not USED_NODES.open, "trace_node_usage can't be nested"  # TODO Is this the right behavior?
-        USED_NODES.reset()
-        USED_NODES.open = True
-        output = fun(*args, **kwargs)
-        USED_NODES.open = False
-        # USED_NODES contains the nodes used in the operator fun
-        if output is not None and not isinstance(output, Node):
-            output = MessageNode(output, description=description, args=USED_NODES.nodes)  # TODO
-        return output
-    return wrapper
+    def decorator(fun):
+
+        def wrapper(*args, **kwargs):
+            assert not USED_NODES.open, "trace_node_usage can't be nested"  # TODO Is this the right behavior?
+            USED_NODES.reset()
+            USED_NODES.open = True
+            output = fun(*args, **kwargs)
+            USED_NODES.open = False
+            # USED_NODES contains the nodes used in the operator fun
+            if output is not None and not isinstance(output, Node):
+                node_description = description or f'{fun.__name__}(*args, **kwargs)'  # TODO
+                output = MessageNode(output, description=node_description, args=USED_NODES.nodes)  # TODO
+            return output
+        return wrapper
+    return decorator
 
 def for_all_methods(decorator):
     """ Applying a decorator to all methods of a class. """
@@ -200,8 +203,12 @@ def trace_ConversableAgent(AgentCls):
         ) -> Union[Node, None]:
             if messages is not None:
                 assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
-            generate_reply = trace_node_usage(super().generate_reply, description=f'generate_reply(messages)')
-            reply = generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
+
+            _generate_reply = super().generate_reply
+            @trace_node_usage(description=f'generate_reply(messages)')
+            def generate_reply(messages, sender, exclude):
+                return _generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
+            reply = generate_reply(messages, sender, exclude)
             return reply
 
         async def a_generate_reply(
