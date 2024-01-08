@@ -93,10 +93,11 @@ student_agent = trace(StudentAgent)(seed=13)
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
-init_obs = user_agent.get_starting_message()
+
 
 # ======= Now with the env reward, we can optimize =======
 
+init_obs = user_agent.get_starting_message()
 optimizer = LLMOptimizer(student_agent.parameters,
                          config_list=config_list,
                          task_description=dedent("""
@@ -105,7 +106,6 @@ optimizer = LLMOptimizer(student_agent.parameters,
                          """.format(init_obs)))  # This just concatenates the feedback into the parameter
 
 
-# use closure to safely add an agent...
 def info_propagate(info_merge_agent=None):
     def propagate(child):
         # we only take the actual feedback, no concat
@@ -115,25 +115,25 @@ def info_propagate(info_merge_agent=None):
 
     return propagate
 
-
 propagate = info_propagate(None)
 
-print("Old prompt:", student_agent.parameters[0].data)
+optimization_steps = 2
 
-user_agent.initiate_chat(student_agent, message=init_obs)
-feedback = user_agent.last_message().data['content']
-last_message = student_agent.last_message()
-optimizer.zero_feedback()
-last_message.backward(feedback, propagate, retain_graph=False)  # Set retain_graph for testing
-optimizer.step()
+for _ in range(optimization_steps):
+    print("Old prompt:", student_agent.parameters[0].data)
 
-print("New prompt:", student_agent.parameters[0].data)
+    init_obs = user_agent.get_starting_message()
+    user_agent.initiate_chat(student_agent, message=init_obs)
+    feedback = user_agent.last_message().data['content']
 
-user_agent.initiate_chat(student_agent, message=init_obs)
-feedback = user_agent.last_message().data['content']
-last_message = student_agent.last_message()
-optimizer.zero_feedback()
-last_message.backward(feedback, propagate, retain_graph=False)  # Set retain_graph for testing
-optimizer.step()
+    if user_agent.reward_history[-1] == 1.0:
+        print("Reached highest reward.")
+        break
 
-print("New prompt:", student_agent.parameters[0].data)
+    last_message = student_agent.last_message()
+
+    optimizer.zero_feedback()
+    last_message.backward(feedback, propagate, retain_graph=False)
+    optimizer.step()
+
+    print("New prompt:", student_agent.parameters[0].data)

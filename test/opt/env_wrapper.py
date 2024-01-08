@@ -16,7 +16,7 @@ class LLFBenchUserAgent(autogen.UserProxyAgent):
             max_consecutive_auto_reply=5,
             human_input_mode='NEVER'
         )
-        self.register_reply(autogen.ConversableAgent, LLFBenchUserAgent._generate_verbal_gym_reply)
+        self.register_reply(autogen.ConversableAgent, LLFBenchUserAgent._generate_llfbench_reply)
         filtered_reply_func_list = []
         # we remove the function call to send the message to openai
         for tup in self._reply_func_list:
@@ -29,6 +29,9 @@ class LLFBenchUserAgent(autogen.UserProxyAgent):
         self.info_history = []
         self.reward_history = []
         self.obs_history = []
+
+    def get_task_description(self):
+        pass
 
     def get_starting_message(self):
         # should do two things:
@@ -49,9 +52,9 @@ class LLFBenchUserAgent(autogen.UserProxyAgent):
             message += f"Instruction: {next_obs}\n\n"
         return message
 
-    def _generate_verbal_gym_reply(self, messages: Optional[List[Dict]] = None,
-                                   sender: Optional[autogen.Agent] = None,
-                                   config: Optional[Any] = None) -> Tuple[bool, str]:
+    def _generate_llfbench_reply(self, messages: Optional[List[Dict]] = None,
+                                 sender: Optional[autogen.Agent] = None,
+                                 config: Optional[Any] = None) -> Tuple[bool, str]:
         # This returns final, reply
         # so this is not to indicate that the whole conversation should be over...
 

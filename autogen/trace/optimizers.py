@@ -72,7 +72,9 @@ class LLMOptimizer(Optimizer):
         Using this instruction, this is the feedback the student received:
         {}
         
-        Please write down a new instruction to help the student achieve a higher score:
+        Please write down a new instruction to help the student achieve a higher score.
+        Be concise and to the point.
+        Remember the student is starting from scratch, not revising their old work:
         """.format(*context))
 
         messages = [{'content': prompt_space, 'role': 'user'}]
