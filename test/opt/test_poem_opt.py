@@ -90,7 +90,7 @@ class StudentAgent(AssistantAgent):
 
 max_turn = 1
 student_agent = trace(StudentAgent)(seed=13)
-user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
+user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Tanka-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
 
@@ -105,23 +105,73 @@ optimizer = LLMOptimizer(student_agent.parameters,
                          {}
                          """.format(init_obs)))  # This just concatenates the feedback into the parameter
 
-optimization_steps = 2
+performances = []
+exp_runs = 5
 
-for _ in range(optimization_steps):
-    print("Old prompt:", student_agent.parameters[0].data)
+for _ in range(exp_runs):
+    optimization_steps = 4
+    performance = []
 
-    init_obs = user_agent.get_starting_message()
-    user_agent.initiate_chat(student_agent, message=init_obs)
-    feedback = user_agent.last_message().data['content']
+    for _ in range(optimization_steps):
+        print("Old prompt:", student_agent.parameters[0].data)
 
-    if user_agent.reward_history[-1] == 1.0:
-        print("Reached highest reward.")
-        break
+        init_obs = user_agent.get_starting_message()
+        user_agent.initiate_chat(student_agent, message=init_obs)
+        feedback = user_agent.last_message().data['content']
 
-    last_message = student_agent.last_message()
+        performance.append(user_agent.reward_history[-1])
 
-    optimizer.zero_feedback()
-    last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False)
-    optimizer.step()
+        if user_agent.reward_history[-1] == 1.0:
+            print("Reached highest reward.")
+            break
 
-    print("New prompt:", student_agent.parameters[0].data)
+        last_message = student_agent.last_message()
+
+        optimizer.zero_feedback()
+        last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False)
+        optimizer.step()
+
+        print("New prompt:", student_agent.parameters[0].data)
+
+    print("Agent reward history:", performance)
+
+    performances.append(performance)
+
+def backfill_lists(parent_list):
+    max_length = max(len(child) for child in parent_list)
+
+    for child in parent_list:
+        # While the child list is shorter than the longest, append its last element
+        while len(child) < max_length:
+            child.append(child[-1])
+
+    return parent_list
+
+performances = backfill_lists(performances)
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+performances = np.array(performances)
+
+# Calculate mean and standard deviation
+means = np.mean(performances, axis=0)
+stds = np.std(performances, axis=0)
+
+# Epochs
+epochs = np.arange(1, len(means) + 1)
+
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(epochs, means, label='Mean Performance')
+plt.fill_between(epochs, means - stds, means + stds, alpha=0.2)
+
+# Labels and title
+plt.xlabel('Epoch')
+plt.ylabel('Performance')
+plt.title('Performance Across Epochs with Confidence Interval')
+plt.legend()
+plt.grid(True)
+
+# Show plot
+plt.show()
