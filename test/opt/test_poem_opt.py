@@ -12,7 +12,7 @@ from env_wrapper import LLFBenchUserAgent
 from typing import Any, Dict, List, Optional, Union
 from collections import defaultdict
 
-from autogen.trace.optimizers import DummyOptimizer, LLMOptimizer
+from autogen.trace.optimizers import DummyOptimizer, LLMOptimizer, PropagateStrategy
 
 from autogen import OpenAIWrapper
 from autogen import Completion, ChatCompletion
@@ -105,18 +105,6 @@ optimizer = LLMOptimizer(student_agent.parameters,
                          {}
                          """.format(init_obs)))  # This just concatenates the feedback into the parameter
 
-
-def info_propagate(info_merge_agent=None):
-    def propagate(child):
-        # we only take the actual feedback, no concat
-        summary = ''.join(
-            [v[0] for k, v in child.feedback.items()])  # we only take the first feedback for testing purposes
-        return {parent: summary for parent in child.parents}
-
-    return propagate
-
-propagate = info_propagate(None)
-
 optimization_steps = 2
 
 for _ in range(optimization_steps):
@@ -133,7 +121,7 @@ for _ in range(optimization_steps):
     last_message = student_agent.last_message()
 
     optimizer.zero_feedback()
-    last_message.backward(feedback, propagate, retain_graph=False)
+    last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False)
     optimizer.step()
 
     print("New prompt:", student_agent.parameters[0].data)
