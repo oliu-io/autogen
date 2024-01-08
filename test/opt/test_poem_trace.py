@@ -10,7 +10,7 @@ In this file, we should have:
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 from autogen.trace.trace import trace
 from textwrap import dedent, indent
-from env_wrapper import VerbalGymUserAgent
+from env_wrapper import LLFBenchUserAgent
 
 from autogen.trace.optimizers import DummyOptimizer
 
@@ -48,8 +48,8 @@ class StudentAgent(AssistantAgent):
 
 max_turn = 1
 student_agent = trace(StudentAgent)(seed=13)
-user_agent = trace(VerbalGymUserAgent)(env_name="verbal-poem-Haiku-v0",
-                               llm_config={"temperature": 0.0, "config_list": config_list})
+user_agent = trace(LLFBenchUserAgent)(env_name="verbal-poem-Haiku-v0",
+                                      llm_config={"temperature": 0.0, "config_list": config_list})
 
 init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(student_agent, message=init_obs)

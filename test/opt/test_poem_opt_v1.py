@@ -6,44 +6,13 @@ In this file, we should have:
 
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
-from autogen.trace.trace import trace, node, trace_node_usage, Node
+from autogen.trace.trace import trace
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 from typing import Any, Dict, List, Optional, Union
 from collections import defaultdict
 
 from autogen.trace.optimizers import DummyOptimizer, LLMOptimizer
-
-from autogen import OpenAIWrapper
-from autogen import Completion, ChatCompletion
-
-def extract_text_or_completion_object(response, tool_enabled=False):
-    """Extract the text or ChatCompletion objects from a completion or chat response.
-
-    Args:
-        response (ChatCompletion | Completion): The response from openai.
-
-    Returns:
-        A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
-    """
-    choices = response.choices
-    if isinstance(response, Completion):
-        return [choice.text for choice in choices]
-
-    TOOL_ENABLED = tool_enabled
-
-    if TOOL_ENABLED:
-        return [
-            choice.message
-            if choice.message.function_call is not None or choice.message.tool_calls is not None
-            else choice.message.content
-            for choice in choices
-        ]
-    else:
-        return [
-            choice.message if choice.message.function_call is not None else choice.message.content
-            for choice in choices
-        ]
 
 
 # Load LLM inference endpoints from an env variable or a file
@@ -55,10 +24,43 @@ assert config_list[0]["model"] == "gpt-3.5-turbo-0613"
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
+sys_msg = dedent("""
+You are a helpful assistant.
+You extract only lines of poems in the message frmo the student, ignore any part of the message that is not related to the poem.
+You should only reply with the poem string extracted from the user's input.
+""")
+class PoemExtractAgent(AssistantAgent):
+
+    def __init__(self):
+        # Modified from BoardAgent in ChessBaord example
+        super().__init__(
+            name="PoemExtractAgent",
+            system_message=sys_msg,
+            llm_config={"temperature": 0.0, "config_list": config_list},
+            max_consecutive_auto_reply=5
+        )
+        self.register_reply(autogen.ConversableAgent, PoemExtractAgent._generate_extractor_reply)
+        self.correct_messages = defaultdict(list)
+
+    def _generate_extractor_reply(self,
+                                  messages: Optional[List[Dict]] = None,
+                                  sender: Optional[autogen.Agent] = None,
+                                  config: Optional[Any] = None,
+                                  ):
+        message = messages[-1]
+        # extract the poem
+        reply = self.generate_reply(self.correct_messages[sender] + [message], sender,
+                                    exclude=[PoemExtractAgent._generate_board_reply])
+        poem = reply if isinstance(reply, str) else str(reply["content"])
+        self.correct_messages[sender].extend([message, self._message_to_dict(poem)])
+        self.correct_messages[sender][-1]["role"] = "assistant"
+        return True, poem
+
+
 sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem.")
 
 class StudentAgent(AssistantAgent):
-    def __init__(self, seed=1234):
+    def __init__(self, seed=1234, extractor_agent=None):
         super().__init__(
             name="StudentAgent",
             system_message=sys_msg,
@@ -66,30 +68,36 @@ class StudentAgent(AssistantAgent):
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
         )
-        self.extraction_sys_prompt = dedent("""
-        You are a helpful assistant.
-        You extract only lines of poems in the message from the student, ignore any part of the message that is not related to the poem.
-        You should only reply with the poem string extracted from the user's input.
-        """)
-        self.register_reply(autogen.ConversableAgent, StudentAgent._generate_reply_for_user, position=5)
+        self.extractor_agent = extractor_agent
+        self.register_reply(autogen.ConversableAgent, StudentAgent._generate_reply_for_user, config=self.extractor_agent)
 
     def _generate_reply_for_user(self,
-                         messages: Optional[List[Dict]] = None,
-                         sender: Optional[autogen.Agent] = None,
-                         config: Optional[Any] = None,
-                         ):
-        if messages is None:
+                                 messages: Optional[List[Dict]] = None,
+                                 sender: Optional[autogen.Agent] = None,
+                                 config: Optional[PoemExtractAgent] = None,
+                                 ):
+        poem_extractor_agent = config
+        message = self.generate_reply(messages, sender, exclude=[self._generate_reply_for_user])
+        if message is None:
             return True, None
         # if there is a response, we try to extract it
-        response = self.client.create(messages=[{
-            "role": "system",
-            "content": self.extraction_sys_prompt,
-        }, {"role": "user", "content": messages[-1]['content']}], model="gpt-3.5-turbo")
+        self.initiate_chat(poem_extractor_agent, clear_history=True, message=message, silent=self.human_input_mode == "NEVER")
+        # last message sent by the board agent
+        last_message = self._oai_messages[poem_extractor_agent][-1]
+        if last_message["role"] == "assistant":
+            # I don't know when this will be triggered?
+            return True, None
 
-        return True, {"content": response}
+        # I don't know if this is correct either
+        return True, self._oai_messages[poem_extractor_agent][-2]
+
+
+sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem.")
+
 
 max_turn = 1
-student_agent = trace(StudentAgent)(seed=13)
+extractor_agent = PoemExtractAgent()
+student_agent = trace(StudentAgent)(seed=13, extractor_agent=extractor_agent)
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
