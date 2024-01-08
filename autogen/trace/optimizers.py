@@ -84,9 +84,50 @@ class LLMOptimizer(Optimizer):
         return new_node
 
 
-# This is used for propagate
+class PropagateStrategy:
+    @staticmethod
+    def retain_last_only_propagate(child):
+        summary = ''.join(
+            [v[0] for k, v in child.feedback.items()])
+        return {parent: summary for parent in child.parents}
+
+    @staticmethod
+    def retain_full_history_propagate(child):
+        # this retains the full history
+        summary = ''.join([f'{str(k)}:{v[0]}' for k, v in
+                           child.feedback.items()])
+        return {parent: summary for parent in child.parents}
+
+
+# This updates feedback before the optimizer
 class FeedbackEnhancer:
-    def __init__(self, parameters, *args, **kwargs):
+    def __init__(self, parameters, config_list, *args, **kwargs):
+        # can add task description in here
         assert type(parameters) is list
         assert all([isinstance(p, ParameterNode) for p in parameters])
         self.parameters = parameters
+        sys_msg = dedent("""
+                You are analyzing the crash report of an intelligent assistant.
+                The crash report prints out the path of the execution of the assistant, but might not be helpful.
+                It also contains the feedback the assistant received from the user.
+                Give a high-level, concise summary of the crash report.
+                """)
+        self.llm = AssistantAgent(name="assistant",
+                                  system_message=sys_msg,
+                                  llm_config={"config_list": config_list})
+
+    def update_feedback(self):
+        for p in self.parameters:
+            if p.trainable:
+                p._feedback = self._update_feedback(p._feedback)  # NOTE: This is an in-place update
+
+    def _update_feedback(self, feedback):
+        new_feedback_dict = {}
+        for parent_node, list_of_feedback in feedback.items():
+            all_feedback = "\n\n".join(list_of_feedback)
+            messages = [{'content': all_feedback, 'role': 'user'}]
+            response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
+            new_feedback = self.llm.client.extract_text_or_function_call(response)[0]
+            print(new_feedback)
+            new_feedback_dict[parent_node] = new_feedback
+        return new_feedback_dict
