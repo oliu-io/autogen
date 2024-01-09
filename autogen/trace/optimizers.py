@@ -122,9 +122,21 @@ class PropagateStrategy:
                            child.feedback.items()])
         return {parent: summary for parent in child.parents}
 
+class RuleBasedOptimizationPathSummary:
+    """
+    This does the rule-based merging/expansion of the optimization path
+    """
+    def __init__(self, parameters, config_list, *args, **kwargs):
+        # can add task description in here
+        assert type(parameters) is list
+        assert all([isinstance(p, ParameterNode) for p in parameters])
+        self.parameters = parameters
+        self.parameter_copy = {}
+        self.save_parameter_copy()
+
 
 # This updates feedback before the optimizer
-class OptimizationPathSummary:
+class LLMOptimizationPathSummary:
     def __init__(self, parameters, config_list, *args, **kwargs):
         # can add task description in here
         assert type(parameters) is list
@@ -166,7 +178,6 @@ class OptimizationPathSummary:
             new_feedback_dict[parent_node] = new_feedback
         return new_feedback_dict
 
-
 class FeedbackEnhance:
     def __init__(self, parameters, config_list, *args, **kwargs):
         # can add task description in here
@@ -175,7 +186,7 @@ class FeedbackEnhance:
         self.parameters = parameters
         sys_msg = dedent("""
                 ...
-                """)
+        """)
         self.llm = AssistantAgent(name="assistant",
                                   system_message=sys_msg,
                                   llm_config={"config_list": config_list})
@@ -192,6 +203,5 @@ class FeedbackEnhance:
             messages = [{'content': all_feedback, 'role': 'user'}]
             response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
             new_feedback = self.llm.client.extract_text_or_function_call(response)[0]
-            print(new_feedback)
             new_feedback_dict[parent_node] = new_feedback
         return new_feedback_dict
