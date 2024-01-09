@@ -2,6 +2,7 @@ from autogen.trace.nodes import ParameterNode
 from collections import defaultdict
 from autogen import AssistantAgent
 from textwrap import dedent, indent
+from copy import deepcopy
 
 
 class Optimizer:
@@ -57,6 +58,9 @@ class LLMOptimizer(Optimizer):
                                   llm_config={"config_list": config_list})
         self.task_description = task_description
 
+        self.parameter_copy = {}
+        self.save_parameter_copy()
+
     def _step(self, value, feedback):
         # `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`
         # context = {"task_description": self.task_description,
@@ -83,6 +87,26 @@ class LLMOptimizer(Optimizer):
         new_node = {'content': new_instruct, 'role': 'system'}
         return new_node
 
+    def save_parameter_copy(self):
+        # this is to be able to go back
+        for p in self.parameters:
+            if p.trainable:
+                self.parameter_copy[p] = {"_data": deepcopy(p._data), "_feedback": deepcopy(p._feedback)}
+
+    def zero_feedback(self):
+        # if we are ready to perform another round of update
+        # we save the current parameters
+        self.save_parameter_copy()
+        super().zero_feedback()
+
+    def restore_parameters(self, parameters):
+        # revert back to a saved copy
+        for p in self.parameters:
+            if p.trainable:
+                assert p in self.parameter_copy
+                p._data = self.parameter_copy[p]["_data"]
+                p._feedback = self.parameter_copy[p]["_feedback"]
+
 
 class PropagateStrategy:
     @staticmethod
@@ -100,7 +124,7 @@ class PropagateStrategy:
 
 
 # This updates feedback before the optimizer
-class FeedbackEnhancer:
+class OptimizationPathSummary:
     def __init__(self, parameters, config_list, *args, **kwargs):
         # can add task description in here
         assert type(parameters) is list
@@ -111,6 +135,46 @@ class FeedbackEnhancer:
                 The crash report prints out the path of the execution of the assistant, but might not be helpful.
                 It also contains the feedback the assistant received from the user.
                 Give a high-level, concise summary of the crash report.
+                """)
+        self.llm = AssistantAgent(name="assistant",
+                                  system_message=sys_msg,
+                                  llm_config={"config_list": config_list})
+        self.parameter_copy = {}
+        self.save_parameter_copy()
+
+    def save_parameter_copy(self):
+        # this is to be able to go back
+        for p in self.parameters:
+            if p.trainable:
+                self.parameter_copy[p] = {"_data": deepcopy(p._data), "_feedback": deepcopy(p._feedback)}
+
+    def update_feedback(self):
+        # before update,  we save it once
+        self.save_parameter_copy()
+        for p in self.parameters:
+            if p.trainable:
+                p._feedback = self._update_feedback(p._feedback)  # NOTE: This is an in-place update
+
+    def _update_feedback(self, feedback):
+        new_feedback_dict = {}
+        for parent_node, list_of_feedback in feedback.items():
+            all_feedback = "\n\n".join(list_of_feedback)
+            messages = [{'content': all_feedback, 'role': 'user'}]
+            response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
+            new_feedback = self.llm.client.extract_text_or_function_call(response)[0]
+            print(new_feedback)
+            new_feedback_dict[parent_node] = new_feedback
+        return new_feedback_dict
+
+
+class FeedbackEnhance:
+    def __init__(self, parameters, config_list, *args, **kwargs):
+        # can add task description in here
+        assert type(parameters) is list
+        assert all([isinstance(p, ParameterNode) for p in parameters])
+        self.parameters = parameters
+        sys_msg = dedent("""
+                ...
                 """)
         self.llm = AssistantAgent(name="assistant",
                                   system_message=sys_msg,
