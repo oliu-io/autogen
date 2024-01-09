@@ -2,7 +2,7 @@ from autogen.trace.nodes import ParameterNode
 from collections import defaultdict
 from autogen import AssistantAgent
 from textwrap import dedent, indent
-from copy import deepcopy
+from copy import copy
 
 
 class Optimizer:
@@ -91,7 +91,7 @@ class LLMOptimizer(Optimizer):
         # this is to be able to go back
         for p in self.parameters:
             if p.trainable:
-                self.parameter_copy[p] = {"_data": deepcopy(p._data), "_feedback": deepcopy(p._feedback)}
+                self.parameter_copy[p] = {"_data": copy(p._data), "_feedback": copy(p._feedback)}
 
     def zero_feedback(self):
         # if we are ready to perform another round of update
@@ -146,7 +146,7 @@ class OptimizationPathSummary:
         # this is to be able to go back
         for p in self.parameters:
             if p.trainable:
-                self.parameter_copy[p] = {"_data": deepcopy(p._data), "_feedback": deepcopy(p._feedback)}
+                self.parameter_copy[p] = {"_data": copy(p._data), "_feedback": copy(p._feedback)}
 
     def update_feedback(self):
         # before update,  we save it once

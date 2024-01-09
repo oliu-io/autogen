@@ -93,8 +93,6 @@ student_agent = trace(StudentAgent)(seed=13)
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Tanka-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
-
-
 # ======= Now with the env reward, we can optimize =======
 
 init_obs = user_agent.get_starting_message()
@@ -106,7 +104,7 @@ optimizer = LLMOptimizer(student_agent.parameters,
                          """.format(init_obs)))  # This just concatenates the feedback into the parameter
 
 performances = []
-exp_runs = 5
+exp_runs = 2
 
 for _ in range(exp_runs):
     optimization_steps = 4
