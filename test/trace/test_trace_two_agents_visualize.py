@@ -66,3 +66,4 @@ def back_prop_node_visualization(start_node):
 dot = back_prop_node_visualization(last_message)
 
 print(dot.source)
+dot.view()
