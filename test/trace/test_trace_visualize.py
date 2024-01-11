@@ -32,25 +32,37 @@ node = last_message
 
 from graphviz import Digraph
 
-dot = Digraph()
-node = last_message
-while True:
-    # assert all([ feedback in v[0] for v in node.feedback.values()])
-    print(f'Node {node.name}: Node Type {node}, Node: {node._data}')
-    dot.node(node.name.replace(":", ""), node.name.replace(":", ""))
+def back_prop_node_visualization(start_node):
+    dot = Digraph()
+    node = start_node
 
-    if len(node.parents) > 0:
-        node = node.parents[0]
-    else:
-        break
+    visited = set()
+    stack = [start_node]
 
-node = last_message
-while True:
+    # we do two loops because I worry Digraph requires "pre-registration" of all nodes
+    # add node names
+    while stack:
+        current_node = stack.pop()
+        print(f'Node {node.name}: Node Type {node}, Node: {node._data}')
+        if current_node not in visited:
+            dot.node(node.name.replace(":", ""), node.name.replace(":", ""))
+            visited.add(current_node)
+            stack.extend(current_node.parents)
 
-    if len(node.parents) > 0:
-        dot.edge(node.name.replace(":", ""), node.parents[0].name.replace(":", ""))
-        node = node.parents[0]
-    else:
-        break
+    # add node edges
+    visited = set()
+    stack = [start_node]
+
+    while stack:
+        current_node = stack.pop()
+        if current_node not in visited:
+            for parent in current_node.parents:
+                dot.edge(current_node.name.replace(":", ""), parent.name.replace(":", ""))
+            visited.add(current_node)
+            stack.extend(current_node.parents)
+
+    return dot
+
+dot = back_prop_node_visualization(last_message)
 
 print(dot.source)
