@@ -52,6 +52,7 @@ setuptools.setup(
         "retrievechat": ["chromadb", "sentence_transformers", "pypdf", "ipython"],
         "teachable": ["chromadb"],
         "lmm": ["replicate", "pillow"],
+        "trace": ['graphviz==0.20.1']
     },
     classifiers=[
         "Programming Language :: Python :: 3",
