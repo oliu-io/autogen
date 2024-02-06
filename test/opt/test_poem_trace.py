@@ -48,7 +48,7 @@ class StudentAgent(AssistantAgent):
 
 max_turn = 1
 student_agent = trace(StudentAgent)(seed=13)
-user_agent = trace(LLFBenchUserAgent)(env_name="verbal-poem-Haiku-v0",
+user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
 init_obs = user_agent.get_starting_message()
@@ -63,7 +63,7 @@ def propagate(child):
 feedback = user_agent.last_message().data['content']
 last_message = student_agent.last_message()
 optimizer.zero_feedback()
-last_message.backward(feedback['content'], propagate, retain_graph=True)  # Set retain_graph for testing
+last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
 optimizer.step()
 
 node = last_message

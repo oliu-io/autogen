@@ -6,7 +6,7 @@ In this file, we should have:
 
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
-from autogen.trace.trace import trace, node, trace_node_usage, Node
+from autogen.trace.trace import trace, node, Node
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 from typing import Any, Dict, List, Optional, Union
