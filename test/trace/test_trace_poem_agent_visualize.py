@@ -4,7 +4,7 @@ import copy
 
 import autogen
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
-from autogen.trace.trace import trace, node, trace_node_usage, Node
+from autogen.trace.trace import trace, node, Node
 from autogen.trace.utils import back_prop_node_visualization
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
