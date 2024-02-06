@@ -45,6 +45,10 @@ class Graph:
     def __str__(self):
         return str(self._nodes)
 
+    def __len__(self):
+        # This is the number of nodes in the graph
+        return sum([len(v) for v in self._nodes.values()])
+
 GRAPH = Graph()  # This is a global registry of all the nodes.
 
 USED_NODES = list()  # A stack of sets. This is a global registry to track which nodes are read.

@@ -133,7 +133,7 @@ def trace_ConversableAgent(AgentCls):
             _generate_reply = super().generate_reply
             @trace_operator('[AGENT] An agent generates the reply based on the messages it has received.')
             def generate_reply(messages, sender, exclude):
-                return _generate_reply([m.data for m in messages] if messages is not None else messages, sender, exclude)
+                return _generate_reply(messages=[m.data for m in messages] if messages is not None else messages, sender=sender, exclude=exclude)
             reply = generate_reply(messages, sender, exclude)
             return reply
 
