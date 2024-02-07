@@ -11,7 +11,7 @@ def for_all_methods(decorator):
     return decorate
 
 
-def back_prop_node_visualization(start_node):
+def back_prop_node_visualization(start_node, reverse=False):
     dot = Digraph()
     node = start_node
 
@@ -36,7 +36,10 @@ def back_prop_node_visualization(start_node):
         current_node = stack.pop()
         if current_node not in visited:
             for parent in current_node.parents:
-                dot.edge(current_node.name.replace(":", ""), parent.name.replace(":", ""))
+                if not reverse:
+                    dot.edge(current_node.name.replace(":", ""), parent.name.replace(":", ""))
+                else:
+                    dot.edge(parent.name.replace(":", ""), current_node.name.replace(":", ""))
             visited.add(current_node)
             stack.extend(current_node.parents)
 
