@@ -58,6 +58,7 @@ class PoemAgent(AssistantAgent):
             llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
+            human_input_mode= "NEVER"
         )
         self.student_agent = PoemStudentAgent()
         self.extractor_agent = PoemExtractor()
