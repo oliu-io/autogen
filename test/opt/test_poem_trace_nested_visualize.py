@@ -119,7 +119,7 @@ feedback = user_agent.last_message().data['content']
 
 last_message.backward(feedback, propagate, retain_graph=False)
 
-dot = back_prop_node_visualization(last_message, reverse=True)
+dot = back_prop_node_visualization(last_message)
 
 # print(dot.source)
 dot.view()

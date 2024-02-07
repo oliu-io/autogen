@@ -24,7 +24,8 @@ assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
-sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem. Append TERMINATE to end the assignment.")
+sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem. " +
+                 "Reply \"TERMINATE\" to end the assignment.")
 
 class PoemStudentAgent(AssistantAgent):
 
@@ -38,8 +39,9 @@ class PoemStudentAgent(AssistantAgent):
         )
 
 sys_msg = dedent("You are extracting a poem from the student's message. " +
-                 "Do not extract anything except the poem itself."
-                 "If the student did not write a poem, return an empty string.")
+                 "Do not extract anything except the poem itself." +
+                 "If the student did not write a poem, return an empty string." +
+                 "Reply \"TERMINATE\" to end the assignment.")
 class PoemExtractor(AssistantAgent):
     def __init__(self):
         super().__init__(
@@ -58,7 +60,7 @@ class PoemAgent(AssistantAgent):
             llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
-            human_input_mode= "NEVER"
+            human_input_mode="NEVER"
         )
         self.student_agent = PoemStudentAgent()
         self.extractor_agent = PoemExtractor()
@@ -107,28 +109,3 @@ user_agent = LLFBenchUserAgent(env_name="llf-poem-Haiku-v0",
 
 init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
-
-# optimizer = DummyOptimizer(student_agent.parameters)  # This just concatenates the feedback into the parameter
-# def propagate(child):
-#     # a dummy function for testing
-#     summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
-#     return {parent: summary for parent in child.parents}
-#
-# feedback = user_agent.last_message().data['content']
-# last_message = student_agent.last_message()
-# optimizer.zero_feedback()
-# last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
-# optimizer.step()
-#
-# node = last_message
-# while True:
-#     # assert all([ feedback in v[0] for v in node.feedback.values()])
-#     # print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node.feedback}')
-#     print(f'Node {node.name} at level {node.level}: Feedback {node.feedback}')
-#     print(node.description)
-#     print("=============")
-#
-#     if len(node.parents)>0:
-#         node = node.parents[0]
-#     else:
-#         break
