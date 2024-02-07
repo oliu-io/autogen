@@ -18,7 +18,7 @@ from gurobipy import GRB
 from eventlet.timeout import Timeout
 from pyomo.opt import TerminationCondition
 
-from autogen.trace import trace
+from autogen.trace import trace, compatability
 
 # %% System Messages
 WRITER_SYSTEM_MSG = """You are a chatbot to:
@@ -109,22 +109,31 @@ class OptiGuideAgent(AssistantAgent):
         self._solver_software = solver_software
         self._origin_execution_result = _run_with_exec(source_code,
                                                        self._solver_software)
-        self._writer = AssistantAgent("writer", llm_config=self.llm_config)
-        self._safeguard = AssistantAgent("safeguard",
+        self._writer = trace(AssistantAgent)("writer", llm_config=self.llm_config)
+        self._safeguard = trace(AssistantAgent)("safeguard",
                                          llm_config=self.llm_config)
         self._debug_times_left = self.debug_times = debug_times
         self._use_safeguard = use_safeguard
         self._success = False
 
+    # def generate_reply(
+    #     self,
+    #     messages: Optional[List[Dict]] = None,
+    #     default_reply: Optional[Union[str, Dict]] = "",
+    #     sender: Optional[Agent] = None,
+    # ) -> Union[str, Dict, None]:
     def generate_reply(
         self,
-        messages: Optional[List[Dict]] = None,
-        default_reply: Optional[Union[str, Dict]] = "",
-        sender: Optional[Agent] = None,
+        messages=None,
+        sender=None,
+        exclude=None,
     ) -> Union[str, Dict, None]:
+
         # Remove unused variables:
         # The message is already stored in self._oai_messages
-        del messages, default_reply
+        # del messages, default_reply
+        del messages
+
         """Reply based on the conversation history."""
         if sender not in [self._writer, self._safeguard]:
             # Step 1: receive the message from the user
@@ -419,7 +428,7 @@ if __name__ == '__main__':
     for s in suppliers:
         m.addConstr(x[s,'roastery2'] <= capacity_in_supplier[s] * z[s], "_")
     ```
-    
+
     ----------
     Question: What if there's a 13% jump in the demand for light coffee at cafe1?
     Answer Code:
