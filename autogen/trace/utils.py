@@ -22,7 +22,7 @@ def back_prop_node_visualization(start_node):
     # add node names
     while stack:
         current_node = stack.pop()
-        print(f'Node {node.name}: Node Type {node}, Node: {node._data}')
+        # print(f'Node {node.name}: Node Type {node}, Node: {node._data}')
         if current_node not in visited:
             dot.node(node.name.replace(":", ""), node.name.replace(":", ""))
             visited.add(current_node)

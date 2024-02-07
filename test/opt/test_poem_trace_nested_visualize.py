@@ -61,8 +61,8 @@ class PoemAgent(AssistantAgent):
             is_termination_msg=termination_msg,
             human_input_mode= "NEVER"
         )
-        self.student_agent = compatability(PoemStudentAgent)()
-        self.extractor_agent = compatability(PoemExtractor)()
+        self.student_agent = trace(PoemStudentAgent)()
+        self.extractor_agent = trace(PoemExtractor)()
 
         self.poem = None
 
@@ -110,16 +110,16 @@ init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
 def propagate(child):
     # a dummy function for testing
-    print("called")
     summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
 
 last_message = poem_agent._oai_messages[user_agent][-2]
+print(last_message.data)
 feedback = user_agent.last_message().data['content']
 
 last_message.backward(feedback, propagate, retain_graph=False)
 
 dot = back_prop_node_visualization(last_message)
 
-print(dot.source)
+# print(dot.source)
 dot.view()
