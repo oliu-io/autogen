@@ -50,10 +50,6 @@ class PoemExtractor(AssistantAgent):
             is_termination_msg=termination_msg,
         )
 
-
-# sys_msg = dedent("You are extracting a poem from the student's message. Do not extract anything except the poem itself.")
-# sys_msg = dedent("Output 0000")
-
 class PoemAgent(AssistantAgent):
     def __init__(self, seed=1234):
         super().__init__(
@@ -74,10 +70,6 @@ class PoemAgent(AssistantAgent):
 
         # self.stop_reply_at_receive(self.student_agent)
         # self.stop_reply_at_receive(self.extractor_agent)
-
-        # No OAI
-        # print(self._reply_func_list)
-        # self._reply_func_list = self._reply_func_list[:-1]
 
     def get_last_user_message(self, agent):
         for m in reversed(self._oai_messages[agent]):
@@ -108,8 +100,6 @@ class PoemAgent(AssistantAgent):
 
 max_turn = 1
 poem_agent = PoemAgent(seed=13)
-
-# import sys; sys.exit()
 
 user_agent = LLFBenchUserAgent(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
