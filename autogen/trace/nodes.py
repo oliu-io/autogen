@@ -133,9 +133,32 @@ class AbstractNode:
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
 
+
+# These are operators that do not change the data type and can be viewed as identity operators.
+IDENTITY_OPERATORS = ('Identity', 'Copy', 'To_dict', 'OAI_Message')
+
+def bypass_identity(node):
+    """ Skip through operators that are effectively identity (registred in IDENTITY_OPERATORS) and return the first ancestor that is not identity. """
+    if isinstance(node, MessageNode):
+        if get_operator_type(node.description) in IDENTITY_OPERATORS:
+            assert len(node.parents)==1
+            node = bypass_identity(node.parents[0])
+    return node
+
+import re
+def get_operator_type(description):
+    """ Extra the operator type from the description. """
+    match = re.search(r"\[([^[\]]+)\]", description)  # TODO. right pattern?
+    if match:
+        operator_type = match.group(1)
+        # TODO check admissible types
+        return operator_type
+    else:
+        raise ValueError(f"The description '{description}' must contain the operator type in square brackets.")
+
 class Node(AbstractNode):
     """ Node for Autogen messages and prompts. Node behaves like a dict."""
-    def __init__(self, value, *, name=None, trainable=False, description="This is a Node in a computational graph.") -> None:
+    def __init__(self, value, *, name=None, trainable=False, description="[Node] This is a node in a computational graph.") -> None:
         # TODO only take in a dict with a certain structure
         if isinstance(value, str):
             warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
@@ -189,7 +212,14 @@ class Node(AbstractNode):
         if visualize:
             from graphviz import Digraph
             digraph = Digraph()
-            get_name = lambda x: x.name.replace(":", "")
+            get_name = lambda x: x.name.replace(":", "")  # using colon in the name causes problems in graphviz
+            def get_label(x):
+                text = get_name(x)+'\n'+x.description+'\n'
+                content = (x.data['content'] if isinstance(x.data, dict) else x.data)
+                print_limit = 100
+                if len(content) > print_limit:
+                    content = content[:print_limit] + '...'
+                return text + content
             visited = set()
 
         queue = [self]  # priority queue
@@ -199,20 +229,23 @@ class Node(AbstractNode):
                 assert isinstance(node, Node)
                 propagated_feedback = propagate(node)  # propagate information from child to parent
                 for parent, parent_feedback in propagated_feedback.items():
+                    parent = bypass_identity(parent)  # skip identity operators registered in IDENTITY_OPERATORS
                     parent._add_feedback(node, parent_feedback)
                     if len(parent.parents) > 0:
                         heapq.heappush(queue, parent)  # put parent in the priority queue
 
                     if visualize:
                         # Plot the edge from parent to node
-                        edge = (get_name(parent), get_name(node))
+                        # print(node.name, get_name(node))
+                        edge = (get_name(node), get_name(parent)) if reverse_plot else (get_name(parent), get_name(node))
+                        # Just plot the edge once, since the same node can be
+                        # visited multiple times (e.g., when that node has
+                        # multiple children).
                         if edge not in visited:
-                            # Just plot the edge once, since the same node can
-                            # be visited multiple times (e.g., when that node
-                            # has multiple children).
                             digraph.edge(*edge)
                             visited.add(edge)
-
+                            digraph.node(get_name(node), label=get_label(node))
+                            digraph.node(get_name(parent), label=get_label(parent))
                 node._del_feedback()  # delete feedback to save memory
                 if not retain_graph and len(node.parents)>0:
                     node._backwarded = True  # set backwarded to True

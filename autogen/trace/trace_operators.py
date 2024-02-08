@@ -1,7 +1,6 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.nodes import MessageNode, USED_NODES
 from dill.source import getsource
-import re
 
 
 class trace_nodes:
@@ -25,13 +24,6 @@ def trace_operator(description):  # TODO add a dict to describe the inputs?
         """
         assert callable(fun), "fun must be a callable."
         assert description is not None, "description must be provided."
-
-        match = re.search(r"\[([^[\]]+)\]", description)  # TODO. right pattern?
-        if match:
-            operator_type = match.group(1)
-            # TODO check admissible types
-        else:
-            raise ValueError(f"The description '{description}' must contain the operator type in square brackets.")
 
 
         # TODO how to describe the mapping and inputs automatically?
