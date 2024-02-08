@@ -91,7 +91,7 @@ class PoemAgent(AssistantAgent):
             self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True)
 
         # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
-        extracted_poem = self.last_message(self.extractor_agent)["content"]
+        extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
 
         return True, {"content": extracted_poem}
 
