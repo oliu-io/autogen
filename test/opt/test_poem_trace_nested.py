@@ -24,7 +24,7 @@ assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
-sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem. " +
+sys_msg1 = dedent("You are a student and your teacher gives you an assignment to write a poem. " +
                  "Reply \"TERMINATE\" to end the assignment.")
 
 class PoemStudentAgent(AssistantAgent):
@@ -32,13 +32,13 @@ class PoemStudentAgent(AssistantAgent):
     def __init__(self):
         super().__init__(
             name="PoemStudentAgent",
-            system_message=sys_msg,
+            system_message=sys_msg1,
             llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
         )
 
-sys_msg = dedent("You are extracting a poem from the student's message. " +
+sys_msg2 = dedent("You are extracting a poem from the student's message. " +
                  "Do not extract anything except the poem itself." +
                  "If the student did not write a poem, return an empty string." +
                  "Reply \"TERMINATE\" to end the assignment.")
@@ -46,7 +46,7 @@ class PoemExtractor(AssistantAgent):
     def __init__(self):
         super().__init__(
             name="PoemExtractor",
-            system_message=sys_msg,
+            system_message=sys_msg2,
             llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
