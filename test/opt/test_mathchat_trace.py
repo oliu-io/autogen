@@ -43,7 +43,7 @@ def propagate(child):
 # last_message = assistant._oai_messages[-1]
 # print(last_message.data)
 
-last_message = mathproxyagent.last_message()
+last_message = mathproxyagent.last_message_node()
 feedback = "The solution is correct."  # imagine we have access to groundtruth answers here
 
 last_message.backward(feedback, propagate, retain_graph=False)

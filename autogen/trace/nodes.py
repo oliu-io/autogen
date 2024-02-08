@@ -218,7 +218,7 @@ class Node(AbstractNode):
 
     def __setitem__(self, key, value):
         warnings.warn(f"Attemping to set {key} in {self.name}. In-place operation is not traced.")
-        self.data[key] = value
+        self._data[key] = value
 
     def __delitem__(self, key):
         del self.data[key]

@@ -20,7 +20,7 @@ def propagate(child):
     summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
 feedback = 'Great job.'
-last_message = assistant.last_message()
+last_message = assistant.last_message_node()
 optimizer.zero_feedback()
 last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
 optimizer.step()

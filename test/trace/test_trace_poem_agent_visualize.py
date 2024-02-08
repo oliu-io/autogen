@@ -51,7 +51,7 @@ def extract_text_or_completion_object(response, tool_enabled=False):
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
              "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
          })
-assert len(config_list) > 0 
+assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
@@ -102,8 +102,8 @@ def propagate(child):
     summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
 
-last_message = student_agent.last_message()
-feedback = user_agent.last_message().data['content']
+last_message = student_agent.last_message_node()
+feedback = user_agent.last_message_node().data['content']
 
 last_message.backward(feedback, propagate, retain_graph=False)
 

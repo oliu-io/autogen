@@ -52,7 +52,7 @@ def extract_text_or_completion_object(response, tool_enabled=False):
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
              "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
          })
-assert len(config_list) > 0 
+assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
@@ -116,7 +116,7 @@ for _ in range(exp_runs):
 
         init_obs = user_agent.get_starting_message()
         user_agent.initiate_chat(student_agent, message=init_obs)
-        feedback = user_agent.last_message().data['content']
+        feedback = user_agent.last_message_node().data['content']
 
         performance.append(user_agent.reward_history[-1])
 
@@ -124,7 +124,7 @@ for _ in range(exp_runs):
             print("Reached highest reward.")
             break
 
-        last_message = student_agent.last_message()
+        last_message = student_agent.last_message_node()
 
         optimizer.zero_feedback()
         last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False)

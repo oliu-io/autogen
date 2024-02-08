@@ -7,6 +7,7 @@ from autogen.trace.trace_operators import trace_operator
 from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
 from dill.source import getsource
+from collections import defaultdict
 
 # Here we implement wrapper of Autogen ConversableAgent class
 
@@ -36,9 +37,11 @@ def trace_ConversableAgent(AgentCls):
 
         def __init__(self, *args, **kwargs):
             self.__oai_system_message = None
+            self.__oai_messages = defaultdict(list)  # dict of list of Nodes
             super().__init__(*args, **kwargs)
 
-        # We override the self._oai_system_message to use the ParameterNode type.
+        # We override the self._oai_system_message. Interally, the system prompt
+        # is stored in self.__oai_system_message as a list of ParameterNodes.
         # TODO Add other parameters
         @property
         def _oai_system_message(self):
@@ -78,15 +81,79 @@ def trace_ConversableAgent(AgentCls):
         ) -> bool:
             raise NotImplementedError
 
-        # _append_oai_message is called in super().send, which stores the sent message in self._oai_messages. We cannot use trace_operator here because _append_oai_message performs in-place operation to the agent's memory self._oai_messages. So we instead override the stored message in self._oai_messages with a MessageNode.
+        #### Modify self._append_oai_message.
+        # We override the self._oai_messages and implement it as a property based on an internal attribute self.__oai_messages.
+        # self.__oai_messages is a dict of list of Node, whereas self._oai_messages is a copy of self.__oai_messages and is a dict of list of dict.
+        # In this way, we can keep the original codes of methods that read from self._oai_messages.
+        # For methods that write into self._oai_messages, we override them below to write into self.__oai_messages directly
+        # Lastly, we override last_message to return Node, instead of dict.
+
+        @property
+        def _oai_messages(self):  # return a dict of list of dict
+            x = defaultdict(list)
+            for k, v in self.__oai_messages.items():
+                x[k] = [n.data for n in v]
+            return x
+
+        @_oai_messages.setter
+        def _oai_messages(self, value):  # convert the dict of list of dict to dict of list of Node
+            assert isinstance(value, dict)
+            for k, v in value.items():
+                assert isinstance(v, list)
+                self.__oai_messages[k] = [node(n) for n in v]
+
         def _append_oai_message(self, message: Node, role, conversation_id: Agent) -> bool:
-            assert isinstance(message, Node), "message must be a Node type"
-            # We don't touch the logic within super()._append_oai_message, but we replace the final content with the MessageNode. A Node object can be used as a dict, so it is compatible with the original logic.
-            output = super()._append_oai_message(message, role, conversation_id) # output is boolean
-            data = self._oai_messages[conversation_id][-1]  # This is a oai_message dict created in super()._append_oai_message. We now replace it with a MessageNode.
-            m_data = MessageNode(data, description=f'[OAI_Message] This is the oai_message created based on a message.', inputs={'message': message})
-            self._oai_messages[conversation_id][-1] = m_data  # This is the message added by super._append_oai_message
-            return output
+            assert isinstance(message, Node), "message must be a Node type."
+
+            ### Original code
+            message = self._message_to_dict(message)
+            # create oai message to be appended to the oai conversation that can be passed to oai directly.
+            oai_message = {k: message[k] for k in ("content", "function_call", "name", "context") if k in message}
+            if "content" not in oai_message:
+                if "function_call" in oai_message:
+                    oai_message["content"] = None  # if only function_call is provided, content will be set to None.
+                else:
+                    return False
+
+            oai_message["role"] = "function" if message.get("role") == "function" else role
+            if "function_call" in oai_message:
+                oai_message["role"] = "assistant"  # only messages with role 'assistant' can have a function call.
+                oai_message["function_call"] = dict(oai_message["function_call"])
+            # self._oai_messages[conversation_id].append(oai_message)
+            ### End of original code
+
+            # XXX  Since self._oai_messages creates a copy, to trace the creation of
+            # the oai_message, we need to append to self.__oai_messages
+            # directly.
+            node_oai_message = MessageNode(oai_message, description=f'[OAI_Message] This is the oai_message created based on a message.', inputs={'message': message})
+            self.__oai_messages[conversation_id].append(node_oai_message)
+            return True
+
+        def clear_history(self, agent: Optional[Agent] = None):
+            # XXX Since self._oai_messages creates a copy, to trace the creation of
+            # the oai_message, we need to call clear with self.__oai_messages.
+            # directly.
+            if agent is None:
+                self.__oai_messages.clear()
+            else:
+                self.__oai_messages[agent].clear()
+
+        def last_message_node(self, agent: Optional[Agent] = None) -> Node:
+            if agent is None:
+                n_conversations = len(self._oai_messages)
+                if n_conversations == 0:
+                    return None
+                if n_conversations == 1:
+                    # for conversation in self._oai_messages.values():
+                    for conversation in self.__oai_messages.values():  # XXX We return MessageNode
+                        return conversation[-1]
+                raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
+            # return self._oai_messages[agent][-1]
+            return self.__oai_messages[agent][-1]  # XXX We return MessageNode
+
+        @property
+        def chat_message_nodes(self) -> Dict[Agent, List[Node]]:
+            return self.__oai_messages
 
         #### Modify self.receive to use the Node type
         def receive(
@@ -97,7 +164,19 @@ def trace_ConversableAgent(AgentCls):
             silent: Optional[bool] = False,
         ):
             assert isinstance(message, Node), "message must be a Node type"
-            super().receive(message, sender, request_reply, silent)
+            # super().receive(message, sender, request_reply, silent)
+
+            self._process_received_message(message, sender, silent)
+            if request_reply is False or request_reply is None and self.reply_at_receive[sender] is False:
+                return
+            # reply = self.generate_reply(messages=self.chat_messages[sender], sender=sender)
+
+            # Since self.chat_messages returns a dict of list of dict. We need
+            # to pass nodes in self.__oai_messages to the new generate_reply, so
+            # the node usages can be traced.
+            reply = self.generate_reply(messages=self.__oai_messages[sender], sender=sender)
+            if reply is not None:
+                self.send(reply, sender, silent=silent)
 
         async def a_receive(
             self,
