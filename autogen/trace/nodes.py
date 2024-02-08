@@ -163,7 +163,7 @@ class Node(AbstractNode):
     def _del_feedback(self):
         self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
 
-    def backward(self, feedback: str, propagate, retain_graph=False):
+    def backward(self, feedback: str, propagate, retain_graph=False, visualize=False, reverse_plot=False):
         """ Backward pass.
 
             feedback: feedback given to the current node
@@ -171,6 +171,9 @@ class Node(AbstractNode):
 
                 def propagate(node, feedback):
                     return {parent: propagated feedback for parent in node.parents}
+
+            visualize: if True, plot the graph using graphviz
+            reverse_plot: if True, plot the graph in reverse order (from child to parent).
 
         """
         if self._backwarded:
@@ -181,6 +184,13 @@ class Node(AbstractNode):
 
         if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
             return
+
+        digraph = None
+        if visualize:
+            from graphviz import Digraph
+            digraph = Digraph()
+            get_name = lambda x: x.name.replace(":", "")
+            visited = set()
 
         queue = [self]  # priority queue
         while True:
@@ -193,12 +203,24 @@ class Node(AbstractNode):
                     if len(parent.parents) > 0:
                         heapq.heappush(queue, parent)  # put parent in the priority queue
 
+                    if visualize:
+                        # Plot the edge from parent to node
+                        edge = (get_name(parent), get_name(node))
+                        if edge not in visited:
+                            # Just plot the edge once, since the same node can
+                            # be visited multiple times (e.g., when that node
+                            # has multiple children).
+                            digraph.edge(*edge)
+                            visited.add(edge)
+
                 node._del_feedback()  # delete feedback to save memory
                 if not retain_graph and len(node.parents)>0:
                     node._backwarded = True  # set backwarded to True
 
             except IndexError:  # queue is empty
                 break
+
+        return digraph
 
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):

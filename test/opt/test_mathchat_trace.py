@@ -46,9 +46,9 @@ def propagate(child):
 last_message = mathproxyagent.last_message_node()
 feedback = "The solution is correct."  # imagine we have access to groundtruth answers here
 
-last_message.backward(feedback, propagate, retain_graph=False)
+dot = last_message.backward(feedback, propagate, retain_graph=False, visualize=True)
 
-dot = back_prop_node_visualization(last_message)
+# dot = back_prop_node_visualization(last_message)
 
 # print(dot.source)
 dot.view()

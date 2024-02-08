@@ -118,9 +118,9 @@ last_message = poem_agent.chat_message_nodes[user_agent][-2]
 print(last_message)
 feedback = user_agent.last_message_node().data['content']
 
-last_message.backward(feedback, propagate, retain_graph=False)
+dot = last_message.backward(feedback, propagate, retain_graph=False, visualize=True)
 
-dot = back_prop_node_visualization(last_message)
+# dot = back_prop_node_visualization(last_message)
 
 # print(dot.source)
 dot.view()
