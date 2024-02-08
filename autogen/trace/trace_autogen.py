@@ -11,6 +11,19 @@ from collections import defaultdict
 
 # Here we implement wrapper of Autogen ConversableAgent class
 
+class agent_scope():
+    """ This is a context manager that can be used to add the agent's name to the
+    scope NAME_SCOPES when a method of an agent is called. This is to track
+    which agents create nodes."""
+    def __init__(self, agent_name):
+        self.agent_name = agent_name
+
+    def __enter__(self):
+        NAME_SCOPES.append(self.agent_name)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        NAME_SCOPES.pop()
+
 @for_all_methods
 def trace_agent_scope(fun):
     """ This is a decorator that can be applied on all methods of a
@@ -19,9 +32,8 @@ def trace_agent_scope(fun):
     which agents create nodes."""
     def wrapper(self, *args, **kwargs):
         assert isinstance(self, ConversableAgent)
-        NAME_SCOPES.append(self.name)
-        output = fun(self, *args, **kwargs)
-        NAME_SCOPES.pop()
+        with agent_scope(self.name):
+            output = fun(self, *args, **kwargs)
         return output
     return wrapper
 
@@ -51,7 +63,8 @@ def trace_ConversableAgent(AgentCls):
         def _oai_system_message(self, value):  # This is the parameter
             assert isinstance(value, list)
             assert len(value) == 1  # XXX Not sure why _oai_system_message in Autogen is always a list of length 1
-            self.__oai_system_message = ParameterNode(value[0])
+            with agent_scope(self.name):  # NOTE setters are not covered by trace_agent_scope
+                self.__oai_system_message = ParameterNode(value[0], description='[Parameter] System message of the agent.')
 
         @property
         def parameters(self):  # Return a list of ParameterNodes
@@ -97,10 +110,11 @@ def trace_ConversableAgent(AgentCls):
 
         @_oai_messages.setter
         def _oai_messages(self, value):  # convert the dict of list of dict to dict of list of Node
-            assert isinstance(value, dict)
-            for k, v in value.items():
-                assert isinstance(v, list)
-                self.__oai_messages[k] = [node(n) for n in v]
+            with agent_scope(self.name):  # NOTE setters are not covered by trace_agent_scope
+                assert isinstance(value, dict)
+                for k, v in value.items():
+                    assert isinstance(v, list)
+                    self.__oai_messages[k] = [node(n) for n in v]
 
         def _append_oai_message(self, message: Node, role, conversation_id: Agent) -> bool:
             assert isinstance(message, Node), "message must be a Node type."
@@ -210,7 +224,7 @@ def trace_ConversableAgent(AgentCls):
 
             # We trace the super().generate_reply.
             _generate_reply = super().generate_reply
-            @trace_operator('[AGENT] An agent generates the reply based on the messages it has received.')
+            @trace_operator('[Agent] An agent generates the reply based on the messages it has received.')
             def generate_reply(messages, sender, exclude):
                 return _generate_reply(messages=[m.data for m in messages] if messages is not None else messages, sender=sender, exclude=exclude)
             reply = generate_reply(messages, sender, exclude)
