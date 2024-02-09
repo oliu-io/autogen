@@ -156,13 +156,16 @@ def get_operator_type(description):
     else:
         raise ValueError(f"The description '{description}' must contain the operator type in square brackets.")
 
+def supported_data_type(value):
+    return isinstance(value, bool) or isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node)
+
 class Node(AbstractNode):
     """ Node for Autogen messages and prompts. Node behaves like a dict."""
     def __init__(self, value, *, name=None, trainable=False, description="[Node] This is a node in a computational graph.") -> None:
         # TODO only take in a dict with a certain structure
         if isinstance(value, str):
             warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
-        assert  isinstance(value, bool) or isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node), f"Value {value} must be a bool, a string, a dict, or a Node."
+        assert supported_data_type(value), f"Value {value} must be a bool, a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
         self._feedback = defaultdict(list)  # (analogous to gradient) this is the (synthetic) feedback from the user

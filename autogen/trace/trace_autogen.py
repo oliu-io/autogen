@@ -8,6 +8,8 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 import inspect
 from dill.source import getsource
 from collections import defaultdict
+from autogen.agentchat.conversable_agent import logger
+import asyncio
 
 # Here we implement wrapper of Autogen ConversableAgent class
 
@@ -38,7 +40,7 @@ def trace_agent_scope(fun):
     return wrapper
 
 
-def trace_ConversableAgent(AgentCls):
+def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
     """ Return a decorated Agent class who communicates with MessageNode type message, which can be traced."""
 
     # make all the messages the Node type
@@ -47,10 +49,19 @@ def trace_ConversableAgent(AgentCls):
     @trace_agent_scope
     class TracedAgent(AgentCls):
 
+        # We wrap the following methods to trace the creation of the nodes.
+        default_reply_funcs = (
+            ConversableAgent.generate_oai_reply,
+            ConversableAgent.generate_code_execution_reply,
+            ConversableAgent.generate_function_call_reply,
+            ConversableAgent.generate_async_function_call_reply,
+            ConversableAgent.check_termination_and_human_reply,
+        )
+
         def __init__(self, *args, **kwargs):
             self.__oai_system_message = None
             self.__oai_messages = defaultdict(list)  # dict of list of Nodes
-            super().__init__(*args, **kwargs)
+            super(TracedAgent, self).__init__(*args, **kwargs)
 
         # We override the self._oai_system_message. Interally, the system prompt
         # is stored in self.__oai_system_message as a list of ParameterNodes.
@@ -72,7 +83,7 @@ def trace_ConversableAgent(AgentCls):
 
         #### Wrap the output as a Node.
         def generate_init_message(self, **context) -> Union[str, Dict]:
-            return node(super().generate_init_message(**context))
+            return node(super(TracedAgent, self).generate_init_message(**context))
 
         #### Modify self.send to use the MessageNode type
         def send(
@@ -83,7 +94,7 @@ def trace_ConversableAgent(AgentCls):
             silent: Optional[bool] = False,
         ):
             assert message is not None  # self.send is called in either self.initiate_chat or self.receive. In both cases, message is not None.
-            super().send(node(message), recipient, request_reply, silent)
+            super(TracedAgent, self).send(node(message), recipient, request_reply, silent)
 
         async def a_send(
             self,
@@ -178,8 +189,7 @@ def trace_ConversableAgent(AgentCls):
             silent: Optional[bool] = False,
         ):
             assert isinstance(message, Node), "message must be a Node type"
-            # super().receive(message, sender, request_reply, silent)
-
+            # Below is mostly super(TracedAgent, self).receive(message, sender, request_reply, silent)
             self._process_received_message(message, sender, silent)
             if request_reply is False or request_reply is None and self.reply_at_receive[sender] is False:
                 return
@@ -188,7 +198,7 @@ def trace_ConversableAgent(AgentCls):
             # Since self.chat_messages returns a dict of list of dict. We need
             # to pass nodes in self.__oai_messages to the new generate_reply, so
             # the node usages can be traced.
-            reply = self.generate_reply(messages=self.__oai_messages[sender], sender=sender)
+            reply = self.generate_reply(messages=self.__oai_messages[sender], sender=sender)  # XXX
             if reply is not None:
                 self.send(reply, sender, silent=silent)
 
@@ -202,33 +212,61 @@ def trace_ConversableAgent(AgentCls):
             raise NotImplementedError
 
         # _message_to_dict is called in self._process_received_message (called
-        # in super().receive). It formats the incoming message into a dict
+        # in super(TracedAgent, self).receive). It formats the incoming message into a dict
         # format. We don't touch its logic but wrap its output as a
         # MessaageNode. Since ConversibleAgent calls
         # self._message_to_dict(message), we cannot use it as a static method
         # anymore.
         @trace_operator('[To_dict] Convert message to the dict format of Autogen.')
         def _message_to_dict(self, message: Node) -> Node:
-            assert isinstance(message, Node), "message must be a Node type"
-            return super()._message_to_dict(message.data)
+            assert isinstance(message, Node), f"Message {message} must be a Node type"
+            # return super(TracedAgent, self)._message_to_dict(message.data)
+            return ConversableAgent._message_to_dict(message.data)
 
         #### Modify self.generate_reply to use the Node type
+        # Most code is the same as super(TracedAgent, self).generate_reply, but
+        # we make sure reply_func returns a Node type. If wrap_all_replies is
+        # True, we wrap any reply_func that is registered. When wrap_all_replies
+        # is False, we only wrap the default reply functions (the ones
+        # registered in ConversibleAgent). The user can override
+        # self.default_reply_funcs to more finely control the wrapping behavior.
         def generate_reply(
             self,
-            messages: Optional[List[Node]] = None,
+            messages: Optional[List[Dict]] = None,
             sender: Optional[Agent] = None,
             exclude: Optional[List[Callable]] = None,
-        ) -> Union[Node, None]:
-            if messages is not None:
-                assert all(isinstance(m, Node) for m in messages), "messages must be a a list of Node types"
+        ) -> Union[str, Dict, None]:
 
-            # We trace the super().generate_reply.
-            _generate_reply = super().generate_reply
-            @trace_operator('[Agent] An agent generates the reply based on the messages it has received.')
-            def generate_reply(messages, sender, exclude):
-                return _generate_reply(messages=[m.data for m in messages] if messages is not None else messages, sender=sender, exclude=exclude)
-            reply = generate_reply(messages, sender, exclude)
-            return reply
+            if all((messages is None, sender is None)):
+                error_msg = f"Either {messages=} or {sender=} must be provided."
+                logger.error(error_msg)
+                raise AssertionError(error_msg)
+
+            if messages is None:
+                # messages = self._oai_messages[sender]  # This returns a list of dict
+                messages = self.__oai_messages[sender]  # XXX This returns a list of Nodes
+
+            for reply_func_tuple in self._reply_func_list:
+                reply_func = reply_func_tuple["reply_func"]
+                if exclude and reply_func in exclude:
+                    continue
+                if asyncio.coroutines.iscoroutinefunction(reply_func):
+                    continue
+                if self._match_trigger(reply_func_tuple["trigger"], sender):
+
+                    # XXX Wrappying the (default) reply functions into a trace_operator that returns a MessageNode.
+                    if wrap_all_replies or reply_func in self.default_reply_funcs:
+                        _reply_func = reply_func
+                        @trace_operator(f'[Agent] {str(reply_func)}.')
+                        def reply_func(self, messages, sender, config):
+                            return  _reply_func(self, messages=[m.data for m in messages] if messages is not None else messages, sender=sender, config=config)
+
+                    final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
+
+                    assert isinstance(reply, Node) or reply is None, f"The output of the reply function {reply} must be a Node type."  # XXX
+                    if final:
+                        return reply
+            return node(self._default_auto_reply)
 
         async def a_generate_reply(
             self,

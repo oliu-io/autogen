@@ -1,1 +1,1 @@
-from autogen.trace.trace import trace, node, no_trace, compatability
+from autogen.trace.trace import trace, node, stop_tracing, compatability

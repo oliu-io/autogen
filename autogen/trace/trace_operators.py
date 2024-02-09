@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.nodes import MessageNode, USED_NODES
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, supported_data_type
 from dill.source import getsource
+from collections.abc import Iterable
 
 
 class trace_nodes:
@@ -38,7 +39,11 @@ def trace_operator(description):  # TODO add a dict to describe the inputs?
             with trace_nodes() as used_nodes:  # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
                 output = fun(*args, **kwargs)
             if output is not None and not isinstance(output, MessageNode):
-                output = MessageNode(output, description=description, inputs=list(used_nodes))
+                if not supported_data_type(output):
+                    assert isinstance(output, Iterable), "The output of the operator must be a string, dict, Node, or an iterable of former forms."
+                    output = [MessageNode(o, description=description, inputs=list(used_nodes)) if o is not None else o for o in output]
+                else:
+                    output = MessageNode(output, description=description, inputs=list(used_nodes))
             return output
         return wrapper
     return decorator

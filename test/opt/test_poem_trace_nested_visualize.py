@@ -8,7 +8,7 @@ In this file, we should have:
 """
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
-from autogen.trace.trace import trace, compatability
+from autogen.trace.trace import trace, compatability, node
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 from autogen.trace.utils import back_prop_node_visualization
@@ -51,7 +51,8 @@ class PoemExtractor(AssistantAgent):
             is_termination_msg=termination_msg,
         )
 
-class PoemAgent(AssistantAgent):
+# We inherit from the traced version of AssistantAgent and register new reply_funcs that based on nodes.
+class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
     def __init__(self, seed=1234):
         super().__init__(
             name="PoemAgent",
@@ -74,35 +75,39 @@ class PoemAgent(AssistantAgent):
         # self.stop_reply_at_receive(self.extractor_agent)
 
     def get_last_user_message(self, agent):
-        for m in reversed(self._oai_messages[agent]):
+        # for m in reversed(self._oai_messages[agent]):
+        #     if m['role'] == 'user':
+        #         return m
+        for m in reversed(self.chat_message_nodes[agent]):
             if m['role'] == 'user':
                 return m
 
     def _generate_poem_reply(self,
         messages = None, sender=None, config=None):
-        message = messages[-1]['content']
+        # message = messages[-1]['content']
+        message = messages[-1]
 
         if self.poem is None:
             self.initiate_chat(self.student_agent, message=message, clear_history=True)
-            self.poem = self.get_last_user_message(self.student_agent)["content"]
+            self.poem = self.get_last_user_message(self.student_agent)#["content"]
 
         # this just means we haven't called extractor agent before
         if len(self._oai_messages[self.extractor_agent]) == 0:
             self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True)
 
         # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
-        extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
+        extracted_poem = self.get_last_user_message(self.extractor_agent)#["content"]
 
-        return True, {"content": extracted_poem}
+        return True, extracted_poem# {"content": extracted_poem}
 
     def _reply_to_terminate_agent(self, messages=None, sender=None, config=None):
-        return True, {"content": "TERMINATE"}
+        return True, node({"content": "TERMINATE"})
 
     def _reply_to_terminate_extractor(self, messages=None, sender=None, config=None):
-        return True, {"content": "TERMINATE"}
+        return True, node({"content": "TERMINATE"})
 
 max_turn = 1
-poem_agent = trace(PoemAgent)(seed=13)
+poem_agent = PoemAgent(seed=13)
 
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
