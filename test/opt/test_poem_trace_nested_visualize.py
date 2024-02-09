@@ -8,7 +8,7 @@ In this file, we should have:
 """
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
-from autogen.trace.trace import trace, compatability, node
+from autogen.trace.trace import trace, compatability, node, trace_class
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 from autogen.trace.utils import back_prop_node_visualization
@@ -52,7 +52,9 @@ class PoemExtractor(AssistantAgent):
         )
 
 # We inherit from the traced version of AssistantAgent and register new reply_funcs that based on nodes.
-class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
+# class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
+@trace_class
+class PoemAgent(AssistantAgent):
     def __init__(self, seed=1234):
         super().__init__(
             name="PoemAgent",

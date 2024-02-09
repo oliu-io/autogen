@@ -25,6 +25,10 @@ def trace(cls, wrap_all_replies=True):
     return trace_ConversableAgent(cls, wrap_all_replies=wrap_all_replies)
     # TODO: enable tracing other classes and functions
 
+def trace_class(cls):
+    assert issubclass(cls, ConversableAgent), "cls must be a subclass of ConversableAgent."
+    return trace_ConversableAgent(cls, wrap_all_replies=False)
+
 class stop_tracing():
     """ A contextmanager to disable tracing."""
     def __enter__(self):
