@@ -162,7 +162,7 @@ class Node(AbstractNode):
         # TODO only take in a dict with a certain structure
         if isinstance(value, str):
             warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
-        assert  isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node), f"Value {value} must be a string, a dict, or a Node."
+        assert  isinstance(value, bool) or isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node), f"Value {value} must be a bool, a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
         self._feedback = defaultdict(list)  # (analogous to gradient) this is the (synthetic) feedback from the user
@@ -186,7 +186,7 @@ class Node(AbstractNode):
     def _del_feedback(self):
         self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
 
-    def backward(self, feedback: str, propagate, retain_graph=False, visualize=False, reverse_plot=False):
+    def backward(self, feedback: str, propagate, retain_graph=False, visualize=False, reverse_plot=False, print_limit=100):
         """ Backward pass.
 
             feedback: feedback given to the current node
@@ -197,6 +197,7 @@ class Node(AbstractNode):
 
             visualize: if True, plot the graph using graphviz
             reverse_plot: if True, plot the graph in reverse order (from child to parent).
+            print_limit: the maximum number of characters to print in the graph.
 
         """
         if self._backwarded:
@@ -215,8 +216,7 @@ class Node(AbstractNode):
             get_name = lambda x: x.name.replace(":", "")  # using colon in the name causes problems in graphviz
             def get_label(x):
                 text = get_name(x)+'\n'+x.description+'\n'
-                content = (x.data['content'] if isinstance(x.data, dict) else x.data)
-                print_limit = 100
+                content = str(x.data['content'] if isinstance(x.data, dict) else x.data)
                 if len(content) > print_limit:
                     content = content[:print_limit] + '...'
                 return text + content
@@ -261,6 +261,9 @@ class Node(AbstractNode):
             return self.data.__getattribute__(name)
         else:
             raise AttributeError(f"{self} has no attribute {name}.")
+
+    def __bool__(self):
+        return bool(self.data)
 
     def __len__(self):
         return len(self.data)
