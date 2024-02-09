@@ -107,6 +107,16 @@ class LLMOptimizer(Optimizer):
                 p._data = self.parameter_copy[p]["_data"]
                 p._feedback = self.parameter_copy[p]["_feedback"]
 
+get_name = lambda x: x.name.replace(":", "")
+def get_label(x, print_limit=200):
+    if isinstance(x, str):
+        return x
+
+    text = get_name(x)+'\n'+x.description+'\n'
+    content = str(x.data['content'] if isinstance(x.data, dict) else x.data)
+    if len(content) > print_limit:
+        content = content[:print_limit] + '...'
+    return text + content
 
 class PropagateStrategy:
     @staticmethod
@@ -118,7 +128,7 @@ class PropagateStrategy:
     @staticmethod
     def retain_full_history_propagate(child):
         # this retains the full history
-        summary = ''.join([f'{str(k)}:{v[0]}' for k, v in
+        summary = ''.join([f'{get_label(k)}:{v[0]}' for k, v in
                            child.feedback.items()])
         return {parent: summary for parent in child.parents}
 

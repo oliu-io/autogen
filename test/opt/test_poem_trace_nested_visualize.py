@@ -9,9 +9,9 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
+from autogen.trace.optimizers import PropagateStrategy
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
-from autogen.trace.utils import back_prop_node_visualization
 
 from autogen.trace.optimizers import DummyOptimizer
 
@@ -113,19 +113,11 @@ user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
 
 init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
-def propagate(child):
-    # a dummy function for testing
-    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
-    return {parent: summary for parent in child.parents}
 
 last_message = poem_agent.chat_message_nodes[user_agent][-2]
 # print(last_message.data)
 print(last_message)
 feedback = user_agent.last_message_node().data['content']
 
-dot = last_message.backward(feedback, propagate, retain_graph=False, visualize=True)
-
-# dot = back_prop_node_visualization(last_message)
-
-# print(dot.source)
+dot = last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False, visualize=True)
 dot.view()
