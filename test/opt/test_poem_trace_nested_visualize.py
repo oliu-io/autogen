@@ -77,9 +77,6 @@ class PoemAgent(AssistantAgent):
         # self.stop_reply_at_receive(self.extractor_agent)
 
     def get_last_user_message(self, agent):
-        # for m in reversed(self._oai_messages[agent]):
-        #     if m['role'] == 'user':
-        #         return m
         for m in reversed(self.chat_message_nodes[agent]):
             if m['role'] == 'user':
                 return m

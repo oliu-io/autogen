@@ -8,7 +8,7 @@ In this file, we should have:
 """
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
-from autogen.trace.trace import trace
+from autogen.trace.trace import trace, trace_class
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 
@@ -52,6 +52,7 @@ class PoemExtractor(AssistantAgent):
             is_termination_msg=termination_msg,
         )
 
+@trace_class
 class PoemAgent(AssistantAgent):
     def __init__(self, seed=1234):
         super().__init__(
@@ -62,8 +63,8 @@ class PoemAgent(AssistantAgent):
             is_termination_msg=termination_msg,
             human_input_mode="NEVER"
         )
-        self.student_agent = PoemStudentAgent()
-        self.extractor_agent = PoemExtractor()
+        self.student_agent = trace(PoemStudentAgent)()
+        self.extractor_agent = trace(PoemExtractor)()
 
         self.poem = None
 

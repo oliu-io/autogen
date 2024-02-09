@@ -17,13 +17,6 @@ class LLFBenchUserAgent(autogen.UserProxyAgent):
             human_input_mode='NEVER'
         )
         self.register_reply(autogen.ConversableAgent, LLFBenchUserAgent._generate_llfbench_reply)
-        # filtered_reply_func_list = []
-        # # we remove the function call to send the message to openai
-        # for tup in self._reply_func_list:
-        #     if tup['reply_func'] == autogen.ConversableAgent.generate_oai_reply:
-        #         continue
-        #     filtered_reply_func_list.append(tup)
-        # self._reply_func_list = filtered_reply_func_list
 
         # we need to append rewards in history (and see how well it works)
         self.info_history = []
