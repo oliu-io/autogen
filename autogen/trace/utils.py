@@ -85,3 +85,10 @@ def plot_agent_performance(performances, backfilled=True):
 
     # Show plot
     plt.show()
+
+def verbalize(next_obs, feedback, reward):
+    message = f"""Score: {reward}\n\n"""
+    message += f"Feedback: {feedback}\n\n"
+    if next_obs is not None:
+        message += f"Instruction: {next_obs}\n\n"
+    return message

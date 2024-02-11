@@ -7,10 +7,10 @@ In this file, we should have:
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
 from autogen.trace.optimizers import PropagateStrategy, LLMOptimizer
-from autogen.trace.optimizer_autogen import train_with_wrapped_env
-from autogen.trace.utils import backfill_lists, plot_agent_performance
+from autogen.trace.optimizer_autogen import train_with_env
+from autogen.trace.utils import backfill_lists, plot_agent_performance, verbalize
 from textwrap import dedent, indent
-from env_wrapper import LLFBenchUserAgent
+import llfbench
 
 from autogen.trace.optimizers import DummyOptimizer
 
@@ -54,7 +54,7 @@ class PoemExtractor(AssistantAgent):
 # class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
 @trace_class
 class PoemAgent(AssistantAgent):
-    def __init__(self, seed=123, silent=False):
+    def __init__(self, seed=456, silent=False):
         super().__init__(
             name="PoemAgent",
             system_message="",
@@ -105,28 +105,24 @@ class PoemAgent(AssistantAgent):
     def _reply_to_terminate_extractor(self, messages=None, sender=None, config=None):
         return True, node({"content": "TERMINATE"})
 
-max_turn = 1
 poem_agent = PoemAgent(silent=True)
-
-user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-SyllableConstrainedPoem-v0",
-                                      llm_config={"temperature": 0.0, "config_list": config_list})
+env = llfbench.make("llf-poem-SyllableConstrainedPoem-v0", instruction_type='b', feedback_type='a')
 
 # ======= Now with the env reward, we can optimize =======
 
-init_obs = user_agent.get_starting_message()
 optimizer = LLMOptimizer(poem_agent.student_agent.parameters,
                          config_list=config_list,
                          task_description=dedent("""
-                         You are helping a student write a poem that satisfies the following requirements:
-                         {}
-                         """.format(init_obs)))  # This just concatenates the feedback into the parameter
+                         You are helping a student write a poem that satisfies the requirement of having a fixed 
+                         number of syllables per line and a fixed number of lines.
+                         """))
 
 performances = []
 exp_runs = 5
+optimization_steps = 4
 
 for _ in range(exp_runs):
-    optimization_steps = 4
-    info = train_with_wrapped_env(user_agent, poem_agent, optimizer, optimization_steps)
+    info = train_with_env(env, poem_agent, optimizer, optimization_steps, feedback_verbalize=verbalize, verbose=True)
     print("Agent reward history:", info['rewards'])
     performances.append(info['rewards'])
 
