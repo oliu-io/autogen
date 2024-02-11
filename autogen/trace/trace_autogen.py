@@ -163,7 +163,12 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             else:
                 self.__oai_messages[agent].clear()
 
-        def last_message_node(self, agent: Optional[Agent] = None) -> Node:
+        def last_message_node(self, agent: Optional[Agent] = None, role: Optional[str] = None) -> Union[Node, None]:
+            # add a role filtering
+            if role == 'self':
+                role = 'assistant'
+            assert role in {'assistant', 'user', None}, f"role must be one of 'assistant', 'user', or None, but got {role}."
+
             if agent is None:
                 n_conversations = len(self._oai_messages)
                 if n_conversations == 0:
@@ -171,9 +176,22 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                 if n_conversations == 1:
                     # for conversation in self._oai_messages.values():
                     for conversation in self.__oai_messages.values():  # XXX We return MessageNode
+                        # add a role filtering
+                        if role is not None:
+                            for message in reversed(conversation):
+                                if message["role"] == role:
+                                    return message
+                            return None
                         return conversation[-1]
                 raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
             # return self._oai_messages[agent][-1]
+
+            if role is not None:
+                for message in reversed(self.__oai_messages[agent]):
+                    if message["role"] == role:
+                        return message
+                return None
+
             return self.__oai_messages[agent][-1]  # XXX We return MessageNode
 
         @property

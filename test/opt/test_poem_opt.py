@@ -4,47 +4,13 @@ In this file, we should have:
 3. An optimizer that optimizes...with an agent call (20 min)
 """
 
-import autogen
-from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
-from autogen.trace.trace import trace, node, Node
+from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
+from autogen.trace.trace import trace, compatability, node, trace_class
+from autogen.trace.optimizers import PropagateStrategy, LLMOptimizer
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
-from typing import Any, Dict, List, Optional, Union
-from collections import defaultdict
 
-from autogen.trace.optimizers import DummyOptimizer, LLMOptimizer, PropagateStrategy
-
-from autogen import OpenAIWrapper
-from autogen import Completion, ChatCompletion
-
-def extract_text_or_completion_object(response, tool_enabled=False):
-    """Extract the text or ChatCompletion objects from a completion or chat response.
-
-    Args:
-        response (ChatCompletion | Completion): The response from openai.
-
-    Returns:
-        A list of text, or a list of ChatCompletion objects if function_call/tool_calls are present.
-    """
-    choices = response.choices
-    if isinstance(response, Completion):
-        return [choice.text for choice in choices]
-
-    TOOL_ENABLED = tool_enabled
-
-    if TOOL_ENABLED:
-        return [
-            choice.message
-            if choice.message.function_call is not None or choice.message.tool_calls is not None
-            else choice.message.content
-            for choice in choices
-        ]
-    else:
-        return [
-            choice.message if choice.message.function_call is not None else choice.message.content
-            for choice in choices
-        ]
-
+from autogen.trace.optimizers import DummyOptimizer
 
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints
@@ -56,48 +22,96 @@ assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
-sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem.")
+sys_msg1 = dedent("You are a student and your teacher gives you an assignment to write a poem.")
 
-class StudentAgent(AssistantAgent):
-    def __init__(self, seed=1234):
+class PoemStudentAgent(AssistantAgent):
+
+    def __init__(self):
         super().__init__(
-            name="StudentAgent",
-            system_message=sys_msg,
-            llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
+            name="PoemStudentAgent",
+            system_message=sys_msg1,
+            llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
         )
-        self.extraction_sys_prompt = dedent("""
-        You are a helpful assistant.
-        You extract only lines of poems in the message from the student, ignore any part of the message that is not related to the poem.
-        You should only reply with the poem string extracted from the user's input.
-        """)
-        self.register_reply(autogen.ConversableAgent, StudentAgent._generate_reply_for_user, position=5)
 
-    def _generate_reply_for_user(self,
-                         messages: Optional[List[Dict]] = None,
-                         sender: Optional[autogen.Agent] = None,
-                         config: Optional[Any] = None,
-                         ):
-        if messages is None:
-            return True, None
-        # if there is a response, we try to extract it
-        response = self.client.create(messages=[{
-            "role": "system",
-            "content": self.extraction_sys_prompt,
-        }, {"role": "user", "content": messages[-1]['content']}], model="gpt-3.5-turbo")
+sys_msg2 = dedent("You are extracting a poem from the student's message. " +
+                 "Do not extract anything except the poem itself."
+                 "If the student did not write a poem, return an empty string.")
+class PoemExtractor(AssistantAgent):
+    def __init__(self):
+        super().__init__(
+            name="PoemExtractor",
+            system_message=sys_msg2,
+            llm_config={"temperature": 0.0, "config_list": config_list},
+            max_consecutive_auto_reply=1,
+            is_termination_msg=termination_msg,
+        )
 
-        return True, {"content": response}
+# We inherit from the traced version of AssistantAgent and register new reply_funcs that based on nodes.
+# class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
+@trace_class
+class PoemAgent(AssistantAgent):
+    def __init__(self, seed=1234):
+        super().__init__(
+            name="PoemAgent",
+            system_message="",
+            llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
+            max_consecutive_auto_reply=1,
+            is_termination_msg=termination_msg,
+            human_input_mode= "NEVER"
+        )
+        self.student_agent = trace(PoemStudentAgent)()
+        self.extractor_agent = trace(PoemExtractor)()
+
+        self.poem = None
+
+        self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=1)
+        self.register_reply([PoemStudentAgent], PoemAgent._reply_to_terminate_agent)
+        self.register_reply([PoemExtractor], PoemAgent._reply_to_terminate_extractor)
+
+        # self.stop_reply_at_receive(self.student_agent)
+        # self.stop_reply_at_receive(self.extractor_agent)
+
+    def get_last_user_message(self, agent):
+        for m in reversed(self.chat_message_nodes[agent]):
+            if m['role'] == 'user':
+                return m
+
+    def _generate_poem_reply(self,
+        messages = None, sender=None, config=None):
+        # message = messages[-1]['content']
+        message = messages[-1]
+
+        if self.poem is None:
+            self.initiate_chat(self.student_agent, message=message, clear_history=True)
+            self.poem = self.get_last_user_message(self.student_agent)#["content"]
+
+        # this just means we haven't called extractor agent before
+        if len(self._oai_messages[self.extractor_agent]) == 0:
+            self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True)
+
+        # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
+        extracted_poem = self.get_last_user_message(self.extractor_agent)#["content"]
+
+        return True, extracted_poem# {"content": extracted_poem}
+
+    def _reply_to_terminate_agent(self, messages=None, sender=None, config=None):
+        return True, node({"content": "TERMINATE"})
+
+    def _reply_to_terminate_extractor(self, messages=None, sender=None, config=None):
+        return True, node({"content": "TERMINATE"})
 
 max_turn = 1
-student_agent = trace(StudentAgent)(seed=13)
-user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Tanka-v0",
+poem_agent = PoemAgent(seed=13)
+
+user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-SyllableConstrainedPoem-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
 # ======= Now with the env reward, we can optimize =======
 
 init_obs = user_agent.get_starting_message()
-optimizer = LLMOptimizer(student_agent.parameters,
+optimizer = LLMOptimizer(poem_agent.parameters,
                          config_list=config_list,
                          task_description=dedent("""
                          You are helping a student write a poem that satisfies the following requirements:
@@ -112,25 +126,26 @@ for _ in range(exp_runs):
     performance = []
 
     for _ in range(optimization_steps):
-        print("Old prompt:", student_agent.parameters[0].data)
+        print("Old prompt:", poem_agent.parameters[0].data)
 
         init_obs = user_agent.get_starting_message()
-        user_agent.initiate_chat(student_agent, message=init_obs)
+        user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
         feedback = user_agent.last_message_node().data['content']
 
         performance.append(user_agent.reward_history[-1])
 
         if user_agent.reward_history[-1] == 1.0:
             print("Reached highest reward.")
-            break
+            continue
 
-        last_message = student_agent.last_message_node()
+        # last_message = poem_agent.last_message_node()
+        last_message = poem_agent.last_message_node(user_agent, role='assistant')
 
         optimizer.zero_feedback()
         last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False)
         optimizer.step()
 
-        print("New prompt:", student_agent.parameters[0].data)
+        print("New prompt:", poem_agent.parameters[0].data)
 
     print("Agent reward history:", performance)
 

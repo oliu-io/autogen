@@ -128,7 +128,7 @@ class PropagateStrategy:
     @staticmethod
     def retain_full_history_propagate(child):
         # this retains the full history
-        summary = ''.join([f'{get_label(k)}:{v[0]}' for k, v in
+        summary = ''.join([f'\n\n{get_label(k).capitalize()}{v[0]}' for k, v in
                            child.feedback.items()])
         return {parent: summary for parent in child.parents}
 
