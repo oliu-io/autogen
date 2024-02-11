@@ -7,6 +7,8 @@ In this file, we should have:
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
 from autogen.trace.optimizers import PropagateStrategy, LLMOptimizer
+from autogen.trace.optimizer_autogen import train
+from autogen.trace.utils import backfill_lists, plot_agent_performance
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 
@@ -52,7 +54,7 @@ class PoemExtractor(AssistantAgent):
 # class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
 @trace_class
 class PoemAgent(AssistantAgent):
-    def __init__(self, seed=1234):
+    def __init__(self, seed=123, silent=False):
         super().__init__(
             name="PoemAgent",
             system_message="",
@@ -65,6 +67,7 @@ class PoemAgent(AssistantAgent):
         self.extractor_agent = trace(PoemExtractor)()
 
         self.poem = None
+        self.silent = silent
 
         self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=1)
         self.register_reply([PoemStudentAgent], PoemAgent._reply_to_terminate_agent)
@@ -84,12 +87,12 @@ class PoemAgent(AssistantAgent):
         message = messages[-1]
 
         if self.poem is None:
-            self.initiate_chat(self.student_agent, message=message, clear_history=True)
+            self.initiate_chat(self.student_agent, message=message, clear_history=True, silent=self.silent)
             self.poem = self.get_last_user_message(self.student_agent)#["content"]
 
         # this just means we haven't called extractor agent before
         if len(self._oai_messages[self.extractor_agent]) == 0:
-            self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True)
+            self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True, silent=self.silent)
 
         # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
         extracted_poem = self.get_last_user_message(self.extractor_agent)#["content"]
@@ -103,7 +106,7 @@ class PoemAgent(AssistantAgent):
         return True, node({"content": "TERMINATE"})
 
 max_turn = 1
-poem_agent = PoemAgent(seed=13)
+poem_agent = PoemAgent(silent=True)
 
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-SyllableConstrainedPoem-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
@@ -123,69 +126,9 @@ exp_runs = 5
 
 for _ in range(exp_runs):
     optimization_steps = 4
-    performance = []
-
-    for _ in range(optimization_steps):
-        print("Old prompt:", poem_agent.parameters[0].data)
-
-        init_obs = user_agent.get_starting_message()
-        user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
-        feedback = user_agent.last_message_node().data['content']
-
-        performance.append(user_agent.reward_history[-1])
-
-        if user_agent.reward_history[-1] == 1.0:
-            print("Reached highest reward.")
-            continue
-
-        # last_message = poem_agent.last_message_node()
-        last_message = poem_agent.last_message_node(user_agent, role='assistant')
-
-        optimizer.zero_feedback()
-        last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False)
-        optimizer.step()
-
-        print("New prompt:", poem_agent.parameters[0].data)
-
-    print("Agent reward history:", performance)
-
-    performances.append(performance)
-
-def backfill_lists(parent_list):
-    max_length = max(len(child) for child in parent_list)
-
-    for child in parent_list:
-        # While the child list is shorter than the longest, append its last element
-        while len(child) < max_length:
-            child.append(child[-1])
-
-    return parent_list
+    info = train(user_agent, poem_agent, optimizer, optimization_steps)
+    print("Agent reward history:", info['rewards'])
+    performances.append(info['rewards'])
 
 performances = backfill_lists(performances)
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-performances = np.array(performances)
-
-# Calculate mean and standard deviation
-means = np.mean(performances, axis=0)
-stds = np.std(performances, axis=0)
-
-# Epochs
-epochs = np.arange(1, len(means) + 1)
-
-# Plotting
-plt.figure(figsize=(10, 6))
-plt.plot(epochs, means, label='Mean Performance')
-plt.fill_between(epochs, means - stds, means + stds, alpha=0.2)
-
-# Labels and title
-plt.xlabel('Epoch')
-plt.ylabel('Performance')
-plt.title('Performance Across Epochs with Confidence Interval')
-plt.legend()
-plt.grid(True)
-
-# Show plot
-plt.show()
+plot_agent_performance(performances, backfilled=True)

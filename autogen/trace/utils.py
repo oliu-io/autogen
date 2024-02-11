@@ -44,3 +44,44 @@ def back_prop_node_visualization(start_node, reverse=False):
             stack.extend(current_node.parents)
 
     return dot
+
+def backfill_lists(parent_list):
+    max_length = max(len(child) for child in parent_list)
+
+    for child in parent_list:
+        # While the child list is shorter than the longest, append its last element
+        while len(child) < max_length:
+            child.append(child[-1])
+
+    return parent_list
+
+def plot_agent_performance(performances, backfilled=True):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    if not backfilled:
+        performances = backfill_lists(performances)
+
+    performances = np.array(performances)
+
+    # Calculate mean and standard deviation
+    means = np.mean(performances, axis=0)
+    stds = np.std(performances, axis=0)
+
+    # Epochs
+    epochs = np.arange(1, len(means) + 1)
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    plt.plot(epochs, means, label='Mean Performance')
+    plt.fill_between(epochs, means - stds, means + stds, alpha=0.2)
+
+    # Labels and title
+    plt.xlabel('Epoch')
+    plt.ylabel('Performance')
+    plt.title('Performance Across Epochs with Confidence Interval')
+    plt.legend()
+    plt.grid(True)
+
+    # Show plot
+    plt.show()

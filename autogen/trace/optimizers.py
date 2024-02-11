@@ -4,6 +4,10 @@ from autogen import AssistantAgent
 from textwrap import dedent, indent
 from copy import copy
 
+"""
+We follow the same design principle as trace
+This file is not dependent of AutoGen library and can be used independently with trace
+"""
 
 class Optimizer:
 
