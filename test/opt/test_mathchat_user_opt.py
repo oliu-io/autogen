@@ -1,6 +1,10 @@
 """
 This file demonstrates how to do a fixed dataset based optimization
 (Other files focus on interactive enviornments)
+
+Example notebook: https://github.com/microsoft/autogen/blob/main/notebook/agentchat_MathChat.ipynb
+
+Example notebook: https://github.com/microsoft/autogen/blob/main/notebook/oai_chatgpt_gpt4.ipynb
 """
 
 import autogen
