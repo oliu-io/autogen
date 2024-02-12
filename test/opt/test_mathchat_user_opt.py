@@ -32,17 +32,7 @@ config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
          })
 assert len(config_list) > 0
 
-# 1. create an AssistantAgent instance named "assistant"
-assistant = trace(autogen.AssistantAgent)(
-    name="assistant",
-    system_message="You are a helpful assistant.",
-    llm_config={
-        "timeout": 600,
-        "seed": 42,
-        "config_list": config_list,
-    },
-    max_consecutive_auto_reply=2
-)
+# ====== Helper Functions ======
 
 def remove_boxed(string: str):
     """Source: https://github.com/hendrycks/math
@@ -107,19 +97,6 @@ def get_answer(solution):
     if answer is None:
         return None
     return answer
-# def _is_termination_msg_mathchat(message):
-#     """Check if a message is a termination message."""
-#     if isinstance(message, dict):
-#         message = message.get("content")
-#         if message is None:
-#             return False
-#     cb = extract_code(message)
-#     contain_code = False
-#     for c in cb:
-#         if c[0] == "python" or c[0] == "wolfram":
-#             contain_code = True
-#             break
-#     return not contain_code and get_answer(message) is not None and get_answer(message) != ""
 
 def _is_termination_msg_mathchat(message):
     """Check if a message is a termination message."""
@@ -137,6 +114,18 @@ def _is_termination_msg_mathchat(message):
     terminate = get_answer(message) is not None and get_answer(message) != ""
 
     return terminate
+
+# 1. create an AssistantAgent instance named "assistant"
+assistant = trace(autogen.AssistantAgent)(
+    name="assistant",
+    system_message="You are a helpful assistant.",
+    llm_config={
+        "timeout": 600,
+        "seed": 42,
+        "config_list": config_list,
+    },
+    max_consecutive_auto_reply=2
+)
 
 # 2. create the MathUserProxyAgent instance named "mathproxyagent"
 # By default, the human_input_mode is "NEVER", which means the agent will not ask for human input.
