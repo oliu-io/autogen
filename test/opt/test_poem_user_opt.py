@@ -119,7 +119,7 @@ optimizer = LLMOptimizer(poem_agent.student_agent.parameters,
 
 performances = []
 exp_runs = 5
-optimization_steps = 4
+optimization_steps = 3
 
 for _ in range(exp_runs):
     info = train_with_env(env, poem_agent, optimizer, optimization_steps, feedback_verbalize=verbalize, verbose=True)
