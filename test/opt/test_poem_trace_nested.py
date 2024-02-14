@@ -8,11 +8,11 @@ In this file, we should have:
 """
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
-from autogen.trace.trace import trace
+from autogen.trace.trace import trace, trace_class, node
+from autogen.trace.optimizers import PropagateStrategy
+
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
-
-from autogen.trace.optimizers import DummyOptimizer
 
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints
@@ -24,32 +24,33 @@ assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
-sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem. Append TERMINATE to end the assignment.")
+sys_msg1 = dedent("You are a student and your teacher gives you an assignment to write a poem.")
 
 class PoemStudentAgent(AssistantAgent):
 
     def __init__(self):
         super().__init__(
             name="PoemStudentAgent",
-            system_message=sys_msg,
+            system_message=sys_msg1,
             llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
         )
 
-sys_msg = dedent("You are extracting a poem from the student's message. " +
+sys_msg2 = dedent("You are extracting a poem from the student's message. " +
                  "Do not extract anything except the poem itself."
                  "If the student did not write a poem, return an empty string.")
 class PoemExtractor(AssistantAgent):
     def __init__(self):
         super().__init__(
             name="PoemExtractor",
-            system_message=sys_msg,
+            system_message=sys_msg2,
             llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
         )
 
+@trace_class
 class PoemAgent(AssistantAgent):
     def __init__(self, seed=1234):
         super().__init__(
@@ -60,8 +61,8 @@ class PoemAgent(AssistantAgent):
             is_termination_msg=termination_msg,
             human_input_mode= "NEVER"
         )
-        self.student_agent = PoemStudentAgent()
-        self.extractor_agent = PoemExtractor()
+        self.student_agent = trace(PoemStudentAgent)()
+        self.extractor_agent = trace(PoemExtractor)()
 
         self.poem = None
 
@@ -73,62 +74,39 @@ class PoemAgent(AssistantAgent):
         # self.stop_reply_at_receive(self.extractor_agent)
 
     def get_last_user_message(self, agent):
-        for m in reversed(self._oai_messages[agent]):
+        for m in reversed(self.chat_message_nodes[agent]):
             if m['role'] == 'user':
                 return m
 
     def _generate_poem_reply(self,
         messages = None, sender=None, config=None):
-        message = messages[-1]['content']
+        # message = messages[-1]['content']
+        message = messages[-1]
 
         if self.poem is None:
             self.initiate_chat(self.student_agent, message=message, clear_history=True)
-            self.poem = self.get_last_user_message(self.student_agent)["content"]
+            self.poem = self.get_last_user_message(self.student_agent)#["content"]
 
         # this just means we haven't called extractor agent before
         if len(self._oai_messages[self.extractor_agent]) == 0:
             self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True)
 
-        extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
+        # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
+        extracted_poem = self.get_last_user_message(self.extractor_agent)#["content"]
 
-        return True, {"content": extracted_poem}
+        return True, extracted_poem# {"content": extracted_poem}
 
     def _reply_to_terminate_agent(self, messages=None, sender=None, config=None):
-        return True, {"content": "TERMINATE"}
+        return True, node({"content": "TERMINATE"})
 
     def _reply_to_terminate_extractor(self, messages=None, sender=None, config=None):
-        return True, {"content": "TERMINATE"}
+        return True, node({"content": "TERMINATE"})
 
-max_turn = 1
+
 poem_agent = PoemAgent(seed=13)
 
-user_agent = LLFBenchUserAgent(env_name="llf-poem-Haiku-v0",
+user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
 init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
-
-# optimizer = DummyOptimizer(student_agent.parameters)  # This just concatenates the feedback into the parameter
-# def propagate(child):
-#     # a dummy function for testing
-#     summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
-#     return {parent: summary for parent in child.parents}
-#
-# feedback = user_agent.last_message().data['content']
-# last_message = student_agent.last_message()
-# optimizer.zero_feedback()
-# last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
-# optimizer.step()
-#
-# node = last_message
-# while True:
-#     # assert all([ feedback in v[0] for v in node.feedback.values()])
-#     # print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node.feedback}')
-#     print(f'Node {node.name} at level {node.level}: Feedback {node.feedback}')
-#     print(node.description)
-#     print("=============")
-#
-#     if len(node.parents)>0:
-#         node = node.parents[0]
-#     else:
-#         break

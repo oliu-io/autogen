@@ -6,9 +6,7 @@ There are a number of benefits of using `autogen` to perform inference: performa
 
 ## Tune Inference Parameters (for openai<1)
 
-*Links to notebook examples:*
-* [Optimize for Code Generation](https://github.com/microsoft/autogen/blob/main/notebook/oai_completion.ipynb)
-* [Optimize for Math](https://github.com/microsoft/autogen/blob/main/notebook/oai_chatgpt_gpt4.ipynb)
+Find a list of examples in this page: [Tune Inference Parameters Examples](../Examples.md#inference-hyperparameters-tuning)
 
 ### Choices to optimize
 
@@ -105,12 +103,9 @@ config, analysis = autogen.Completion.tune(
 `num_samples` is the number of configurations to sample. -1 means unlimited (until optimization budget is exhausted).
 The returned `config` contains the optimized configuration and `analysis` contains an ExperimentAnalysis object for all the tried configurations and results.
 
-The tuend config can be used to perform inference.
+The tuned config can be used to perform inference.
 
 ## API unification
-
-<!-- `autogen.Completion.create` is compatible with both `openai.Completion.create` and `openai.ChatCompletion.create`, and both OpenAI API and Azure OpenAI API. So models such as "text-davinci-003", "gpt-3.5-turbo" and "gpt-4" can share a common API.
-When chat models are used and `prompt` is given as the input to `autogen.Completion.create`, the prompt will be automatically converted into `messages` to fit the chat completion API requirement. One advantage is that one can experiment with both chat and non-chat models for the same prompt in a unified API. -->
 
 `autogen.OpenAIWrapper.create()` can be used to create completions for both chat and non-chat models, and both OpenAI API and Azure OpenAI API.
 
@@ -121,51 +116,130 @@ client = OpenAIWrapper()
 # ChatCompletion
 response = client.create(messages=[{"role": "user", "content": "2+2="}], model="gpt-3.5-turbo")
 # extract the response text
-print(client.extract_text_or_function_call(response))
+print(client.extract_text_or_completion_object(response))
+# get cost of this completion
+print(response.cost)
 # Azure OpenAI endpoint
 client = OpenAIWrapper(api_key=..., base_url=..., api_version=..., api_type="azure")
 # Completion
 response = client.create(prompt="2+2=", model="gpt-3.5-turbo-instruct")
 # extract the response text
-print(client.extract_text_or_function_call(response))
+print(client.extract_text_or_completion_object(response))
 
 ```
 
 For local LLMs, one can spin up an endpoint using a package like [FastChat](https://github.com/lm-sys/FastChat), and then use the same API to send a request. See [here](/blog/2023/07/14/Local-LLMs) for examples on how to make inference with local LLMs.
 
-<!-- When only working with the chat-based models, `autogen.ChatCompletion` can be used. It also does automatic conversion from prompt to messages, if prompt is provided instead of messages. -->
+For custom model clients, one can register the client with `autogen.OpenAIWrapper.register_model_client` and then use the same API to send a request. See [here](/blog/2024/01/26/Custom-Models) for examples on how to make inference with custom model clients.
+
+## Usage Summary
+
+The `OpenAIWrapper` from `autogen` tracks token counts and costs of your API calls. Use the `create()` method to initiate requests and `print_usage_summary()` to retrieve a detailed usage report, including total cost and token usage for both cached and actual requests.
+
+- `mode=["actual", "total"]` (default): print usage summary for all completions and non-caching completions.
+- `mode='actual'`: only print non-cached usage.
+- `mode='total'`: only print all usage (including cache).
+
+Reset your session's usage data with `clear_usage_summary()` when needed. [View Notebook](https://github.com/microsoft/autogen/blob/main/notebook/oai_client_cost.ipynb)
+
+Example usage:
+```python
+from autogen import OpenAIWrapper
+
+client = OpenAIWrapper()
+client.create(messages=[{"role": "user", "content": "Python learning tips."}], model="gpt-3.5-turbo")
+client.print_usage_summary()  # Display usage
+client.clear_usage_summary()  # Reset usage data
+```
+
+Sample output:
+```
+Usage summary excluding cached usage:
+Total cost: 0.00015
+* Model 'gpt-3.5-turbo': cost: 0.00015, prompt_tokens: 25, completion_tokens: 58, total_tokens: 83
+
+Usage summary including cached usage:
+Total cost: 0.00027
+* Model 'gpt-3.5-turbo': cost: 0.00027, prompt_tokens: 50, completion_tokens: 100, total_tokens: 150
+```
+
+Note: if using a custom model client (see [here](/blog/2024/01/26/Custom-Models) for details) and if usage summary is not implemented, then the usage summary will not be available.
 
 ## Caching
 
-API call results are cached locally and reused when the same request is issued. This is useful when repeating or continuing experiments for reproducibility and cost saving. It still allows controlled randomness by setting the "cache_seed" specified in `OpenAIWrapper.create()` or the constructor of `OpenAIWrapper`.
+API call results are cached locally and reused when the same request is issued.
+This is useful when repeating or continuing experiments for reproducibility and cost saving.
+
+Starting version 0.2.8, a configurable context manager allows you to easily configure
+the cache, using either DiskCache or Redis.
+All `OpenAIWrapper` created inside the context manager can use the same cache
+through the constructor.
 
 ```python
-client = OpenAIWrapper(cache_seed=...)
-client.create(...)
+from autogen import Cache
+
+with Cache.redis(redis_url="redis://localhost:6379/0") as cache:
+    client = OpenAIWrapper(..., cache=cache)
+    client.create(...)
+
+with Cache.disk() as cache:
+    client = OpenAIWrapper(..., cache=cache)
+    client.create(...)
 ```
+
+You can also set a cache directly in the `create()` method.
 
 ```python
-client = OpenAIWrapper()
-client.create(cache_seed=..., ...)
+client = OpenAIWrapper(...)
+with Cache.disk() as cache:
+    client.create(..., cache=cache)
 ```
 
-Caching is enabled by default with cache_seed 41. To disable it please set `cache_seed` to None.
+You can vary the `cache_seed` parameter to get different LLM output while
+still using cache.
 
-_NOTE_. openai v1.1 introduces a new param `seed`. The difference between autogen's `cache_seed` and openai's `seed` is that:
-* autogen uses local disk cache to guarantee the exactly same output is produced for the same input and when cache is hit, no openai api call will be made.
-* openai's `seed` is a best-effort deterministic sampling with no guarantee of determinism. When using openai's `seed` with `cache_seed` set to None, even for the same input, an openai api call will be made and there is no guarantee for getting exactly the same output.
+```python
+# Setting the cache_seed to 1 will use a different cache from the default one
+# and you will see different output.
+with Cache.disk(cache_seed=1) as cache:
+    client.create(..., cache=cache)
+```
+
+By default DiskCache uses `.cache` for storage. To change the cache directory,
+set `cache_path_root`:
+
+```python
+with Cache.disk(cache_path_root="/tmp/autogen_cache") as cache:
+    client.create(..., cache=cache)
+```
+
+### Turnning off cache
+
+For backward compatibility, DiskCache is always enabled by default
+with `cache_seed` set to 41. To fully disable it, set `cache_seed` to None.
+
+```python
+# Turn off cache in constructor,
+client = OpenAIWrapper(..., cache_seed=None)
+# or directly in create().
+client.create(..., cache_seed=None)
+```
+
+### Difference between `cache_seed` and openai's `seed` parameter
+
+openai v1.1 introduces a new param `seed`.
+The differences between autogen's `cache_seed` and openai's `seed`:
+    - autogen uses local disk cache to guarantee the exactly same output is produced
+    for the same input and when cache is hit, no openai api call will be made.
+    - openai's `seed` is a best-effort deterministic sampling with no guarantee
+    of determinism. When using openai's `seed` with `cache_seed` set to None,
+    even for the same input, an openai api call will be made and there is
+    no guarantee for getting exactly the same output.
 
 ## Error handling
 
 ### Runtime error
 
-<!-- It is easy to hit error when calling OpenAI APIs, due to connection, rate limit, or timeout. Some of the errors are transient. `autogen.Completion.create` deals with the transient errors and retries automatically. Request timeout, max retry period and retry wait time can be configured via `request_timeout`, `max_retry_period` and `retry_wait_time`.
-
-- `request_timeout` (int): the timeout (in seconds) sent with a single request.
-- `max_retry_period` (int): the total time (in seconds) allowed for retrying failed requests.
-- `retry_wait_time` (int): the time interval to wait (in seconds) before retrying a failed request.
-
-Moreover,  -->
 One can pass a list of configurations of different models/endpoints to mitigate the rate limits and other runtime error. For example,
 
 ```python
@@ -186,12 +260,16 @@ client = OpenAIWrapper(
         {
             "model": "llama2-chat-7B",
             "base_url": "http://127.0.0.1:8080",
+        },
+        {
+            "model": "microsoft/phi-2",
+            "model_client_cls": "CustomModelClient"
         }
     ],
 )
 ```
 
-`client.create()` will try querying Azure OpenAI gpt-4, OpenAI gpt-3.5-turbo, and a locally hosted llama2-chat-7B one by one,
+`client.create()` will try querying Azure OpenAI gpt-4, OpenAI gpt-3.5-turbo, a locally hosted llama2-chat-7B, and phi-2 using a custom model client class named `CustomModelClient`, one by one,
 until a valid result is returned. This can speed up the development process where the rate limit is a bottleneck. An error will be raised if the last choice fails. So make sure the last choice in the list has the best availability.
 
 For convenience, we provide a number of utility functions to load config lists.
@@ -201,7 +279,7 @@ For convenience, we provide a number of utility functions to load config lists.
 - `config_list_from_models`: Creates configurations based on a provided list of models, useful when targeting specific models without manually specifying each configuration.
 - `config_list_from_dotenv`: Constructs a configuration list from a `.env` file, offering a consolidated way to manage multiple API configurations and keys from a single file.
 
-We suggest that you take a look at this [notebook](https://github.com/microsoft/autogen/blob/main/notebook/oai_openai_utils.ipynb) for full code examples of the different methods to configure your model endpoints.
+We suggest that you take a look at this [notebook](/docs/llm_configuration) for full code examples of the different methods to configure your model endpoints.
 
 ### Logic error
 
@@ -209,7 +287,7 @@ Another type of error is that the returned response does not satisfy a requireme
 
 ```python
 def valid_json_filter(response, **_):
-    for text in OpenAIWrapper.extract_text_or_function_call(response):
+    for text in OpenAIWrapper.extract_text_or_completion_object(response):
         try:
             json.loads(text)
             return True

@@ -1,5 +1,6 @@
+from typing import Callable, Dict, List, Literal, Optional, Union
+
 from .conversable_agent import ConversableAgent
-from typing import Callable, Dict, Optional, Union
 
 
 class UserProxyAgent(ConversableAgent):
@@ -15,6 +16,13 @@ class UserProxyAgent(ConversableAgent):
     To customize the initial message when a conversation starts, override `generate_init_message` method.
     """
 
+    # Default UserProxyAgent.description values, based on human_input_mode
+    DEFAULT_USER_PROXY_AGENT_DESCRIPTIONS = {
+        "ALWAYS": "An attentive HUMAN user who can answer questions about the task, and can perform tasks such as running Python code or inputting command line commands at a Linux terminal and reporting back the execution results.",
+        "TERMINATE": "A user that can run Python code or input command line commands at a Linux terminal and report back the execution results.",
+        "NEVER": "A computer terminal that performs no other action than running Python scripts (provided to it quoted in ```python code blocks), or sh shell scripts (provided to it quoted in ```sh code blocks).",
+    }
+
     def __init__(
         self,
         name: str,
@@ -22,10 +30,11 @@ class UserProxyAgent(ConversableAgent):
         max_consecutive_auto_reply: Optional[int] = None,
         human_input_mode: Optional[str] = "ALWAYS",
         function_map: Optional[Dict[str, Callable]] = None,
-        code_execution_config: Optional[Union[Dict, bool]] = None,
+        code_execution_config: Optional[Union[Dict, Literal[False]]] = None,
         default_auto_reply: Optional[Union[str, Dict, None]] = "",
-        llm_config: Optional[Union[Dict, bool]] = False,
-        system_message: Optional[str] = "",
+        llm_config: Optional[Union[Dict, Literal[False]]] = False,
+        system_message: Optional[Union[str, List]] = "",
+        description: Optional[str] = None,
     ):
         """
         Args:
@@ -53,12 +62,11 @@ class UserProxyAgent(ConversableAgent):
                     The default working directory is the "extensions" directory under
                     "path_to_autogen".
                 - use_docker (Optional, list, str or bool): The docker image to use for code execution.
+                    Default is True, which means the code will be executed in a docker container. A default list of images will be used.
                     If a list or a str of image name(s) is provided, the code will be executed in a docker container
                     with the first image successfully pulled.
-                    If None, False or empty, the code will be executed in the current environment.
-                    Default is True, which will be converted into a list.
-                    If the code is executed in the current environment,
-                    the code must be trusted.
+                    If False, the code will be executed in the current environment.
+                    We strongly recommend using docker for code execution.
                 - timeout (Optional, int): The maximum execution time in seconds.
                 - last_n_messages (Experimental, Optional, int): The number of messages to look back for code execution. Default to 1.
             default_auto_reply (str or dict or None): the default auto reply message when no code execution or llm based reply is generated.
@@ -66,17 +74,22 @@ class UserProxyAgent(ConversableAgent):
                 Please refer to [OpenAIWrapper.create](/docs/reference/oai/client#create)
                 for available options.
                 Default to false, which disables llm-based auto reply.
-            system_message (str): system message for ChatCompletion inference.
+            system_message (str or List): system message for ChatCompletion inference.
                 Only used when llm_config is not False. Use it to reprogram the agent.
+            description (str): a short description of the agent. This description is used by other agents
+                (e.g. the GroupChatManager) to decide when to call upon this agent. (Default: system_message)
         """
         super().__init__(
-            name,
-            system_message,
-            is_termination_msg,
-            max_consecutive_auto_reply,
-            human_input_mode,
-            function_map,
-            code_execution_config,
-            llm_config,
-            default_auto_reply,
+            name=name,
+            system_message=system_message,
+            is_termination_msg=is_termination_msg,
+            max_consecutive_auto_reply=max_consecutive_auto_reply,
+            human_input_mode=human_input_mode,
+            function_map=function_map,
+            code_execution_config=code_execution_config,
+            llm_config=llm_config,
+            default_auto_reply=default_auto_reply,
+            description=description
+            if description is not None
+            else self.DEFAULT_USER_PROXY_AGENT_DESCRIPTIONS[human_input_mode],
         )

@@ -158,7 +158,7 @@ class OptiGuideAgent(AssistantAgent):
             self.initiate_chat(self._writer, message=CODE_PROMPT)
             if self._success:
                 # step 7: receive interpret result
-                reply = self.last_message(self._writer)["content"]
+                reply = self.last_message_node(self._writer)["content"]
             else:
                 reply = "Sorry. I cannot answer your question."
             # Finally, step 8: send reply to user
@@ -173,14 +173,14 @@ class OptiGuideAgent(AssistantAgent):
             # no reply to writer
             return
 
-        _, code = extract_code(self.last_message(sender)["content"])[0]
+        _, code = extract_code(self.last_message_node(sender)["content"])[0]
 
         # Step 3: safeguard
         safe_msg = ""
         if self._use_safeguard:
             self.initiate_chat(message=SAFEGUARD_PROMPT.format(code=code),
                                recipient=self._safeguard)
-            safe_msg = self.last_message(self._safeguard)["content"]
+            safe_msg = self.last_message_node(self._safeguard)["content"]
         else:
             safe_msg = "SAFE"
 

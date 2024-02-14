@@ -14,13 +14,22 @@ from autogen.trace.nodes import node
     directly invoking Node."""
 
 
-def trace(cls):
-    """ A decorator to trace a ConversableAgent."""
+def trace(cls, wrap_all_replies=True):
+    """ A decorator to trace a ConversableAgent.
+
+        Args:
+            cls (subclass of ConversableAgent): The class to trace.
+            wrap_all_replies (bool): If True, all registered reply_funcs would be wrappped by trace_operator.
+    """
     assert issubclass(cls, ConversableAgent), "cls must be a subclass of ConversableAgent."
-    return trace_ConversableAgent(cls)
+    return trace_ConversableAgent(cls, wrap_all_replies=wrap_all_replies)
     # TODO: enable tracing other classes and functions
 
-class no_trace():
+def trace_class(cls):
+    assert issubclass(cls, ConversableAgent), "cls must be a subclass of ConversableAgent."
+    return trace_ConversableAgent(cls, wrap_all_replies=False)
+
+class stop_tracing():
     """ A contextmanager to disable tracing."""
     def __enter__(self):
         GRAPH.TRACE = False
@@ -34,7 +43,7 @@ def compatability(fun):
     @for_all_methods
     def no_trace_decorator(fun):
         def wrapper(*args, **kwargs):
-            with no_trace():
+            with stop_tracing():
                 return fun(*args, **kwargs)
         return wrapper
     return no_trace_decorator(traced_Cls)
