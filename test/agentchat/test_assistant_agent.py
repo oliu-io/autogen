@@ -4,21 +4,26 @@ import pytest
 import autogen
 from autogen.agentchat import AssistantAgent, UserProxyAgent
 
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from conftest import skip_openai  # noqa: E402
+
+try:
+    from openai import OpenAI
+except ImportError:
+    skip = True
+else:
+    skip = False or skip_openai
+
 KEY_LOC = "notebook"
 OAI_CONFIG_LIST = "OAI_CONFIG_LIST"
 here = os.path.abspath(os.path.dirname(__file__))
 
 
 @pytest.mark.skipif(
-    sys.platform in ["darwin", "win32"],
-    reason="do not run on MacOS or windows",
+    sys.platform in ["darwin", "win32"] or skip,
+    reason="do not run on MacOS or windows OR openai not installed OR requested to skip",
 )
 def test_ai_user_proxy_agent():
-    try:
-        import openai
-    except ImportError:
-        return
-
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
 
@@ -44,38 +49,26 @@ def test_ai_user_proxy_agent():
         llm_config={
             "config_list": config_list,
         },
-        # In the system message the "user" always refers to ther other agent.
+        # In the system message the "user" always refers to the other agent.
         system_message="You ask a user for help. You check the answer from the user and provide feedback.",
     )
     assistant.reset()
 
     math_problem = "$x^3=125$. What is x?"
-    ai_user_proxy.initiate_chat(
+    res = ai_user_proxy.initiate_chat(
         assistant,
         message=math_problem,
     )
     print(conversations)
+    print("Result summary:", res.summary)
 
 
+@pytest.mark.skipif(skip, reason="openai not installed OR requested to skip")
 def test_gpt35(human_input_mode="NEVER", max_consecutive_auto_reply=5):
-    try:
-        import openai
-    except ImportError:
-        return
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
-        filter_dict={
-            "model": {
-                "gpt-3.5-turbo",
-                "gpt-3.5-turbo-16k",
-                "gpt-3.5-turbo-16k-0613",
-                "gpt-3.5-turbo-0301",
-                "chatgpt-35-turbo-0301",
-                "gpt-35-turbo-v0301",
-                "gpt",
-            },
-        },
+        filter_dict={"tags": ["gpt-3.5-turbo", "gpt-3.5-turbo-16k"]},
     )
     llm_config = {
         "cache_seed": 42,
@@ -114,12 +107,8 @@ If "Thank you" or "You\'re welcome" are said in the conversation, then say TERMI
     assert not isinstance(user.use_docker, bool)  # None or str
 
 
+@pytest.mark.skipif(skip, reason="openai not installed OR requested to skip")
 def test_create_execute_script(human_input_mode="NEVER", max_consecutive_auto_reply=10):
-    try:
-        import openai
-    except ImportError:
-        return
-
     config_list = autogen.config_list_from_json(OAI_CONFIG_LIST, file_location=KEY_LOC)
     conversations = {}
     # autogen.ChatCompletion.start_logging(conversations)
@@ -143,7 +132,14 @@ def test_create_execute_script(human_input_mode="NEVER", max_consecutive_auto_re
         message="""Create and execute a script to plot a rocket without using matplotlib""",
     )
     assistant.reset()
-    user.initiate_chat(
+    user = UserProxyAgent(
+        "user",
+        human_input_mode=human_input_mode,
+        code_execution_config={"work_dir": f"{here}/test_agent_scripts"},
+        max_consecutive_auto_reply=max_consecutive_auto_reply,
+        is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
+    )
+    res = user.initiate_chat(
         assistant,
         message="""Create a temp.py file with the following content:
 ```
@@ -151,20 +147,18 @@ print('Hello world!')
 ```""",
     )
     print(conversations)
+    print("Result summary:", res.summary)
     # autogen.ChatCompletion.print_usage_summary()
     # autogen.ChatCompletion.start_logging(compact=False)
-    user.send("""Execute temp.py""", assistant)
+    res = user.send("""Execute temp.py""", assistant)
     # print(autogen.ChatCompletion.logged_history)
     # autogen.ChatCompletion.print_usage_summary()
     # autogen.ChatCompletion.stop_logging()
+    print("Execution result summary:", res.summary)
 
 
+@pytest.mark.skipif(skip, reason="openai not installed OR requested to skip")
 def test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=10):
-    try:
-        import openai
-    except ImportError:
-        return
-
     config_list = autogen.config_list_from_json(
         OAI_CONFIG_LIST,
         file_location=KEY_LOC,
@@ -201,9 +195,9 @@ def test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=10):
 
 
 if __name__ == "__main__":
-    # test_gpt35()
+    test_gpt35()
     # test_create_execute_script(human_input_mode="TERMINATE")
     # when GPT-4, i.e., the DEFAULT_MODEL, is used, conversation in the following test
     # should terminate in 2-3 rounds of interactions (because is_termination_msg should be true after 2-3 rounds)
     # although the max_consecutive_auto_reply is set to 10.
-    test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=10)
+    # test_tsp(human_input_mode="NEVER", max_consecutive_auto_reply=10)

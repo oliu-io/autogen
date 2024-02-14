@@ -25,12 +25,12 @@ try:
     import diskcache
 
     ERROR = None
-except ImportError:
-    ERROR = ImportError(
-        "(Deprecated) The autogen.Completion class requires openai<1 and diskcache. "
-        "Please switch to autogen.OpenAIWrapper for openai>=1."
-    )
+    assert openai.__version__ < "1"
+except (AssertionError, ImportError):
     openai_Completion = object
+    # The autogen.Completion class requires openai<1
+    ERROR = AssertionError("(Deprecated) The autogen.Completion class requires openai<1 and diskcache. ")
+
 logger = logging.getLogger(__name__)
 if not logger.handlers:
     # Add the console handler.
@@ -132,7 +132,7 @@ class Completion(openai_Completion):
             seed (int, Optional): The integer identifier for the pseudo seed.
                 Results corresponding to different seeds will be cached in different places.
             cache_path (str, Optional): The root path for the cache.
-                The complete cache path will be {cache_path}/{seed}.
+                The complete cache path will be {cache_path_root}/{seed}.
         """
         cls.cache_seed = seed
         cls.cache_path = f"{cache_path_root}/{seed}"
@@ -145,7 +145,7 @@ class Completion(openai_Completion):
             seed (int, Optional): The integer identifier for the pseudo seed.
                 If omitted, all caches under cache_path_root will be cleared.
             cache_path (str, Optional): The root path for the cache.
-                The complete cache path will be {cache_path}/{cache_seed}.
+                The complete cache path will be {cache_path_root}/{seed}.
         """
         if seed is None:
             shutil.rmtree(cache_path_root, ignore_errors=True)
@@ -229,7 +229,8 @@ class Completion(openai_Completion):
                 sleep(retry_wait_time)
             except APIError as err:
                 error_code = err and err.json_body and isinstance(err.json_body, dict) and err.json_body.get("error")
-                error_code = error_code and error_code.get("code")
+                if isinstance(error_code, dict):
+                    error_code = error_code.get("code")
                 if error_code == "content_filter":
                     raise
                 # transient error
@@ -340,7 +341,7 @@ class Completion(openai_Completion):
             config (dict): Hyperparameter setting for the openai api call.
             prune (bool, optional): Whether to enable pruning. Defaults to True.
             eval_only (bool, optional): Whether to evaluate only
-              (ignore the inference budget and do not rasie error when a request fails).
+              (ignore the inference budget and do not raise error when a request fails).
               Defaults to False.
 
         Returns:
@@ -429,7 +430,7 @@ class Completion(openai_Completion):
                     if previous_num_completions:
                         n_tokens_list[i] += n_output_tokens
                         responses_list[i].extend(responses)
-                        # Assumption 1: assuming requesting n1, n2 responses separatively then combining them
+                        # Assumption 1: assuming requesting n1, n2 responses separately then combining them
                         # is the same as requesting (n1+n2) responses together
                     else:
                         n_tokens_list.append(n_output_tokens)
@@ -743,13 +744,13 @@ class Completion(openai_Completion):
                 {
                     "model": "gpt-3.5-turbo",
                     "api_key": os.environ.get("OPENAI_API_KEY"),
-                    "api_type": "open_ai",
+                    "api_type": "openai",
                     "base_url": "https://api.openai.com/v1",
                 },
                 {
                     "model": "llama-7B",
                     "base_url": "http://127.0.0.1:8080",
-                    "api_type": "open_ai",
+                    "api_type": "openai",
                 }
             ],
             prompt="Hi",
@@ -949,7 +950,7 @@ class Completion(openai_Completion):
             return_responses_and_per_instance_result (bool): Whether to also return responses
                 and per instance results in addition to the aggregated results.
             logging_level (optional): logging level. Defaults to logging.WARNING.
-            **config (dict): parametes passed to the openai api call `create()`.
+            **config (dict): parameters passed to the openai api call `create()`.
 
         Returns:
             None when no valid eval_func is provided in either test or tune;

@@ -18,11 +18,11 @@ AutoGen is powered by collaborative [research studies](/docs/Research) from Micr
 
 ### Quickstart
 
-Install from pip: `pip install pyautogen`. Find more options in [Installation](/docs/Installation).
+Install from pip: `pip install pyautogen`. Find more options in [Installation](/docs/installation/).
 For [code execution](/docs/FAQ#code-execution), we strongly recommend installing the python docker package, and using docker.
 
 #### Multi-Agent Conversation Framework
-Autogen enables the next-gen LLM applications with a generic multi-agent conversation framework. It offers customizable and conversable agents which integrate LLMs, tools and human.
+Autogen enables the next-gen LLM applications with a generic multi-agent conversation framework. It offers customizable and conversable agents which integrate LLMs, tools, and humans.
 By automating chat among multiple capable agents, one can easily make them collectively perform tasks autonomously or with human feedback, including tasks that require using tools via code. For [example](https://github.com/microsoft/autogen/blob/main/test/twoagent.py),
 ```python
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
@@ -32,7 +32,7 @@ from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 # and OAI_CONFIG_LIST_sample.json
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST")
 assistant = AssistantAgent("assistant", llm_config={"config_list": config_list})
-user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding"})
+user_proxy = UserProxyAgent("user_proxy", code_execution_config={"work_dir": "coding", "use_docker": False}) # IMPORTANT: set to True to run code in docker, recommended
 user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stock price change YTD.")
 # This initiates an automated chat between the two agents to solve the task
 ```
@@ -40,11 +40,11 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 The figure below shows an example conversation flow with AutoGen.
 ![Agent Chat Example](/img/chat_example.png)
 
-* [Code examples](/docs/Examples/AgentChat).
+* [Code examples](/docs/Examples).
 * [Documentation](/docs/Use-Cases/agent_chat).
 
 #### Enhanced LLM Inferences
-Autogen also helps maximize the utility out of the expensive LLMs such as ChatGPT and GPT-4. It offers enhanced LLM inference with powerful functionalites like tuning, caching, error handling, templating. For example, you can optimize generations by LLM with your own tuning data, success metrics and budgets.
+Autogen also helps maximize the utility out of the expensive LLMs such as ChatGPT and GPT-4. It offers enhanced LLM inference with powerful functionalities like tuning, caching, error handling, templating. For example, you can optimize generations by LLM with your own tuning data, success metrics and budgets.
 ```python
 # perform tuning for openai<1
 config, analysis = autogen.Completion.tune(
@@ -60,13 +60,13 @@ config, analysis = autogen.Completion.tune(
 response = autogen.Completion.create(context=test_instance, **config)
 ```
 
-* [Code examples](/docs/Examples/Inference).
+* [Code examples](/docs/Examples).
 * [Documentation](/docs/Use-Cases/enhanced_inference).
 
 ### Where to Go Next ?
 
 * Understand the use cases for [multi-agent conversation](/docs/Use-Cases/agent_chat) and [enhanced LLM inference](/docs/Use-Cases/enhanced_inference).
-* Find [code examples](/docs/Examples/AgentChat).
+* Find [code examples](/docs/Examples).
 * Read [SDK](/docs/reference/agentchat/conversable_agent/).
 * Learn about [research](/docs/Research) around AutoGen.
 * [Roadmap](https://github.com/orgs/microsoft/projects/989/views/3)
