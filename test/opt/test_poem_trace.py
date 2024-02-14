@@ -17,9 +17,10 @@ from autogen.trace.optimizers import DummyOptimizer
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints
 # and OAI_CONFIG_LIST_sample
-config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST")
-config_list = [config_list[1]]
-assert config_list[0]["model"] == "gpt-3.5-turbo-0613"
+config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
+             "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
+         })
+assert len(config_list) > 0 
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
@@ -48,7 +49,7 @@ class StudentAgent(AssistantAgent):
 
 max_turn = 1
 student_agent = trace(StudentAgent)(seed=13)
-user_agent = trace(LLFBenchUserAgent)(env_name="verbal-poem-Haiku-v0",
+user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
 init_obs = user_agent.get_starting_message()
@@ -63,7 +64,7 @@ def propagate(child):
 feedback = user_agent.last_message().data['content']
 last_message = student_agent.last_message()
 optimizer.zero_feedback()
-last_message.backward(feedback['content'], propagate, retain_graph=True)  # Set retain_graph for testing
+last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
 optimizer.step()
 
 node = last_message

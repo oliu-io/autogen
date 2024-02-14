@@ -56,7 +56,7 @@ def test_chat_manager():
         max_consecutive_auto_reply=2,
         human_input_mode="NEVER",
         llm_config=False,
-        default_auto_reply="This is alice sepaking.",
+        default_auto_reply="This is alice speaking.",
     )
     agent2 = trace(autogen.ConversableAgent)(
         "bob",
@@ -90,7 +90,7 @@ def test_plugin():
         max_consecutive_auto_reply=2,
         human_input_mode="NEVER",
         llm_config=False,
-        default_auto_reply="This is alice sepaking.",
+        default_auto_reply="This is alice speaking.",
     )
     agent2 = trace(autogen.ConversableAgent)(
         "bob",
