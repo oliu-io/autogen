@@ -52,9 +52,13 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         # We wrap the following methods to trace the creation of the nodes.
         default_reply_funcs = (
             ConversableAgent.generate_oai_reply,
+            ConversableAgent.a_generate_oai_reply,
+            ConversableAgent._generate_code_execution_reply_using_executor,
             ConversableAgent.generate_code_execution_reply,
+            ConversableAgent.generate_tool_calls_reply,
+            ConversableAgent.a_generate_tool_calls_reply,
             ConversableAgent.generate_function_call_reply,
-            ConversableAgent.generate_async_function_call_reply,
+            ConversableAgent.a_generate_function_call_reply,
             ConversableAgent.check_termination_and_human_reply,
         )
 
