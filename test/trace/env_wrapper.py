@@ -66,8 +66,8 @@ class LLFBenchUserAgent(autogen.UserProxyAgent):
         message = self.verbalize(next_obs['observation'], next_obs['feedback'], reward)
         # by appending TERMINATE to the message
         # we can stop the entire conversation
-        if success:
-            message += '\n\nTERMINATE'
+        # if success:
+        message += '\n\nTERMINATE'
 
         self.info_history.append(info)
         self.obs_history.append(next_obs)

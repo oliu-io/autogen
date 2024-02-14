@@ -8,11 +8,12 @@ In this file, we should have:
 """
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
-from autogen.trace.trace import trace, trace_class, node
+from autogen.trace.trace import trace, compatability, node, trace_class
 from autogen.trace.optimizers import PropagateStrategy
-
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
+
+from autogen.trace.optimizers import DummyOptimizer
 
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints
@@ -20,7 +21,7 @@ from env_wrapper import LLFBenchUserAgent
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
              "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
          })
-assert len(config_list) > 0 
+assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
@@ -50,6 +51,8 @@ class PoemExtractor(AssistantAgent):
             is_termination_msg=termination_msg,
         )
 
+# We inherit from the traced version of AssistantAgent and register new reply_funcs that based on nodes.
+# class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
 @trace_class
 class PoemAgent(AssistantAgent):
     def __init__(self, seed=1234):
@@ -102,7 +105,7 @@ class PoemAgent(AssistantAgent):
     def _reply_to_terminate_extractor(self, messages=None, sender=None, config=None):
         return True, node({"content": "TERMINATE"})
 
-
+max_turn = 1
 poem_agent = PoemAgent(seed=13)
 
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
@@ -110,3 +113,11 @@ user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
 
 init_obs = user_agent.get_starting_message()
 user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
+
+last_message = poem_agent.chat_message_nodes[user_agent][-2]
+# print(last_message.data)
+print(last_message)
+feedback = user_agent.last_message_node().data['content']
+
+dot = last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False, visualize=True)
+dot.view()

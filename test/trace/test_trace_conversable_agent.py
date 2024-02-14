@@ -1,6 +1,6 @@
 import pytest
 from autogen.agentchat import ConversableAgent
-from autogen.trace import trace, no_trace
+from autogen.trace import trace, stop_tracing
 
 
 ConversableAgent = trace(ConversableAgent)
@@ -23,35 +23,35 @@ def test_trigger(retain_graph=False):
     agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent.register_reply(agent1, lambda recipient, messages, sender, config: (True, "hello"))
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello"
+    assert agent1.last_message_node(agent)["content"] == "hello"
     agent.register_reply("a1", lambda recipient, messages, sender, config: (True, "hello a1"))
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello a1"
+    assert agent1.last_message_node(agent)["content"] == "hello a1"
     agent.register_reply(
         ConversableAgent, lambda recipient, messages, sender, config: (True, "hello conversable agent")
     )
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello conversable agent"
+    assert agent1.last_message_node(agent)["content"] == "hello conversable agent"
     agent.register_reply(
         lambda sender: sender.name.startswith("a"), lambda recipient, messages, sender, config: (True, "hello a")
     )
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello a"
+    assert agent1.last_message_node(agent)["content"] == "hello a"
     agent.register_reply(
         lambda sender: sender.name.startswith("b"), lambda recipient, messages, sender, config: (True, "hello b")
     )
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello a"
+    assert agent1.last_message_node(agent)["content"] == "hello a"
     agent.register_reply(
         ["agent2", agent1], lambda recipient, messages, sender, config: (True, "hello agent2 or agent1")
     )
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
+    assert agent1.last_message_node(agent)["content"] == "hello agent2 or agent1"
     agent.register_reply(
         ["agent2", "agent3"], lambda recipient, messages, sender, config: (True, "hello agent2 or agent3")
     )
     agent1.initiate_chat(agent, message="hi")
-    assert agent1.last_message(agent)["content"] == "hello agent2 or agent1"
+    assert agent1.last_message_node(agent)["content"] == "hello agent2 or agent1"
     pytest.raises(ValueError, agent.register_reply, 1, lambda recipient, messages, sender, config: (True, "hi"))
     pytest.raises(ValueError, agent._match_trigger, 1, agent1)
 
@@ -66,7 +66,7 @@ def test_trigger(retain_graph=False):
         # a dummy function for testing
         summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
         return {parent: summary for parent in child.parents}
-    output = agent1.last_message()
+    output = agent1.last_message_node()
     dummy_feedback = 'Dummy feedback'
     output.backward(dummy_feedback, propagate, retain_graph=retain_graph)
     optimizer.step()  # TODO somehow it's not traced to the parameters
@@ -173,14 +173,14 @@ def test_max_consecutive_auto_reply():
     assert agent._consecutive_auto_reply_counter[agent1] == 1
     agent1.initiate_chat(agent, message="hello again")
     # with auto reply because the counter is reset
-    assert agent1.last_message(agent)["role"] == "user"
+    assert agent1.last_message_node(agent)["role"] == "user"
     assert len(agent1.chat_messages[agent]) == 2
     assert len(agent.chat_messages[agent1]) == 2
 
     assert agent._consecutive_auto_reply_counter[agent1] == 1
     agent1.send(message="bye", recipient=agent)
     # no auto reply
-    assert agent1.last_message(agent)["role"] == "assistant"
+    assert agent1.last_message_node(agent)["role"] == "assistant"
 
     agent1.initiate_chat(agent, clear_history=False, message="hi")
     assert len(agent1.chat_messages[agent]) > 2
@@ -276,7 +276,7 @@ async def test_a_generate_reply_raises_on_messages_and_sender_none(conversable_a
 
 if __name__ == "__main__":
     test_trigger(retain_graph=False)
-    with no_trace():
+    with stop_tracing():
         test_trigger()
     test_trigger(retain_graph=True)
 
