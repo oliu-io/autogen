@@ -4,7 +4,7 @@ from autogen.trace.utils import for_all_methods
 from autogen.agentchat.agent import Agent
 from autogen.trace.trace_operators import trace_operator
 
-from autogen.agentchat.conversable_agent import ConversableAgent
+from autogen.agentchat.conversable_agent import ConversableAgent, colored
 import inspect
 from dill.source import getsource
 from collections import defaultdict
@@ -133,40 +133,63 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
 
         def _append_oai_message(self, message: Node, role, conversation_id: Agent) -> bool:
             assert isinstance(message, Node), "message must be a Node type."
-
             ### Original code
             message = self._message_to_dict(message)
             # create oai message to be appended to the oai conversation that can be passed to oai directly.
-            oai_message = {k: message[k] for k in ("content", "function_call", "name", "context") if k in message}
+            oai_message = {
+                k: message[k]
+                for k in ("content", "function_call", "tool_calls", "tool_responses", "tool_call_id", "name", "context")
+                if k in message and message[k] is not None
+            }
             if "content" not in oai_message:
-                if "function_call" in oai_message:
+                if "function_call" in oai_message or "tool_calls" in oai_message:
                     oai_message["content"] = None  # if only function_call is provided, content will be set to None.
                 else:
                     return False
 
-            oai_message["role"] = "function" if message.get("role") == "function" else role
-            if "function_call" in oai_message:
+            if message.get("role") in ["function", "tool"]:
+                oai_message["role"] = message.get("role")
+            else:
+                oai_message["role"] = role
+
+            if oai_message.get("function_call", False) or oai_message.get("tool_calls", False):
                 oai_message["role"] = "assistant"  # only messages with role 'assistant' can have a function call.
-                oai_message["function_call"] = dict(oai_message["function_call"])
             # self._oai_messages[conversation_id].append(oai_message)
             ### End of original code
-
             # XXX  Since self._oai_messages creates a copy, to trace the creation of
             # the oai_message, we need to append to self.__oai_messages
             # directly.
             node_oai_message = MessageNode(oai_message, description=f'[OAI_Message] This is the oai_message created based on a message.', inputs={'message': message})
             self.__oai_messages[conversation_id].append(node_oai_message)
+
             return True
 
-        def clear_history(self, agent: Optional[Agent] = None):
-            # XXX Since self._oai_messages creates a copy, to trace the creation of
-            # the oai_message, we need to call clear with self.__oai_messages.
-            # directly.
-            if agent is None:
-                self.__oai_messages.clear()
-            else:
-                self.__oai_messages[agent].clear()
+        def clear_history(self, recipient: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None):
+            """Clear the chat history of the agent.
 
+            Args:
+                recipient: the agent with whom the chat history to clear. If None, clear the chat history with all agents.
+                nr_messages_to_preserve: the number of newest messages to preserve in the chat history.
+            """
+            if recipient is None:
+                if nr_messages_to_preserve:
+                    for key in self._oai_messages:
+                        # Remove messages from history except last `nr_messages_to_preserve` messages.
+                        self.__oai_messages[key] = self.__oai_messages[key][-nr_messages_to_preserve:]
+                else:
+                    self.__oai_messages.clear()
+            else:
+                self.__oai_messages[recipient].clear()
+                if nr_messages_to_preserve:
+                    print(
+                        colored(
+                            "WARNING: `nr_preserved_messages` is ignored when clearing chat history with a specific agent.",
+                            "yellow",
+                        ),
+                        flush=True,
+                    )
+
+        # TODO double check
         def last_message_node(self, agent: Optional[Agent] = None, role: Optional[str] = None) -> Union[Node, None]:
             # add a role filtering
             if role == 'self':
@@ -254,9 +277,9 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         # self.default_reply_funcs to more finely control the wrapping behavior.
         def generate_reply(
             self,
-            messages: Optional[List[Dict]] = None,
-            sender: Optional[Agent] = None,
-            exclude: Optional[List[Callable]] = None,
+            messages: Optional[List[Dict[str, Any]]] = None,
+            sender: Optional["Agent"] = None,
+            **kwargs: Any,
         ) -> Union[str, Dict, None]:
 
             if all((messages is None, sender is None)):
@@ -268,11 +291,20 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                 # messages = self._oai_messages[sender]  # This returns a list of dict
                 messages = self.__oai_messages[sender]  # XXX This returns a list of Nodes
 
+            # TODO need to trace these
+            # Call the hookable method that gives registered hooks a chance to process all messages.
+            # Message modifications do not affect the incoming messages or self._oai_messages.
+            messages = self.process_all_messages(messages)
+
+            # Call the hookable method that gives registered hooks a chance to process the last message.
+            # Message modifications do not affect the incoming messages or self._oai_messages.
+            messages = self.process_last_message(messages)
+
             for reply_func_tuple in self._reply_func_list:
                 reply_func = reply_func_tuple["reply_func"]
-                if exclude and reply_func in exclude:
+                if "exclude" in kwargs and reply_func in kwargs["exclude"]:
                     continue
-                if asyncio.coroutines.iscoroutinefunction(reply_func):
+                if inspect.iscoroutinefunction(reply_func):
                     continue
                 if self._match_trigger(reply_func_tuple["trigger"], sender):
 
@@ -286,16 +318,18 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                     final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
 
                     assert isinstance(reply, Node) or reply is None, f"The output of the reply function {reply} must be a Node type."  # XXX
+
                     if final:
                         return reply
-            return node(self._default_auto_reply)
+            return node(self._default_auto_reply) # XXX
+
 
         async def a_generate_reply(
             self,
-            messages: Optional[List[Dict]] = None,
-            sender: Optional[Agent] = None,
-            exclude: Optional[List[Callable]] = None,
-        ) -> Union[str, Dict, None]:
+            messages: Optional[List[Dict[str, Any]]] = None,
+            sender: Optional["Agent"] = None,
+            **kwargs: Any,
+        ) -> Union[str, Dict[str, Any], None]:
             raise NotImplementedError
 
     return TracedAgent
