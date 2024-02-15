@@ -14,7 +14,8 @@ class LLFBenchUserAgent(autogen.UserProxyAgent):
             system_message="Not used",
             llm_config=llm_config,
             max_consecutive_auto_reply=5,
-            human_input_mode='NEVER'
+            human_input_mode='NEVER',
+            code_execution_config=False
         )
         self.register_reply(autogen.ConversableAgent, LLFBenchUserAgent._generate_llfbench_reply)
 

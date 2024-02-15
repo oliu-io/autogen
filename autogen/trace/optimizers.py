@@ -1,6 +1,7 @@
 from autogen.trace.nodes import ParameterNode
 from collections import defaultdict
 from autogen import AssistantAgent
+from autogen.oai.completion import Completion
 from textwrap import dedent, indent
 from copy import copy
 
@@ -87,7 +88,9 @@ class LLMOptimizer(Optimizer):
 
         messages = [{'content': prompt_space, 'role': 'user'}]
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        new_instruct = self.llm.client.extract_text_or_function_call(response)[0]
+        # response = Completion.create(messages=self.llm._oai_system_message + messages)
+        # new_instruct = self.llm.client.extract_text_or_function_call(response)[0]
+        new_instruct = self.llm.client.extract_text_or_completion_object(response)[0]
         new_node = {'content': new_instruct, 'role': 'system'}
         return new_node
 
@@ -187,7 +190,9 @@ class LLMOptimizationPathSummary:
             all_feedback = "\n\n".join(list_of_feedback)
             messages = [{'content': all_feedback, 'role': 'user'}]
             response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-            new_feedback = self.llm.client.extract_text_or_function_call(response)[0]
+            # new_feedback = self.llm.client.extract_text_or_function_call(response)[0]
+            # new_feedback = Completion.extract_text_or_function_call(response)[0]
+            new_feedback = self.llm.client.extract_text_or_completion_object(response)[0]
             print(new_feedback)
             new_feedback_dict[parent_node] = new_feedback
         return new_feedback_dict
