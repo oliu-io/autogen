@@ -36,6 +36,7 @@ class PoemStudentAgent(AssistantAgent):
             llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
+            code_execution_config=False
         )
 
 sys_msg2 = dedent("You are extracting a poem from the student's message. " +
@@ -49,6 +50,7 @@ class PoemExtractor(AssistantAgent):
             llm_config={"temperature": 0.0, "config_list": config_list},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
+            code_execution_config=False
         )
 
 # We inherit from the traced version of AssistantAgent and register new reply_funcs that based on nodes.
@@ -62,14 +64,15 @@ class PoemAgent(AssistantAgent):
             llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
-            human_input_mode= "NEVER"
+            human_input_mode= "NEVER",
+            code_execution_config=False
         )
         self.student_agent = trace(PoemStudentAgent)()
         self.extractor_agent = trace(PoemExtractor)()
 
         self.poem = None
 
-        self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=1)
+        self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=5)
         self.register_reply([PoemStudentAgent], PoemAgent._reply_to_terminate_agent)
         self.register_reply([PoemExtractor], PoemAgent._reply_to_terminate_extractor)
 

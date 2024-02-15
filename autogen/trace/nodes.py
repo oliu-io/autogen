@@ -135,7 +135,7 @@ class AbstractNode:
 
 
 # These are operators that do not change the data type and can be viewed as identity operators.
-IDENTITY_OPERATORS = ('Identity', 'Copy', 'To_dict', 'OAI_Message')
+IDENTITY_OPERATORS = ('identity', 'Copy', 'message_to_dict', 'oai_message')
 
 def bypass_identity(node):
     """ Skip through operators that are effectively identity (registred in IDENTITY_OPERATORS) and return the first ancestor that is not identity. """
@@ -311,8 +311,8 @@ class MessageNode(Node):
         inputs use the keys in args (if args is a dict), or the names of the
         nodes in args (if args is a list). Here're some examples:
 
-        MessageNode(node_a, inputs=[node_a], description="[Identity] This is an idenity operator.")
-        MessageNode(copy_node_a, inputs=[node_a], description="[Copy] This is a copy operator.")
+        MessageNode(node_a, inputs=[node_a], description="[identity] This is an idenity operator.")
+        MessageNode(copy_node_a, inputs=[node_a], description="[copy] This is a copy operator.")
         MesssageNode(1, inputs={'a':node_a, 'b':node_b}, description="[Add] This is an add operator of a and b.")
     """
     def __init__(self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None) -> None:
