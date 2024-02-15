@@ -71,7 +71,7 @@ def train_with_env(env: gym.Env, agent: ConversableAgent, optimizer: Optimizer,
     # we provide a fake user agent
     # and query feedback from the environment
     user_agent = trace(UserProxyAgent)(name="user agent", human_input_mode="NEVER",
-                                       default_auto_reply="TERMINATE")
+                                       default_auto_reply="TERMINATE", code_execution_config=False)
 
     opt_info = {}
     opt_info['prompt_traj'] = []  # a list of dictionary {'content': prompt, 'role': 'system'}
