@@ -137,14 +137,6 @@ class AbstractNode:
 # These are operators that do not change the data type and can be viewed as identity operators.
 IDENTITY_OPERATORS = ('identity', 'Copy', 'message_to_dict', 'oai_message')
 
-def bypass_identity(node):
-    """ Skip through operators that are effectively identity (registred in IDENTITY_OPERATORS) and return the first ancestor that is not identity. """
-    if isinstance(node, MessageNode):
-        if get_operator_type(node.description) in IDENTITY_OPERATORS:
-            assert len(node.parents)==1
-            node = bypass_identity(node.parents[0])
-    return node
-
 import re
 def get_operator_type(description):
     """ Extra the operator type from the description. """
@@ -168,7 +160,7 @@ class Node(AbstractNode):
         assert supported_data_type(value), f"Value {value} must be a bool, a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
-        self._feedback = defaultdict(list)  # (analogous to gradient) this is the (synthetic) feedback from the user
+        self._feedback = defaultdict(list)  # (analogous to gradient) this is the feedback from the user. Each key is a child and the value is a list of feedbacks from the child.
         self._description = description # Infomation to describe of the node
         self._backwarded = False  # True if backward has been called
 
@@ -184,7 +176,7 @@ class Node(AbstractNode):
         """ Add feedback from a child. """
         if self.feedback is None:
             raise AttributeError(f"{self} has been backwarded.")
-        self.feedback[child].append(feedback)
+        self.feedback[child] = feedback
 
     def _del_feedback(self):
         self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
@@ -225,6 +217,8 @@ class Node(AbstractNode):
                 return text + content
             visited = set()
 
+        # TODO optimize for efficiency
+        # TODO check memory leak
         queue = [self]  # priority queue
         while True:
             try:
@@ -232,19 +226,25 @@ class Node(AbstractNode):
                 assert isinstance(node, Node)
                 propagated_feedback = propagate(node)  # propagate information from child to parent
                 for parent, parent_feedback in propagated_feedback.items():
-                    parent = bypass_identity(parent)  # skip identity operators registered in IDENTITY_OPERATORS
                     parent._add_feedback(node, parent_feedback)
-                    if len(parent.parents) > 0:
+                    # Put parent in the queue if it has not been visited
+                    if len(parent.parents) > 0 and parent not in queue: # and parent not in queue:
                         heapq.heappush(queue, parent)  # put parent in the priority queue
 
                     if visualize:
                         # Plot the edge from parent to node
-                        # print(node.name, get_name(node))
+                        # Bypass chain of identity operators (for better visualization)
+                        while get_operator_type(parent.description) in IDENTITY_OPERATORS:
+                            assert len(parent.parents)==1  # identity operators should have only one parent
+                            visited.add(get_name(parent)) # skip this node in visualization
+                            print(get_name(parent))
+                            parent = parent.parents[0]
+
                         edge = (get_name(node), get_name(parent)) if reverse_plot else (get_name(parent), get_name(node))
                         # Just plot the edge once, since the same node can be
                         # visited multiple times (e.g., when that node has
                         # multiple children).
-                        if edge not in visited:
+                        if edge not in visited and get_name(node) not in visited:
                             digraph.edge(*edge)
                             visited.add(edge)
                             digraph.node(get_name(node), label=get_label(node))
@@ -302,6 +302,13 @@ class ParameterNode(Node):
         # str(node) allows us to look up in the feedback dictionary easily
         return f'ParameterNode: ({self.name}, dtype={type(self._data)})'
 
+    def _add_feedback(self, child, feedback):
+        # In a regular backward pass, each node would be visited only once??
+        # ParameterNode can accumulate feedback from the same child
+        """ Add feedback from a child. """
+        if self.feedback is None:
+            raise AttributeError(f"{self} has been backwarded.")
+        self.feedback[child].append(feedback)
 
 class MessageNode(Node):
     """ Output of an operator.

@@ -48,5 +48,5 @@ feedback = "The solution is correct."  # imagine we have access to groundtruth a
 
 dot = last_message.backward(feedback, propagate, retain_graph=False, visualize=True)
 
-# dot.view()
-print(assistant.param)
+dot.view()
+print(assistant.parameters)
