@@ -237,7 +237,6 @@ class Node(AbstractNode):
                         while get_operator_type(parent.description) in IDENTITY_OPERATORS:
                             assert len(parent.parents)==1  # identity operators should have only one parent
                             visited.add(get_name(parent)) # skip this node in visualization
-                            print(get_name(parent))
                             parent = parent.parents[0]
 
                         edge = (get_name(node), get_name(parent)) if reverse_plot else (get_name(parent), get_name(node))
