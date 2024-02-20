@@ -176,7 +176,7 @@ class Node(AbstractNode):
         """ Add feedback from a child. """
         if self.feedback is None:
             raise AttributeError(f"{self} has been backwarded.")
-        self.feedback[child] = feedback
+        self.feedback[child].append(feedback)
 
     def _del_feedback(self):
         self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
@@ -301,14 +301,6 @@ class ParameterNode(Node):
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
         return f'ParameterNode: ({self.name}, dtype={type(self._data)})'
-
-    def _add_feedback(self, child, feedback):
-        # In a regular backward pass, each node would be visited only once??
-        # ParameterNode can accumulate feedback from the same child
-        """ Add feedback from a child. """
-        if self.feedback is None:
-            raise AttributeError(f"{self} has been backwarded.")
-        self.feedback[child].append(feedback)
 
 class MessageNode(Node):
     """ Output of an operator.
