@@ -10,9 +10,6 @@ from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 from typing import Any, Dict, List, Optional, Union
 from collections import defaultdict
-
-from autogen.trace.optimizers import DummyOptimizer, LLMOptimizer, PropagateStrategy
-
 from autogen import OpenAIWrapper
 from autogen import Completion, ChatCompletion
 

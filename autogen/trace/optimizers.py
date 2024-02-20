@@ -74,13 +74,13 @@ class LLMOptimizer(Optimizer):
         context = [self.task_description, value['content'], feedback]
         prompt_space = dedent("""
         {}
-        
+
         This is your instruction to the student from the previous round:
         {}
-        
+
         Using this instruction, this is the feedback the student received:
         {}
-        
+
         Please write down a new instruction to help the student achieve a higher score.
         Be concise and to the point.
         Remember the student is starting from scratch, not revising their old work:
@@ -125,19 +125,6 @@ def get_label(x, print_limit=200):
         content = content[:print_limit] + '...'
     return text + content
 
-class PropagateStrategy:
-    @staticmethod
-    def retain_last_only_propagate(child):
-        summary = ''.join(
-            [v[0] for k, v in child.feedback.items()])
-        return {parent: summary for parent in child.parents}
-
-    @staticmethod
-    def retain_full_history_propagate(child):
-        # this retains the full history
-        summary = ''.join([f'\n\n{get_label(k).capitalize()}{v[0]}' for k, v in
-                           child.feedback.items()])
-        return {parent: summary for parent in child.parents}
 
 class RuleBasedOptimizationPathSummary:
     """

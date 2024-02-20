@@ -9,6 +9,7 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
+from autogen.trace.propagators import retain_last_only_propagate
 from autogen.trace.optimizers import PropagateStrategy
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
@@ -122,5 +123,5 @@ last_message = poem_agent.chat_message_nodes[user_agent][-2]
 print(last_message)
 feedback = user_agent.last_message_node().data['content']
 
-dot = last_message.backward(feedback, PropagateStrategy.retain_last_only_propagate, retain_graph=False, visualize=True)
+dot = last_message.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=True)
 dot.view()

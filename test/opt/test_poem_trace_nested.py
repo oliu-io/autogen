@@ -9,8 +9,6 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, trace_class, node
-from autogen.trace.optimizers import PropagateStrategy
-
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 
@@ -20,7 +18,7 @@ from env_wrapper import LLFBenchUserAgent
 config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
              "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
          })
-assert len(config_list) > 0 
+assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 

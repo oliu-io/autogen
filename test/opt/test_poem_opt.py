@@ -6,7 +6,7 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
-from autogen.trace.optimizers import PropagateStrategy, LLMOptimizer
+from autogen.trace.optimizers import LLMOptimizer
 from autogen.trace.optimizer_autogen import train_with_wrapped_env
 from autogen.trace.utils import backfill_lists, plot_agent_performance
 from textwrap import dedent, indent

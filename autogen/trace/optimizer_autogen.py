@@ -4,12 +4,13 @@ import gym
 import numpy as np
 from autogen.agentchat.user_proxy_agent import UserProxyAgent
 from autogen.agentchat.conversable_agent import ConversableAgent
-from autogen.trace.optimizers import Optimizer, PropagateStrategy
+from autogen.trace.optimizers import Optimizer
+from autogen.trace.propagators import retain_last_only_propagate
 from autogen.trace.trace import trace
 from textwrap import dedent, indent
 
 """
-This file includes training utility functions specifically 
+This file includes training utility functions specifically
 made for AutoGen
 """
 
@@ -18,10 +19,12 @@ made for AutoGen
 # TODO: add the expand and select strategy
 # TODO: might need to unify the two, or refactor these
 def train_with_wrapped_env(env_agent: UserProxyAgent, agent: ConversableAgent, optimizer: Optimizer,
-                           steps: int, propagate_fn=PropagateStrategy.retain_last_only_propagate, verbose: bool = False):
+                           steps: int, propagate_fn=None, verbose: bool = False):
     # we assume the environment is wrapped around a user agent
     # right now the function is only written for bandit environments
     # Note: the training happens in-place
+    if propagate_fn is None:
+        propagate_fn = retain_last_only_propagate()
 
     info = {}
     info['prompt_traj'] = []  # a list of dictionary {'content': prompt, 'role': 'system'}
@@ -59,7 +62,7 @@ def train_with_wrapped_env(env_agent: UserProxyAgent, agent: ConversableAgent, o
     return info
 
 def train_with_env(env: gym.Env, agent: ConversableAgent, optimizer: Optimizer,
-                  steps: int, feedback_verbalize: callable, propagate_fn=PropagateStrategy.retain_last_only_propagate,
+                  steps: int, feedback_verbalize: callable, propagate_fn=retain_last_only_propagate(),
                   verbose: bool = False, max_reward=None):
     # we assume the environment is wrapped around a user agent
     # right now the function is only written for bandit environments
@@ -115,7 +118,7 @@ def train_with_env(env: gym.Env, agent: ConversableAgent, optimizer: Optimizer,
     return opt_info
 
 def opt_step_with_feedback(feedback: str, last_message, optimizer: Optimizer,
-                           propagate_fn=PropagateStrategy.retain_last_only_propagate, verbose: bool = False):
+                           propagate_fn=retain_last_only_propagate(), verbose: bool = False):
     optimizer.zero_feedback()
     last_message.backward(feedback, propagate_fn, retain_graph=False)
     optimizer.step()
@@ -161,7 +164,7 @@ class DatasetProcessor:
 # Currently, there is a caching issue -- output of LLMs don't change
 # Needs fixing
 def train_with_datasets(dataset, dataset_processor: DatasetProcessor, generate_answer: callable, optimizer: Optimizer,
-                  steps: int, propagate_fn=PropagateStrategy.retain_last_only_propagate,
+                  steps: int, propagate_fn=retain_last_only_propagate(),
                   verbose: bool = False, seed=None):
     # generate_answer: context/input -> node
     # we assume a huggingface API

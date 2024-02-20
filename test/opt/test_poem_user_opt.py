@@ -6,7 +6,7 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
-from autogen.trace.optimizers import PropagateStrategy, LLMOptimizer
+from autogen.trace.optimizers import LLMOptimizer
 from autogen.trace.optimizer_autogen import train_with_env
 from autogen.trace.utils import backfill_lists, plot_agent_performance, verbalize
 from textwrap import dedent, indent
@@ -116,7 +116,7 @@ env = llfbench.make("llf-poem-SyllableConstrainedPoem-v0", instruction_type='b',
 optimizer = LLMOptimizer(poem_agent.student_agent.parameters,
                          config_list=config_list,
                          task_description=dedent("""
-                         You are helping a student write a poem that satisfies the requirement of having a fixed 
+                         You are helping a student write a poem that satisfies the requirement of having a fixed
                          number of syllables per line and a fixed number of lines.
                          """))
 

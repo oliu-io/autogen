@@ -12,7 +12,8 @@ from autogen.agentchat.contrib.math_user_proxy_agent import MathUserProxyAgent
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability
-from autogen.trace.optimizers import PropagateStrategy, LLMOptimizer
+from autogen.trace.optimizers import LLMOptimizer
+from autogen.trace.propagators import retain_last_only_propagate
 from textwrap import dedent, indent
 from autogen.trace.optimizer_autogen import train_with_datasets, DatasetProcessor
 
@@ -162,7 +163,7 @@ optimization_steps = 1
 
 for _ in range(exp_runs):
     info = train_with_datasets(dataset['train'], dp, produce_answer, optimizer,
-                  steps=optimization_steps, propagate_fn=PropagateStrategy.retain_last_only_propagate,
+                  steps=optimization_steps, propagate_fn=retain_last_only_propagate(),
                   verbose=False, seed=123)
     print("Agent reward history:", info['rewards'])
     performances.append(info['rewards'])
