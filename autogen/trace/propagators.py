@@ -17,8 +17,7 @@ class AbtractPropagator:
         assert all((p in propagated_feedback for p in child.parents))
         return propagated_feedback
 
-    @classmethod
-    def propagate(cls, data: Any, description: str, feedback: dict, parents: Node):
+    def propagate(self, data: Any, description: str, feedback: dict, parents: Node):
         """ Compute propagated feedback to node.parents based on
             node.description, node.data, and node.feedback. Return a dict where
             the keys are the parents and the values are the
@@ -27,7 +26,28 @@ class AbtractPropagator:
         raise NotImplementedError
 
 
-# Add a subclass that allows registering mechanism for propagators
+class Propagator(AbtractPropagator):
+
+    def __init__(self):
+        self.override = dict()  # key: operator name: value: override propagate function
+
+    def register(self, operator_name, propagate_function):
+        self.override[operator_name] = propagate_function
+
+    def propagate(self, data: Any, description: str, feedback: dict, parents: Node):
+        operator_type = get_operator_type(description)
+        if operator_type in self.override:
+            return self.override[operator_type](data, description, feedback, parents)
+        else:
+            return self._propagate(data, description, feedback, parents)
+
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: Node):
+        """ Compute propagated feedback to node.parents based on
+            node.description, node.data, and node.feedback. Return a dict where
+            the keys are the parents and the values are the
+            propagated feedback.
+        """
+        raise NotImplementedError
 
 
 get_name = lambda x: x.name.replace(":", "")
@@ -42,15 +62,15 @@ def get_label(x, print_limit=200):
     return text + content
 
 
-class retain_last_only_propagate(AbtractPropagator):
-    @classmethod
-    def propagate(cls, data: Any, description: str, feedback: dict, parents: Node):
+class retain_last_only_propagate(Propagator):
+
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: Node):
         summary = ''.join([v[0] for k, v in feedback.items()])
         return {parent: summary for parent in parents}
 
-class retain_full_history_propagate(AbtractPropagator):
-    @classmethod
-    def propagate(cls, data: Any, description: str, feedback: dict, parents: Node):
+class retain_full_history_propagate(Propagator):
+
+    def _propagate(cls, data: Any, description: str, feedback: dict, parents: Node):
         # this retains the full history
         summary = ''.join([f'\n\n{get_label(k).capitalize()}{v[0]}' for k, v in feedback.items()])
         return {parent: summary for parent in parents}
