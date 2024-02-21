@@ -10,7 +10,6 @@ In this file, we should have:
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
 from autogen.trace.propagators import retain_last_only_propagate
-from autogen.trace.optimizers import PropagateStrategy
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 

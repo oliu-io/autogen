@@ -6,17 +6,10 @@ from collections import defaultdict
 
 
 class AbtractPropagator:
-    def __call__(self, child: Node):
+    def __call__(self, child: MessageNode):
         """ Calling this method would propagte the feedback from the child to the parents."""
         assert isinstance(child, MessageNode)
-        # TODO define some default propagation rules for known operators
-        # if get_operator_type(child.description) in IDENTITY_OPERATORS:
-        #     assert len(child.parents) == 1, "Identity operators should have exactly one parent"
-        #     aggregated_feedback = [f for f in child.feedback.values()]
-        #     breakpoint()
-        #     propagated_feedback = {parent: aggregated_feedback for parent in child.parents}
-        # else:
-        # Call custom propagation rules for unknown operators
+        assert all([len(f)<=1 for f in child.feedback.values()]) # All MessageNode feedback should be at most length 1
         propagated_feedback = self.propagate(child.data, child.description, child.feedback, child.parents)
         # Check propagated feedback has the right format
         # It should be a dictionary with the parents as keys and the feedback as values
@@ -33,6 +26,8 @@ class AbtractPropagator:
         """
         raise NotImplementedError
 
+
+# Add a subclass that allows registering mechanism for propagators
 
 
 get_name = lambda x: x.name.replace(":", "")

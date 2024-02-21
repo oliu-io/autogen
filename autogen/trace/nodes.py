@@ -178,9 +178,6 @@ class Node(AbstractNode):
             raise AttributeError(f"{self} has been backwarded.")
         self.feedback[child].append(feedback)
 
-    def _del_feedback(self):
-        self._feedback = defaultdict(list)  # This saves memory and prevents backward from being called twice
-
     def backward(self, feedback: str, propagate, retain_graph=False, visualize=False, reverse_plot=False, print_limit=100):
         """ Backward pass.
 
@@ -195,15 +192,10 @@ class Node(AbstractNode):
             print_limit: the maximum number of characters to print in the graph.
 
         """
-        if self._backwarded:
-            raise AttributeError(f"{self} has been backwarded.")
 
         assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
-        self._add_feedback('user', feedback)
 
-        if len(self.parents) == 0:  # This is a leaf. Nothing to propagate
-            return
-
+        # Setup for visualization
         digraph = None
         if visualize:
             from graphviz import Digraph
@@ -217,17 +209,32 @@ class Node(AbstractNode):
                 return text + content
             visited = set()
 
+        # Check for root node with no parents
+        if self._backwarded:
+            raise AttributeError(f"{self} has been backwarded.")
+        self._add_feedback('user', feedback)
+        if len(self.parents) == 0:  # This is a root. Nothing to propagate
+            if visualize:
+                digraph.node(get_name(node), label=get_label(node))
+            self._backwarded = not retain_graph
+            return
+
         # TODO optimize for efficiency
         # TODO check memory leak
         queue = [self]  # priority queue
         while True:
             try:
                 node = heapq.heappop(queue)
-                assert isinstance(node, Node)
-                propagated_feedback = propagate(node)  # propagate information from child to parent
+                # Each node is a MessageNode, which has at least one parent.
+                assert len(node.parents) > 0 and isinstance(node, MessageNode)
+                if node._backwarded:
+                    raise AttributeError(f"{node} has been backwarded.")
+
+                # Propagate information from child to parent
+                propagated_feedback = propagate(node)
                 for parent, parent_feedback in propagated_feedback.items():
                     parent._add_feedback(node, parent_feedback)
-                    # Put parent in the queue if it has not been visited
+                    # Put parent in the queue if it has not been visited and it's not a root
                     if len(parent.parents) > 0 and parent not in queue: # and parent not in queue:
                         heapq.heappush(queue, parent)  # put parent in the priority queue
 
@@ -248,9 +255,8 @@ class Node(AbstractNode):
                             visited.add(edge)
                             digraph.node(get_name(node), label=get_label(node))
                             digraph.node(get_name(parent), label=get_label(parent))
-                node._del_feedback()  # delete feedback to save memory
-                if not retain_graph and len(node.parents)>0:
-                    node._backwarded = True  # set backwarded to True
+
+                node._backwarded = not retain_graph  # set backwarded to True
 
             except IndexError:  # queue is empty
                 break
@@ -333,6 +339,12 @@ class MessageNode(Node):
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
         return f'MessageNode: ({self.name}, dtype={type(self._data)})'
+
+    def _add_feedback(self, child, feedback):
+        """ Add feedback from a child. """
+        if self.feedback is None:
+            raise AttributeError(f"{self} has been backwarded.")
+        self.feedback[child] = [feedback] # Only one feedback is allowed for MessageNode
 
     @property
     def data(self):  # MessageNode should act as immutable.
