@@ -72,7 +72,7 @@ class AbstractNode:
     def data(self):
         if len(USED_NODES)>0: # We're within trace_nodes context.
             USED_NODES[-1].add(self)
-        return self._data
+        return self.__getattribute__('_data')
 
     @property
     def parents(self):
@@ -265,8 +265,9 @@ class Node(AbstractNode):
 
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
-        if type(self.data) == dict:  # If attribute cannot be found, try to get it from the data
-            return self.data.__getattribute__(name)
+        data = self.__getattribute__('data')
+        if type(data) == dict:  # If attribute cannot be found, try to get it from the data
+            return data.__getattribute__(name)
         else:
             raise AttributeError(f"{self} has no attribute {name}.")
 
