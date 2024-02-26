@@ -137,7 +137,7 @@ mathproxyagent = trace(MathUserProxyAgent)(
     is_termination_msg=_is_termination_msg_mathchat
 )
 
-def produce_answer(math_problem):
+def generate_answer(math_problem):
     mathproxyagent.initiate_chat(assistant, problem=math_problem, clear_history=True)
     last_message = mathproxyagent.last_message_node(role='user')
     # "assistant" means self, "user" means the other agent
@@ -162,8 +162,8 @@ exp_runs = 1
 optimization_steps = 1
 
 for _ in range(exp_runs):
-    info = train_with_datasets(dataset['train'], dp, produce_answer, optimizer,
-                  steps=optimization_steps, propagate_fn=retain_last_only_propagate(),
+    info = train_with_datasets(dataset['train'], dp, generate_answer, optimizer,
+                  steps=optimization_steps, propagate_fn=PropagateStrategy.retain_last_only_propagate,
                   verbose=False, seed=123)
     print("Agent reward history:", info['rewards'])
     performances.append(info['rewards'])
