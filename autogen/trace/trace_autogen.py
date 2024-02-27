@@ -10,7 +10,8 @@ from dill.source import getsource
 from collections import defaultdict
 from autogen.agentchat.conversable_agent import logger
 import asyncio
-
+import copy
+from autogen.oai.client import OpenAIWrapper
 # Here we implement wrapper of Autogen ConversableAgent class
 
 class agent_scope():
@@ -280,7 +281,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         # self.default_reply_funcs to more finely control the wrapping behavior.
         def generate_reply(
             self,
-            messages: Optional[List[Dict[str, Any]]] = None,
+            messages: Optional[List[Node[Dict[str, Any]]]] = None,
             sender: Optional["Agent"] = None,
             **kwargs: Any,
         ) -> Union[str, Dict, None]:
@@ -293,7 +294,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             if messages is None:
                 # messages = self._oai_messages[sender]  # This returns a list of dict
                 messages = self.__oai_messages[sender]  # XXX This returns a list of Nodes
-
+            assert all( isinstance(m, Node) for m in messages), f"All messages must be Node type, but got {messages}."
             # TODO need to trace these
             # Call the hookable method that gives registered hooks a chance to process all messages.
             # Message modifications do not affect the incoming messages or self._oai_messages.
@@ -313,14 +314,11 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                     # XXX Wrappying the (default) reply functions into a trace_operator that returns a MessageNode.
                     if wrap_all_replies or reply_func in self.default_reply_funcs:
                         _reply_func = reply_func
-                        @trace_operator(f'[Agent] {str(reply_func)}.')
+                        @trace_operator(f'[Agent] {str(reply_func)}.', n_outputs=2)
                         def reply_func(self, messages, sender, config):
-                            return  _reply_func(self, messages=[m.data for m in messages] if messages is not None else messages, sender=sender, config=config)
-
+                            return _reply_func(self, messages=[m.data for m in messages] if messages is not None else messages, sender=sender, config=config)
                     final, reply = reply_func(self, messages=messages, sender=sender, config=reply_func_tuple["config"])
-
                     assert isinstance(reply, Node) or reply is None, f"The output of the reply function {reply} must be a Node type."  # XXX
-
                     if final:
                         return reply
             return node(self._default_auto_reply) # XXX
@@ -337,5 +335,38 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         # TODO
         def register_hook(self, hookable_method: Callable, hook: Callable):
             raise NotImplementedError
+
+        # TODO finalize the ones below
+        @trace_operator('[generate_oai_reply] Generate a reply using autogen.oai.', n_outputs=2)
+        def generate_oai_reply(
+            self,
+            messages: Optional[List[None]] = None,
+            sender: Optional[Agent] = None,
+            config= None,
+        ) -> Tuple[bool, Union[str, Dict, None]]:
+            """Generate a reply using autogen.oai."""
+            return super().generate_oai_reply([m.data for m in messages], sender, config)
+
+        # Fix the deepcopy issue of the original ConversibleAgents
+        def __deepcopy__(self, memo):
+            cls = self.__class__
+            result = cls.__new__(cls)
+            memo[id(self)] = result
+            for k, v in self.__dict__.items():
+                if isinstance(v, OpenAIWrapper):
+                    value = copy.copy(v)
+                    setattr(result, k, copy.copy(v))  # This is locked
+                elif k=='TracedAgent__oai_messages':
+                    value = defaultdict(list)  # deepcopy is viewed as detached from the original graph
+                else:
+                    value = copy.deepcopy(v, memo)
+                setattr(result, k, value)
+            return result
+
+        def update_system_message(self, message: Union[str,Node[dict]]):
+            if isinstance(message, str):
+                message = node(message)
+            if isinstance(message, Node):
+                self.__oai_system_message = [message]
 
     return TracedAgent
