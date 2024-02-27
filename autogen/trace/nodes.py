@@ -53,7 +53,9 @@ GRAPH = Graph()  # This is a global registry of all the nodes.
 
 USED_NODES = list()  # A stack of sets. This is a global registry to track which nodes are read.
 
-class AbstractNode:
+from typing import TypeVar, Generic
+T = TypeVar('T')
+class AbstractNode(Generic[T]):
     """ An abstract data node in a directed graph (parents <-- children).
     """
     def __init__(self, value, *, name=None, trainable=False) -> None:
@@ -168,7 +170,7 @@ def get_operator_type(description):
 def supported_data_type(value):
     return isinstance(value, bool) or isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node)
 
-class Node(AbstractNode):
+class Node(AbstractNode[T]):
     """ Node for Autogen messages and prompts. Node behaves like a dict."""
     def __init__(self, value, *, name=None, trainable=False, description="[Node] This is a node in a computational graph.") -> None:
         # TODO only take in a dict with a certain structure
@@ -280,8 +282,10 @@ class Node(AbstractNode):
 
         return digraph
 
+    # TODO remove these
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         data = self.__getattribute__('data')
         try:  # If attribute cannot be found, try to get it from the data
             return data.__getattribute__(name)
@@ -289,34 +293,42 @@ class Node(AbstractNode):
             raise AttributeError(f"{self} has no attribute {name}.")
 
     def __bool__(self):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return bool(self.data)
 
     def __len__(self):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return len(self.data)
 
     def __length_hint__(self):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return NotImplemented
 
     def __getitem__(self, key):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return self.data[key]
 
     def __setitem__(self, key, value):
-        warnings.warn(f"Attemping to set {key} in {self.name}. In-place operation is not traced.")
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         self._data[key] = value
 
     def __delitem__(self, key):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         del self.data[key]
 
     def __iter__(self):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return iter(self.data)
 
     def __reverse__(self):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return reversed(self.data)
 
     def __contains__(self, key):
+        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
         return key in self.data
 
-class ParameterNode(Node):
+class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
     def __init__(self, value, *, name=None, trainable=True, description="This is a ParameterNode in a computational graph.") -> None:
         super().__init__(value, name=name, trainable=trainable, description=description)
@@ -325,7 +337,7 @@ class ParameterNode(Node):
         # str(node) allows us to look up in the feedback dictionary easily
         return f'ParameterNode: ({self.name}, dtype={type(self._data)})'
 
-class MessageNode(Node):
+class MessageNode(Node[T]):
     """ Output of an operator.
 
         description: a string to describe the operator it begins with
@@ -376,3 +388,8 @@ if __name__=='__main__':
     z = MessageNode('Node Z', inputs={'x':x, 'y':y}, description='[Add] This is an add operator of x and y.')
     print(x.name, y.name)
     print([p.name for p in z.parents])
+
+    x : AbstractNode[str] = node('Node X')
+    x : Node[str] = node('Node X')
+    x: ParameterNode[str] = ParameterNode('Node X', trainable=True)
+    x: MessageNode[str] = MessageNode('Node X', inputs={'x':x, 'y':y}, description='[Add] This is an add operator of x and y.')
