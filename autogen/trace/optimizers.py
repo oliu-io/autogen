@@ -4,6 +4,7 @@ from autogen import AssistantAgent
 from autogen.oai.completion import Completion
 from textwrap import dedent, indent
 from copy import copy
+from autogen.trace.propagators import get_label, get_name
 
 """
 We follow the same design principle as trace
@@ -114,29 +115,20 @@ class LLMOptimizer(Optimizer):
                 p._data = self.parameter_copy[p]["_data"]
                 p._feedback = self.parameter_copy[p]["_feedback"]
 
-get_name = lambda x: x.name.replace(":", "")
-def get_label(x, print_limit=200):
-    if isinstance(x, str):
-        return x
+class AgentExecutionSummary:
+    ANALYSIS_PROMPT = dedent("""
+    Considering the following task:
 
-    text = get_name(x)+'\n'+x.description+'\n'
-    content = str(x.data['content'] if isinstance(x.data, dict) else x.data)
-    if len(content) > print_limit:
-        content = content[:print_limit] + '...'
-    return text + content
-
-
-class RuleBasedOptimizationPathSummary:
-    """
-    This does the rule-based merging/expansion of the optimization path
-    """
-    def __init__(self, parameters, config_list, *args, **kwargs):
-        # can add task description in here
-        assert type(parameters) is list
-        assert all([isinstance(p, ParameterNode) for p in parameters])
-        self.parameters = parameters
-        self.parameter_copy = {}
-        self.save_parameter_copy()
+    TASK: {task}
+    
+    Here are the list of agents involved in completing the task:
+    
+    AGENT LIST:
+    {agent_list}
+    
+    Here is a brief summary of how these agents attempted to solve this task:
+    
+    """)
 
 
 # This updates feedback before the optimizer
