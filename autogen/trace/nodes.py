@@ -174,8 +174,8 @@ class Node(AbstractNode[T]):
     """ Node for Autogen messages and prompts. Node behaves like a dict."""
     def __init__(self, value, *, name=None, trainable=False, description="[Node] This is a node in a computational graph.") -> None:
         # TODO only take in a dict with a certain structure
-        if isinstance(value, str):
-            warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
+        # if isinstance(value, str):
+        #     warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
         # assert supported_data_type(value), f"Value {value} must be a bool, a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
@@ -282,51 +282,52 @@ class Node(AbstractNode[T]):
 
         return digraph
 
-    # TODO remove these
-    # We overload some magic methods to make it behave like a dict
-    def __getattr__(self, name):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        data = self.__getattribute__('data')
-        try:  # If attribute cannot be found, try to get it from the data
-            return data.__getattribute__(name)
-        except AttributeError:
-            raise AttributeError(f"{self} has no attribute {name}.")
+    # # TODO remove these
+    # # We overload some magic methods to make it behave like a dict
+    # def __getattr__(self, name):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     data = self.__getattribute__('data')
+    #     try:  # If attribute cannot be found, try to get it from the data
+    #         return data.__getattribute__(name)
+    #     except AttributeError:
+    #         raise AttributeError(f"{self} has no attribute {name}.")
 
     def __bool__(self):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return bool(self.data)
+        raise AttributeError(f"Cannot convert {self} to bool.")
+        # warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+        # return bool(self.data)
 
-    def __len__(self):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return len(self.data)
+    # def __len__(self):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     return len(self.data)
 
-    def __length_hint__(self):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return NotImplemented
+    # def __length_hint__(self):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     return NotImplemented
 
-    def __getitem__(self, key):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return self.data[key]
+    # def __getitem__(self, key):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     return self.data[key]
 
-    def __setitem__(self, key, value):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        self._data[key] = value
+    # def __setitem__(self, key, value):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     self._data[key] = value
 
-    def __delitem__(self, key):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        del self.data[key]
+    # def __delitem__(self, key):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     del self.data[key]
 
-    def __iter__(self):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return iter(self.data)
+    # def __iter__(self):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     return iter(self.data)
 
-    def __reverse__(self):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return reversed(self.data)
+    # def __reverse__(self):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     return reversed(self.data)
 
-    def __contains__(self, key):
-        warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        return key in self.data
+    # def __contains__(self, key):
+    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
+    #     return key in self.data
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
