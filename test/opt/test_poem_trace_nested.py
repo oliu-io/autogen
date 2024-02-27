@@ -64,7 +64,7 @@ class PoemAgent(AssistantAgent):
 
         self.poem = None
 
-        self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=1)
+        self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=5)
         self.register_reply([PoemStudentAgent], PoemAgent._reply_to_terminate_agent)
         self.register_reply([PoemExtractor], PoemAgent._reply_to_terminate_extractor)
 
@@ -102,7 +102,6 @@ class PoemAgent(AssistantAgent):
 
 
 poem_agent = PoemAgent(seed=13)
-
 user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
                                       llm_config={"temperature": 0.0, "config_list": config_list})
 
