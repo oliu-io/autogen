@@ -61,8 +61,8 @@ class AbstractNode:
         self._children = []
         self._level = 0  # leaves are at level 0
         self._name = str(type(value).__name__)+':0' if name is None else  name+':0'  # name:version
-        if isinstance(value, Node):  # copy constructor
-            self._data = copy.deepcopy(value._data)
+        if isinstance(value, Node):  # just a reference
+            self._data = value._data
             self._name = value._name
         else:
             self._data = value
@@ -120,6 +120,23 @@ class AbstractNode:
         # str(node) allows us to look up in the feedback dictionary easily
         return f'Node: ({self.name}, dtype={type(self._data)})'
 
+    def clone(self):
+        return copy.copy(self)
+
+    def detach(self):
+        return copy.deepcopy(self)
+
+    def __deepcopy__(self, memo):  #
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if k == '_parents' or k == '_children':
+                setattr(result, k, [])
+            else:
+                setattr(result, k, copy.deepcopy(v, memo))
+        return result
+
     # def __eq__(self, other):
     #     # this makes it possible to store node as key in a dict
     #     # feedback[node.child] = feedback
@@ -157,7 +174,7 @@ class Node(AbstractNode):
         # TODO only take in a dict with a certain structure
         if isinstance(value, str):
             warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
-        assert supported_data_type(value), f"Value {value} must be a bool, a string, a dict, or a Node."
+        # assert supported_data_type(value), f"Value {value} must be a bool, a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
         self._feedback = defaultdict(list)  # (analogous to gradient) this is the feedback from the user. Each key is a child and the value is a list of feedbacks from the child.
@@ -266,9 +283,9 @@ class Node(AbstractNode):
     # We overload some magic methods to make it behave like a dict
     def __getattr__(self, name):
         data = self.__getattribute__('data')
-        if type(data) == dict:  # If attribute cannot be found, try to get it from the data
+        try:  # If attribute cannot be found, try to get it from the data
             return data.__getattribute__(name)
-        else:
+        except AttributeError:
             raise AttributeError(f"{self} has no attribute {name}.")
 
     def __bool__(self):
@@ -347,9 +364,9 @@ class MessageNode(Node):
             raise AttributeError(f"{self} has been backwarded.")
         self.feedback[child] = [feedback] # Only one feedback is allowed for MessageNode
 
-    @property
-    def data(self):  # MessageNode should act as immutable.
-        return copy.deepcopy(super().data)
+    # @property
+    # def data(self):  # MessageNode should act as immutable.
+    #     return super().data #copy.deepcopy(super().data)
 
 
 if __name__=='__main__':
