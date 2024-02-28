@@ -55,17 +55,16 @@ class PoemExtractor(AssistantAgent):
             max_consecutive_auto_reply=1,
         )
 
-user = UserProxyAgent(
+user = trace(UserProxyAgent)(
     name="User",
     human_input_mode="NEVER",
     is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
     code_execution_config={'use_docker': False}
 )
 
-
 max_turn = 1
-poem_agent = PoemStudentAgent()
-extractor_agent = PoemExtractor()
+poem_agent = trace(PoemStudentAgent)()
+extractor_agent = trace(PoemExtractor)()
 
 env = llfbench.make("llf-poem-Haiku-v0", instruction_type='b', feedback_type='a')
 obs, info = env.reset()
@@ -88,3 +87,5 @@ chat_results = user.initiate_chats(
 )
 
 print(chat_results)
+
+last_node = user.last_message(extractor_agent)
