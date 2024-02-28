@@ -25,7 +25,7 @@ assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
-sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem" +
+sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem. Directly write the poem." +
                  "Reply \"TERMINATE\" in the end when everything is done.")
 
 class PoemStudentAgent(AssistantAgent):
@@ -59,7 +59,9 @@ user = UserProxyAgent(
     name="User",
     human_input_mode="NEVER",
     is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    code_execution_config={'use_docker': False}
 )
+
 
 max_turn = 1
 poem_agent = PoemStudentAgent()
@@ -68,7 +70,6 @@ extractor_agent = PoemExtractor()
 env = llfbench.make("llf-poem-Haiku-v0", instruction_type='b', feedback_type='a')
 obs, info = env.reset()
 
-# current code won't run because autogen we have does not support this function
 chat_results = user.initiate_chats(
     [
         {
@@ -86,4 +87,4 @@ chat_results = user.initiate_chats(
     ]
 )
 
-import pdb; pdb.set_trace()
+print(chat_results)
