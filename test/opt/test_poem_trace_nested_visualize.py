@@ -1,16 +1,17 @@
 """
 In this file, we should have:
-2. Add FeedbackEnhance
-3. An optimizer that optimizes...with an agent call (20 min)
+1. ~~An Agent that solves Poem (a base agent) (you have this already)~~
+  - add trace agent to it
+2. A propagate that only gives feedback to prompt node (manually)
+   - where would FeedbackEnhance go?
+3. An optimizer that optimizes...with an agent call
 """
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatability, node, trace_class
-from autogen.trace.optimizers import LLMOptimizer
-from autogen.trace.optimizer_autogen import train_with_env
-from autogen.trace.utils import backfill_lists, plot_agent_performance, verbalize
+from autogen.trace.propagators import retain_last_only_propagate
 from textwrap import dedent, indent
-import llfbench
+from env_wrapper import LLFBenchUserAgent
 
 from autogen.trace.optimizers import DummyOptimizer
 
@@ -56,7 +57,7 @@ class PoemExtractor(AssistantAgent):
 # class PoemAgent(trace(AssistantAgent, wrap_all_replies=False)):
 @trace_class
 class PoemAgent(AssistantAgent):
-    def __init__(self, seed=456, silent=False):
+    def __init__(self, seed=1234):
         super().__init__(
             name="PoemAgent",
             system_message="",
@@ -70,7 +71,6 @@ class PoemAgent(AssistantAgent):
         self.extractor_agent = trace(PoemExtractor)()
 
         self.poem = None
-        self.silent = silent
 
         self.register_reply(UserProxyAgent, PoemAgent._generate_poem_reply, position=5)
         self.register_reply([PoemStudentAgent], PoemAgent._reply_to_terminate_agent)
@@ -90,12 +90,12 @@ class PoemAgent(AssistantAgent):
         message = messages[-1]
 
         if self.poem is None:
-            self.initiate_chat(self.student_agent, message=message, clear_history=True, silent=self.silent)
+            self.initiate_chat(self.student_agent, message=message, clear_history=True)
             self.poem = self.get_last_user_message(self.student_agent)#["content"]
 
         # this just means we haven't called extractor agent before
         if len(self._oai_messages[self.extractor_agent]) == 0:
-            self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True, silent=self.silent)
+            self.initiate_chat(self.extractor_agent, message=self.poem, clear_history=True)
 
         # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
         extracted_poem = self.get_last_user_message(self.extractor_agent)#["content"]
@@ -108,26 +108,19 @@ class PoemAgent(AssistantAgent):
     def _reply_to_terminate_extractor(self, messages=None, sender=None, config=None):
         return node(True), node({"content": "TERMINATE"})
 
-poem_agent = PoemAgent(silent=True)
-env = llfbench.make("llf-poem-SyllableConstrainedPoem-v0", instruction_type='b', feedback_type='a')
+max_turn = 1
+poem_agent = PoemAgent(seed=13)
 
-# ======= Now with the env reward, we can optimize =======
+user_agent = trace(LLFBenchUserAgent)(env_name="llf-poem-Haiku-v0",
+                                      llm_config={"temperature": 0.0, "config_list": config_list})
 
-optimizer = LLMOptimizer(poem_agent.student_agent.parameters,
-                         config_list=config_list,
-                         task_description=dedent("""
-                         You are helping a student write a poem that satisfies the requirement of having a fixed
-                         number of syllables per line and a fixed number of lines.
-                         """))
+init_obs = user_agent.get_starting_message()
+user_agent.initiate_chat(poem_agent, message=init_obs, clear_history=True)
 
-performances = []
-exp_runs = 5
-optimization_steps = 3
+last_message = poem_agent.chat_message_nodes[user_agent][-2]
+# print(last_message.data)
+print(last_message)
+feedback = user_agent.last_message_node().data['content']
 
-for _ in range(exp_runs):
-    info = train_with_env(env, poem_agent, optimizer, optimization_steps, feedback_verbalize=verbalize, verbose=True)
-    print("Agent reward history:", info['rewards'])
-    performances.append(info['rewards'])
-
-performances = backfill_lists(performances)
-plot_agent_performance(performances, backfilled=True)
+dot = last_message.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=True)
+dot.view()
