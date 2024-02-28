@@ -87,12 +87,12 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             # XXX Wrappying the (default) reply functions into a trace_operator that returns a MessageNode.
             if wrap_all_replies or reply_func in self.default_reply_funcs:
                 if not inspect.iscoroutinefunction(reply_func):
-                    # TODO: support coroutinefunction
                     _reply_func = reply_func
                     @trace_operator(f'[Agent] {str(reply_func)}.', n_outputs=2)
                     def reply_func(self, messages, sender, config):
+                        assert all(isinstance(m, Node) for m in messages), f"All messages must be Node type, but got {messages}."
                         return _reply_func(self, messages=[m.data for m in messages] if messages is not None else messages, sender=sender, config=config)
-                else:
+                else:  # TODO: support coroutinefunction
                     warnings.warn(f"Coroutine function {reply_func} is not wrapped by trace_operator.")
             super().register_reply(trigger, reply_func, position, config, reset_config, ignore_async_in_sync_chat=ignore_async_in_sync_chat)
 
@@ -388,10 +388,11 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                 setattr(result, k, value)
             return result
 
-        def update_system_message(self, message: Union[str,Node[dict]]):
-            if isinstance(message, str):
-                message = node(message)
-            if isinstance(message, Node):
-                self.__oai_system_message = [message]
+        def update_system_message(self, message: Node[str]):
+            assert isinstance(message, Node), "message must be a Node type."
+            system_message = self._oai_system_message[0]  # dict
+            system_message["content"] = message.data
+            system_message = MessageNode(system_message, description="[update_system_message] Update system message's content.", inputs=[self.__oai_system_message, message])
+            self.__oai_system_message = system_message  # TODO maybe self.__oai_system_message should be a list
 
     return TracedAgent
