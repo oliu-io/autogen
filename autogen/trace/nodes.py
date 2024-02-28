@@ -234,7 +234,7 @@ class Node(AbstractNode[T]):
         self._add_feedback('user', feedback)
         if len(self.parents) == 0:  # This is a root. Nothing to propagate
             if visualize:
-                digraph.node(get_name(node), label=get_label(node))
+                digraph.node(get_name(self), label=get_label(self))
             self._backwarded = not retain_graph
             return
 

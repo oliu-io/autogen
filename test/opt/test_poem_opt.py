@@ -125,7 +125,7 @@ optimizer = LLMOptimizer(poem_agent.student_agent.parameters,
                          """.format(init_obs)))  # This just concatenates the feedback into the parameter
 
 performances = []
-exp_runs = 5
+exp_runs = 1
 
 for _ in range(exp_runs):
     optimization_steps = 4
