@@ -4,7 +4,8 @@ import copy
 
 @trace_operator('[cond] This selects x if condition is True, otherwise y.', node_dict='signature')
 def cond(condition : Node, x : Node, y : Node):
-    return x.data if condition.data else y.data
+    x, y, condition = x.data, y.data, condition.data  # This makes sure all data are read
+    return x if condition else y
 
 @trace_operator('[add] This is an add operator of x and y.', node_dict='signature')
 def add(x : Node, y : Node):
@@ -119,9 +120,9 @@ def in_(x : Node, y : Node):
 def not_in(x : Node, y : Node):
     return x.data not in y.data
 
-@trace_operator('[getitem] This is a getitem operator of x and y.', node_dict='signature')
-def getitem(x : Node, y : Node):
-    return x.data[y.data]
+@trace_operator('[getitem] This is a getitem operator of x based on index.', node_dict='signature')
+def getitem(x : Node, index : Node):
+    return x.data[index.data]
 
 @trace_operator('[len] This is a len operator of x.', node_dict='signature')
 def len_(x : Node):

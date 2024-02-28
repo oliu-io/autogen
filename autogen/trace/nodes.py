@@ -122,13 +122,8 @@ class AbstractNode(Generic[T]):
         # str(node) allows us to look up in the feedback dictionary easily
         return f'Node: ({self.name}, dtype={type(self._data)})'
 
-    def clone(self):
-        return copy.copy(self)
-
-    def detach(self):
-        return copy.deepcopy(self)
-
-    def __deepcopy__(self, memo):  #
+    def __deepcopy__(self, memo):
+        """ This creates a deep copy of the node, which is detached from the original graph. """
         cls = self.__class__
         result = cls.__new__(cls)
         memo[id(self)] = result
@@ -138,16 +133,6 @@ class AbstractNode(Generic[T]):
             else:
                 setattr(result, k, copy.deepcopy(v, memo))
         return result
-
-    # def __eq__(self, other):
-    #     # this makes it possible to store node as key in a dict
-    #     # feedback[node.child] = feedback
-    #     return hasattr(other, 'name') and self.name == other.name
-
-    # def __hash__(self):
-    #     # hash should do it over str(self) or repr(self)
-    #     # choose whichever one makes most sense
-    #     return hash(self.__str__())
 
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
@@ -183,6 +168,9 @@ class Node(AbstractNode[T]):
         self._description = description # Infomation to describe of the node
         self._backwarded = False  # True if backward has been called
 
+    def zero_feedback(self):  # set feedback to zero
+        self._feedback = defaultdict(list)
+
     @property
     def feedback(self):
         return self._feedback
@@ -193,11 +181,9 @@ class Node(AbstractNode[T]):
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
-        if self.feedback is None:
-            raise AttributeError(f"{self} has been backwarded.")
         self.feedback[child].append(feedback)
 
-    def backward(self, feedback: str, propagate, retain_graph=False, visualize=False, reverse_plot=False, print_limit=100):
+    def backward(self, feedback: str, propagate=None, retain_graph=False, visualize=False, reverse_plot=False, print_limit=100):
         """ Backward pass.
 
             feedback: feedback given to the current node
@@ -211,8 +197,11 @@ class Node(AbstractNode[T]):
             print_limit: the maximum number of characters to print in the graph.
 
         """
+        if propagate is None:
+            from autogen.trace.propagators import sum_propagate  # this avoids circular import
+            propagate = sum_propagate()
 
-        assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
+        # assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
 
         # Setup for visualization
         digraph = None
@@ -251,6 +240,11 @@ class Node(AbstractNode[T]):
 
                 # Propagate information from child to parent
                 propagated_feedback = propagate(node)
+
+                # Zero-out the feedback once it's propagated.
+                # This is to ensure the feedback is not double counted when retain_graph is True.
+                node.zero_feedback()
+
                 for parent, parent_feedback in propagated_feedback.items():
                     parent._add_feedback(node, parent_feedback)
                     # Put parent in the queue if it has not been visited and it's not a root
@@ -281,6 +275,12 @@ class Node(AbstractNode[T]):
                 break
 
         return digraph
+
+    def clone(self):
+        return MessageNode(copy.deepcopy(self.data), inputs=[self], description='[clone] This is a clone operator.')
+
+    def detach(self):
+        return copy.deepcopy(self)
 
     # # TODO remove these
     # # We overload some magic methods to make it behave like a dict
@@ -357,10 +357,7 @@ class MessageNode(Node[T]):
             assert isinstance(inputs, list) or isinstance(inputs, dict)
             # If inputs is not a dict, we create a dict with the names of the nodes as keys
             if isinstance(inputs, list):
-                _inputs = {}
-                for i, v in enumerate(inputs):
-                    _inputs[v.name] = v
-                inputs = _inputs
+                inputs = {v.name: v for v in inputs}
             self._inputs = inputs
             # Add parents if we are tracing
             for k,v in self._inputs.items():
@@ -373,13 +370,8 @@ class MessageNode(Node[T]):
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
-        if self.feedback is None:
-            raise AttributeError(f"{self} has been backwarded.")
-        self.feedback[child] = [feedback] # Only one feedback is allowed for MessageNode
-
-    # @property
-    # def data(self):  # MessageNode should act as immutable.
-    #     return super().data #copy.deepcopy(super().data)
+        super()._add_feedback(child, feedback)
+        assert len(self.feedback[child]) == 1, "MessageNode should have only one feedback from each child."
 
 
 if __name__=='__main__':
