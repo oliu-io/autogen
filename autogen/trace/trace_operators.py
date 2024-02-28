@@ -48,10 +48,10 @@ def trace_operator(description, n_outputs=1):  # TODO add a dict to describe the
                 if isinstance(output, Node):  # If the output is already a Node, we don't need to wrap it.
                     return output  # NOTE User who implements fun is responsible for the graph structure.
                 # Else, we need to wrap the output as a MessageNode
-                if supported_data_type(output):
-                    return MessageNode(output, description=description, inputs=list(used_nodes))
-                else:
-                    raise NotImplementedError(f"The output {output} of the operator is not supported.")
+                # if supported_data_type(output):
+                return MessageNode(output, description=description, inputs=list(used_nodes))
+                # else:
+                #     raise NotImplementedError(f"The output {output} of the operator is not supported.")
             if n_outputs==1:
                 return wrap_output(outputs)
             else:
