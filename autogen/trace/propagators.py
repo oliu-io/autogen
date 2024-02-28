@@ -62,6 +62,20 @@ def get_label(x, print_limit=200):
     return text + content
 
 
+class sum_propagate(Propagator):
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: Node):
+        # Simply sum the feedback
+        feedback_list = [v[0] for k, v in feedback.items()]
+        if len(feedback_list) == 0:
+            summary = ''
+        else:
+            assert all([type(feedback_list[0]) == type(f) for f in feedback_list])
+            if isinstance(feedback_list[0], str):
+                summary = ''.join(feedback_list)
+            else: # isinstance(feedback_list[0], int):
+                summary = sum(feedback_list)
+        return {parent: summary for parent in parents}
+
 class retain_last_only_propagate(Propagator):
 
     def _propagate(self, data: Any, description: str, feedback: dict, parents: Node):
