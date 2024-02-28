@@ -12,7 +12,7 @@ from autogen.agentchat.conversable_agent import ConversableAgent
 from autogen.graph_utils import check_graph_validity, invert_disallowed_to_allowed
 
 
-from autogen.trace.trace import node
+from autogen.trace.trace import node, trace_class
 from autogen.trace.nodes import Node, MessageNode
 from autogen.trace.trace_operators import trace_operator
 
@@ -72,7 +72,15 @@ class GroupChat(_GroupChat):
     def random_select_speaker(self, agents: Optional[List[Node[Agent]]] = None) -> Union[Node[Agent], None]:
         return super().random_select_speaker(agents.data)
 
+    @trace_operator('[GroupChat._prepare_and_select_agents.select_speaker_message] Prompt the user to select the next speaker.')
+    def select_speaker_message(self, agents: Node[Node[List[Agent]]]):
+        return {"role": "system", "content": self.select_speaker_prompt([a for a in agents.data])}
 
+    @trace_operator('[GroupChat.select_speaker_msg] Return the system message for selecting the next speaker.')
+    def select_speaker_msg(self, agents: Optional[Node[List[Agent]]] = None) -> str:
+        if agents is not None:
+            agents = agents.data
+        return super().select_speaker_msg(agents)
 
     def _prepare_and_select_agents(
         self, last_speaker: Node[Agent]
@@ -192,16 +200,14 @@ class GroupChat(_GroupChat):
                     return dict(message.data, tool_calls=None)
                 return message  # bypass
             select_speaker_messages[-1] = process_speaker_message(select_speaker_messages[-1])
-            select_speaker_messages = select_speaker_messages + [
-                node({"role": "system", "content": self.select_speaker_prompt(graph_eligible_agents)}) # TODO
-            ]
+            select_speaker_messages = select_speaker_messages + [self.select_speaker_message(graph_eligible_agents)]
 
         assert isinstance(selected_agent, Node) or selected_agent is None
         ####################################################################################
         # TODO selected_agent needs to be traced properly
         return selected_agent, graph_eligible_agents, select_speaker_messages
 
-    def select_speaker(self, last_speaker: Node, selector: ConversableAgent) -> Agent:
+    def select_speaker(self, last_speaker: Node[Agent], selector: ConversableAgent) -> Agent:
         """Select the next speaker."""
 
         selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
@@ -209,12 +215,12 @@ class GroupChat(_GroupChat):
             return selected_agent
 
         # auto speaker selection
-        selector.update_system_message(node(self.select_speaker_msg(agents)))  # TODO trace self.select_speaker_msg
+        selector.update_system_message(self.select_speaker_msg(agents))
         final, name = selector.generate_oai_reply(messages)
 
         @trace_operator('[GroupChat._finalize_speaker] Finalize the speaker selection.')
-        def _finalize_speaker(last_speaker, final, name, agents):
-            return node(self._finalize_speaker(last_speaker, final.data, name.data, agents))
+        def _finalize_speaker(last_speaker:Node[Agent], final:Node[bool], name:Node[str], agents:Node[List[Agent]]):
+            return node(self._finalize_speaker(last_speaker.data, final.data, name.data, agents.data))
         return _finalize_speaker(last_speaker, final, name, agents)
 
         # return self._finalize_speaker(last_speaker, final, name, agents)
@@ -223,7 +229,7 @@ class GroupChat(_GroupChat):
         raise NotImplementedError
 
 
-
+@trace_class
 class GroupChatManager(_GroupChatManager):
 
     def __init__(self, *args, **kwargs):
