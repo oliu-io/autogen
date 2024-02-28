@@ -29,7 +29,7 @@ class Optimizer:
     def zero_feedback(self):
         for p in self.parameters:
             # trace the children of parameters and clean their feedback
-            p._feedback = defaultdict(list)
+            p.zero_feedback()
 
 
 class DummyOptimizer(Optimizer):
@@ -120,14 +120,14 @@ class AgentExecutionSummary:
     Considering the following task:
 
     TASK: {task}
-    
+
     Here are the list of agents involved in completing the task:
-    
+
     AGENT LIST:
     {agent_list}
-    
+
     Here is a brief summary of how these agents attempted to solve this task:
-    
+
     """)
 
 
