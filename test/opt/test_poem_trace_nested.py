@@ -92,7 +92,7 @@ class PoemAgent(AssistantAgent):
         # extracted_poem = self.get_last_user_message(self.extractor_agent)["content"]
         extracted_poem = self.get_last_user_message(self.extractor_agent)#["content"]
 
-        return node(True), extracted_poem# {"content": extracted_poem}
+        return node(True), extracted_poem # {"content": extracted_poem}
 
     def _reply_to_terminate_agent(self, messages=None, sender=None, config=None):
         return node(True), node({"content": "TERMINATE"})
