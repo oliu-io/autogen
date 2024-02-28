@@ -61,106 +61,114 @@ class GroupChat(_GroupChat):
         self.__messages.append(message)
 
     @trace_operator('[GroupChat.manual_select_speaker] Manually select the next speaker.')
-    def manual_select_speaker(self, agents: Optional[List[Agent]] = None) -> Union[Agent, None]:
-        return super().manual_select_speaker(agents)
+    def manual_select_speaker(self, agents: Optional[List[Node[Agent]]] = None) -> Union[Node[Agent], None]:
+        return super().manual_select_speaker(agents.data)
 
     @trace_operator('[GroupChat.next_agent] Select the next speaker.')
-    def next_agent(self, agent: Agent, agents: Optional[List[Agent]] = None) -> Agent:
-        return super().next_agent(agent, agents)
+    def next_agent(self, agent: Node[Agent], agents: Optional[List[Node[Agent]]]= None) -> Node[Agent]:
+        return super().next_agent(agent.data, agents.data)
 
     @trace_operator('[GroupChat.random_select_speaker] Randomly select the next speaker.')
-    def random_select_speaker(self, agents: Optional[List[Agent]] = None) -> Union[Agent, None]:
-        return super().random_select_speaker(agents)
+    def random_select_speaker(self, agents: Optional[List[Node[Agent]]] = None) -> Union[Node[Agent], None]:
+        return super().random_select_speaker(agents.data)
 
 
 
     def _prepare_and_select_agents(
-        self, last_speaker: Agent
+        self, last_speaker: Node[Agent]
     ) -> Tuple[Optional[Node[Agent]], List[Agent], Optional[List[Node[Dict]]]]:
-        if self.speaker_selection_method.lower() not in self._VALID_SPEAKER_SELECTION_METHODS:
-            raise ValueError(
-                f"GroupChat speaker_selection_method is set to '{self.speaker_selection_method}'. "
-                f"It should be one of {self._VALID_SPEAKER_SELECTION_METHODS} (case insensitive). "
+
+        @trace_operator('[GroupChat._prepare_and_select_agents.get_graph_eligible_agents] Get the eligible agents.')
+        def get_graph_eligible_agents(last_speaker):
+            last_speaker = last_speaker.data
+
+            if self.speaker_selection_method.lower() not in self._VALID_SPEAKER_SELECTION_METHODS:
+                raise ValueError(
+                    f"GroupChat speaker_selection_method is set to '{self.speaker_selection_method}'. "
+                    f"It should be one of {self._VALID_SPEAKER_SELECTION_METHODS} (case insensitive). "
+                )
+
+            # If provided a list, make sure the agent is in the list
+            allow_repeat_speaker = (
+                self.allow_repeat_speaker
+                if isinstance(self.allow_repeat_speaker, bool) or self.allow_repeat_speaker is None
+                else last_speaker in self.allow_repeat_speaker
             )
 
-        # If provided a list, make sure the agent is in the list
-        allow_repeat_speaker = (
-            self.allow_repeat_speaker
-            if isinstance(self.allow_repeat_speaker, bool) or self.allow_repeat_speaker is None
-            else last_speaker in self.allow_repeat_speaker
-        )
+            agents = self.agents
+            n_agents = len(agents)
+            # Warn if GroupChat is underpopulated
+            if n_agents < 2:
+                raise ValueError(
+                    f"GroupChat is underpopulated with {n_agents} agents. "
+                    "Please add more agents to the GroupChat or use direct communication instead."
+                )
+            elif n_agents == 2 and self.speaker_selection_method.lower() != "round_robin" and allow_repeat_speaker:
+                logger.warning(
+                    f"GroupChat is underpopulated with {n_agents} agents. "
+                    "Consider setting speaker_selection_method to 'round_robin' or allow_repeat_speaker to False, "
+                    "or use direct communication, unless repeated speaker is desired."
+                )
 
-        agents = self.agents
-        n_agents = len(agents)
-        # Warn if GroupChat is underpopulated
-        if n_agents < 2:
-            raise ValueError(
-                f"GroupChat is underpopulated with {n_agents} agents. "
-                "Please add more agents to the GroupChat or use direct communication instead."
-            )
-        elif n_agents == 2 and self.speaker_selection_method.lower() != "round_robin" and allow_repeat_speaker:
-            logger.warning(
-                f"GroupChat is underpopulated with {n_agents} agents. "
-                "Consider setting speaker_selection_method to 'round_robin' or allow_repeat_speaker to False, "
-                "or use direct communication, unless repeated speaker is desired."
-            )
+            if (
+                self.func_call_filter
+                and self.messages
+                and ("function_call" in self.messages[-1] or "tool_calls" in self.messages[-1])
+            ):
+                funcs = []
+                if "function_call" in self.messages[-1]:
+                    funcs += [self.messages[-1]["function_call"]["name"]]
+                if "tool_calls" in self.messages[-1]:
+                    funcs += [
+                        tool["function"]["name"] for tool in self.messages[-1]["tool_calls"] if tool["type"] == "function"
+                    ]
 
-        if (
-            self.func_call_filter
-            and self.messages
-            and ("function_call" in self.messages[-1] or "tool_calls" in self.messages[-1])
-        ):
-            funcs = []
-            if "function_call" in self.messages[-1]:
-                funcs += [self.messages[-1]["function_call"]["name"]]
-            if "tool_calls" in self.messages[-1]:
-                funcs += [
-                    tool["function"]["name"] for tool in self.messages[-1]["tool_calls"] if tool["type"] == "function"
-                ]
-
-            # find agents with the right function_map which contains the function name
-            agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
-            if len(agents) == 1:
-                # only one agent can execute the function
-                return agents[0], agents, None
-            elif not agents:
-                # find all the agents with function_map
-                agents = [agent for agent in self.agents if agent.function_map]
+                # find agents with the right function_map which contains the function name
+                agents = [agent for agent in self.agents if agent.can_execute_function(funcs)]
                 if len(agents) == 1:
+                    # only one agent can execute the function
                     return agents[0], agents, None
                 elif not agents:
-                    raise ValueError(
-                        f"No agent can execute the function {', '.join(funcs)}. "
-                        "Please check the function_map of the agents."
-                    )
-        # remove the last speaker from the list to avoid selecting the same speaker if allow_repeat_speaker is False
-        agents = [agent for agent in agents if agent != last_speaker] if allow_repeat_speaker is False else agents
+                    # find all the agents with function_map
+                    agents = [agent for agent in self.agents if agent.function_map]
+                    if len(agents) == 1:
+                        return agents[0], agents, None
+                    elif not agents:
+                        raise ValueError(
+                            f"No agent can execute the function {', '.join(funcs)}. "
+                            "Please check the function_map of the agents."
+                        )
+            # remove the last speaker from the list to avoid selecting the same speaker if allow_repeat_speaker is False
+            agents = [agent for agent in agents if agent != last_speaker] if allow_repeat_speaker is False else agents
 
-        # Filter agents with allowed_speaker_transitions_dict
+            # Filter agents with allowed_speaker_transitions_dict
 
-        is_last_speaker_in_group = last_speaker in self.agents
+            is_last_speaker_in_group = last_speaker in self.agents
 
-        # this condition means last_speaker is a sink in the graph, then no agents are eligible
-        if last_speaker not in self.allowed_speaker_transitions_dict and is_last_speaker_in_group:
-            raise NoEligibleSpeakerException(
-                f"Last speaker {last_speaker.name} is not in the allowed_speaker_transitions_dict."
-            )
-        # last_speaker is not in the group, so all agents are eligible
-        elif last_speaker not in self.allowed_speaker_transitions_dict and not is_last_speaker_in_group:
-            graph_eligible_agents = []
-        else:
-            # Extract agent names from the list of agents
-            graph_eligible_agents = [
-                agent for agent in agents if agent in self.allowed_speaker_transitions_dict[last_speaker]
-            ]
+            # this condition means last_speaker is a sink in the graph, then no agents are eligible
+            if last_speaker not in self.allowed_speaker_transitions_dict and is_last_speaker_in_group:
+                raise NoEligibleSpeakerException(
+                    f"Last speaker {last_speaker.name} is not in the allowed_speaker_transitions_dict."
+                )
+            # last_speaker is not in the group, so all agents are eligible
+            elif last_speaker not in self.allowed_speaker_transitions_dict and not is_last_speaker_in_group:
+                graph_eligible_agents = []
+            else:
+                # Extract agent names from the list of agents
+                graph_eligible_agents = [
+                    agent for agent in agents if agent in self.allowed_speaker_transitions_dict[last_speaker]
+                ]
 
-        # If there is only one eligible agent, just return it to avoid the speaker selection prompt
-        if len(graph_eligible_agents) == 1:
-            return graph_eligible_agents[0], graph_eligible_agents, None
+            # If there is only one eligible agent, just return it to avoid the speaker selection prompt
+            if len(graph_eligible_agents) == 1:
+                return graph_eligible_agents[0], graph_eligible_agents, None
 
-        # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
-        if len(graph_eligible_agents) == 0:
-            graph_eligible_agents = None
+            # If there are no eligible agents, return None, which means all agents will be taken into consideration in the next step
+            if len(graph_eligible_agents) == 0:
+                graph_eligible_agents = None
+            return graph_eligible_agents
+
+        graph_eligible_agents = get_graph_eligible_agents(last_speaker)
 
         ####################################################################################
         # XXX We only trace the code below
@@ -197,7 +205,6 @@ class GroupChat(_GroupChat):
         """Select the next speaker."""
 
         selected_agent, agents, messages = self._prepare_and_select_agents(last_speaker)
-
         if selected_agent is not None:
             return selected_agent
 
