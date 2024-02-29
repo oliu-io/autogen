@@ -167,8 +167,6 @@ class Node(AbstractNode[T]):
         self._feedback = defaultdict(list)  # (analogous to gradient) this is the feedback from the user. Each key is a child and the value is a list of feedbacks from the child.
         self._description = description # Infomation to describe of the node
         self._backwarded = False  # True if backward has been called
-        import autogen.trace.operators as ops
-        self.__ops = ops
 
     def zero_feedback(self):  # set feedback to zero
         self._feedback = defaultdict(list)
@@ -291,43 +289,56 @@ class Node(AbstractNode[T]):
 
     # We overload magic methods that return a value. These methods return a MessageNode.
     def __add__(self, other):
-        return self.__ops.add(self, other)
+        import autogen.trace.operators as ops
+        return ops.add(self, other)
 
     def __sub__(self, other):
-        return self.__ops.subtract(self, other)
+        import autogen.trace.operators as ops
+        return ops.subtract(self, other)
 
     def __mul__(self, other):
-        return self.__ops.multiply(self, other)
+        import autogen.trace.operators as ops
+        return ops.multiply(self, other)
 
     def __truediv__(self, other):
-        return self.__ops.divide(self, other)
+        import autogen.trace.operators as ops
+        return ops.divide(self, other)
 
     def __floordiv__(self, other):
-        return self.__ops.floor_divide(self, other)
+        import autogen.trace.operators as ops
+        return ops.floor_divide(self, other)
 
     def __mod__(self, other):
-        return self.__ops.mod(self, other)
+        import autogen.trace.operators as ops
+        return ops.mod(self, other)
 
     def __pow__(self, other):
-        return self.__ops.power(self, other)
+        import autogen.trace.operators as ops
+        return ops.power(self, other)
 
     def __and__(self, other):
-        return self.__ops.and_(self, other)
+        import autogen.trace.operators as ops
+        return ops.and_(self, other)
 
     def __or__(self, other):
-        return self.__ops.or_(self, other)
+        import autogen.trace.operators as ops
+        return ops.or_(self, other)
 
     def __xor__(self, other):
-        return self.__ops.xor(self, other)
+        import autogen.trace.operators as ops
+        return ops.xor(self, other)
 
     def __neg__(self):
-        return self.__ops.neg(self)
+        import autogen.trace.operators as ops
+        return ops.neg(self)
 
     def __pos__(self):
-        return self.__ops.pos(self)
+        import autogen.trace.operators as ops
+        return ops.pos(self)
 
     def __invert__(self):
-        return self.__ops.invert(self)
+        import autogen.trace.operators as ops
+        return ops.invert(self)
 
 
 class ParameterNode(Node[T]):
