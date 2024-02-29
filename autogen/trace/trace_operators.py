@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, supported_data_type, node
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, supported_data_type, node, get_operator_name
 from dill.source import getsource
 from collections.abc import Iterable
 import inspect
@@ -37,19 +37,20 @@ def trace_operator(description, n_outputs=1, node_dict='auto'):  # TODO add a di
         # TODO how to describe the mapping and inputs automatically?
         # description = getsource(fun)
 
+        operator_name = get_operator_name(description)  # TODO using a dict?
         def wrap_output(output, inputs: Union[List[Node],Dict[str,Node]]):
             """ Wrap the output as a MessageNode of inputs as the parents."""
             if output is None:  # We keep None as None.
                 return output
             if len(inputs)==0:  # If no nodes are used, we don't need to wrap the output as a MessageNode.
-                return node(output)
+                return Node(output, name=operator_name)
             # Some nodes are used in the operator fun, we need to wrap the output as a MessageNode.
             if isinstance(output, MessageNode):  # If the output is already a Node, we don't need to wrap it.
                 if not all([node in output.parents for node in inputs]):
                      warnings.warn(f"Not all nodes used in the operator {fun} are part of the inputs of the output. The output may not be consistent with the inputs.")
                 return output  # NOTE User who implements fun is responsible for the graph structure.
             # Else, we need to wrap the output as a MessageNode
-            return MessageNode(output, description=description, inputs=inputs)
+            return MessageNode(output, description=description, inputs=inputs, name=operator_name)
 
 
         def wrapper(*args, **kwargs):

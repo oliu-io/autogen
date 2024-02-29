@@ -1,7 +1,7 @@
 
 
 from typing import Any
-from autogen.trace.nodes import Node, MessageNode, get_operator_type, IDENTITY_OPERATORS
+from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
 
 
@@ -35,9 +35,9 @@ class Propagator(AbtractPropagator):
         self.override[operator_name] = propagate_function
 
     def propagate(self, data: Any, description: str, feedback: dict, parents: Node):
-        operator_type = get_operator_type(description)
-        if operator_type in self.override:
-            return self.override[operator_type](data, description, feedback, parents)
+        operator_name = get_operator_name(description)
+        if operator_name in self.override:
+            return self.override[operator_name](data, description, feedback, parents)
         else:
             return self._propagate(data, description, feedback, parents)
 
