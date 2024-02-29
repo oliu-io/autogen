@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, supported_data_type, node, get_operator_name
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, node, get_operator_name
 from dill.source import getsource
 from collections.abc import Iterable
 import inspect
@@ -15,7 +15,7 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
-
+# TODO rename to trace_op
 def trace_operator(description, n_outputs=1, node_dict='auto'):  # TODO add a dict to describe the inputs?
     def decorator(fun):
         """ This is a decorator to trace a function. The wrapped function returns a MessageNode.

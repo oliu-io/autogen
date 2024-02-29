@@ -1,5 +1,8 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # to prevent cicular import
+    from autogen.trace.nodes import Node
 from autogen.trace.trace_operators import trace_operator
-from autogen.trace.nodes import Node
 import copy
 
 @trace_operator('[cond] This selects x if condition is True, otherwise y.', node_dict='signature')
@@ -39,10 +42,6 @@ def mod(x : Node, y : Node):
 @trace_operator('[floor_divide] This is a floor_divide operator of x and y.', node_dict='signature')
 def floor_divide(x : Node, y : Node):
     return x.data // y.data
-
-@trace_operator('[abs] This is an abs operator of x.', node_dict='signature')
-def abs(x : Node):
-    return abs(x.data)
 
 @trace_operator('[neg] This is a neg operator of x.', node_dict='signature')
 def neg(x : Node):

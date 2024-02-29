@@ -167,6 +167,8 @@ class Node(AbstractNode[T]):
         self._feedback = defaultdict(list)  # (analogous to gradient) this is the feedback from the user. Each key is a child and the value is a list of feedbacks from the child.
         self._description = description # Infomation to describe of the node
         self._backwarded = False  # True if backward has been called
+        import autogen.trace.operators as ops
+        self.__ops = ops
 
     def zero_feedback(self):  # set feedback to zero
         self._feedback = defaultdict(list)
@@ -283,52 +285,50 @@ class Node(AbstractNode[T]):
     def detach(self):
         return copy.deepcopy(self)
 
-    # # TODO remove these
-    # # We overload some magic methods to make it behave like a dict
-    # def __getattr__(self, name):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     data = self.__getattribute__('data')
-    #     try:  # If attribute cannot be found, try to get it from the data
-    #         return data.__getattribute__(name)
-    #     except AttributeError:
-    #         raise AttributeError(f"{self} has no attribute {name}.")
-
+    # We do not allow Node to be used bool. The user should access node.data directly.
     def __bool__(self):
         raise AttributeError(f"Cannot convert {self} to bool.")
-        # warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-        # return bool(self.data)
 
-    # def __len__(self):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     return len(self.data)
+    # We overload magic methods that return a value. These methods return a MessageNode.
+    def __add__(self, other):
+        return self.__ops.add(self, other)
 
-    # def __length_hint__(self):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     return NotImplemented
+    def __sub__(self, other):
+        return self.__ops.subtract(self, other)
 
-    # def __getitem__(self, key):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     return self.data[key]
+    def __mul__(self, other):
+        return self.__ops.multiply(self, other)
 
-    # def __setitem__(self, key, value):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     self._data[key] = value
+    def __truediv__(self, other):
+        return self.__ops.divide(self, other)
 
-    # def __delitem__(self, key):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     del self.data[key]
+    def __floordiv__(self, other):
+        return self.__ops.floor_divide(self, other)
 
-    # def __iter__(self):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     return iter(self.data)
+    def __mod__(self, other):
+        return self.__ops.mod(self, other)
 
-    # def __reverse__(self):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     return reversed(self.data)
+    def __pow__(self, other):
+        return self.__ops.power(self, other)
 
-    # def __contains__(self, key):
-    #     warnings.warn(f"Deprecated: Attemping to access data in {self}.")
-    #     return key in self.data
+    def __and__(self, other):
+        return self.__ops.and_(self, other)
+
+    def __or__(self, other):
+        return self.__ops.or_(self, other)
+
+    def __xor__(self, other):
+        return self.__ops.xor(self, other)
+
+    def __neg__(self):
+        return self.__ops.neg(self)
+
+    def __pos__(self):
+        return self.__ops.pos(self)
+
+    def __invert__(self):
+        return self.__ops.invert(self)
+
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
