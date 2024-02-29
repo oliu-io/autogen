@@ -9,9 +9,11 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace
+from autogen.trace.optimizer_autogen import retain_last_only_propagate
 from textwrap import dedent, indent
-# from env_wrapper import LLFBenchUserAgent
 import llfbench
+from autogen.trace.utils import verbalize
+
 
 from autogen.trace.optimizers import DummyOptimizer
 
@@ -88,4 +90,12 @@ chat_results = user.initiate_chats(
 
 print(chat_results)
 
-last_node = user.last_message(extractor_agent)
+last_node = user.last_message_node(extractor_agent)
+next_obs, reward, terminated, truncated, info = env.step(last_node.data['content'])
+feedback = verbalize(next_obs['observation'], next_obs['feedback'], reward)
+
+last_node.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=False)
+
+print("Feedback:", feedback)
+print(poem_agent.parameters[0].feedback())
+print(extractor_agent.parameters[0].feedback())
