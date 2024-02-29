@@ -90,12 +90,13 @@ chat_results = user.initiate_chats(
 
 print(chat_results)
 
-last_node = user.last_message_node(extractor_agent)
+last_node = user.last_message_node(poem_agent)
 next_obs, reward, terminated, truncated, info = env.step(last_node.data['content'])
 feedback = verbalize(next_obs['observation'], next_obs['feedback'], reward)
 
-last_node.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=False)
+fig = last_node.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=True)
+fig.view()
 
 print("Feedback:", feedback)
-print(poem_agent.parameters[0].feedback())
-print(extractor_agent.parameters[0].feedback())
+print(poem_agent.parameters[0].feedback)
+print(extractor_agent.parameters[0].feedback)

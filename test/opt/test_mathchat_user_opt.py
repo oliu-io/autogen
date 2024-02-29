@@ -163,7 +163,7 @@ optimization_steps = 1
 
 for _ in range(exp_runs):
     info = train_with_datasets(dataset['train'], dp, generate_answer, optimizer,
-                  steps=optimization_steps, propagate_fn=PropagateStrategy.retain_last_only_propagate,
+                  steps=optimization_steps, propagate_fn=retain_last_only_propagate(),
                   verbose=False, seed=123)
     print("Agent reward history:", info['rewards'])
     performances.append(info['rewards'])

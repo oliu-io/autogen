@@ -95,7 +95,7 @@ def train_with_env(env: gym.Env, agent: ConversableAgent, optimizer: Optimizer,
 
         last_message = agent.last_message_node(user_agent, role='assistant')
 
-        next_obs, reward, terminated, truncated, info = env.step(last_message['content'])
+        next_obs, reward, terminated, truncated, info = env.step(last_message.data['content'])
         success = info['success']
         feedback = feedback_verbalize(next_obs['observation'], next_obs['feedback'], reward)
 
@@ -200,7 +200,7 @@ def train_with_datasets(dataset, dataset_processor: DatasetProcessor, generate_a
         last_message = generate_answer(init_obs)
 
         reference_answer = dataset_processor.get_answer(row)
-        predicted_answer = last_message['content']
+        predicted_answer = last_message.data['content']
 
         feedback, reward = dataset_processor.generate_feedback(predicted_answer, reference_answer)
 
