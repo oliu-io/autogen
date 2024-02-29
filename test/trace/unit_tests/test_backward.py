@@ -17,16 +17,21 @@ fig.view()
 for k, v in x._feedback.items():
     print(f'child {k}: {k.name}: {k.data}: {v}')
 assert ' '.join([str(k) for k in x._feedback.values()]) == "['feedback'] ['feedbackfeedback']"
+print('\n')
 
 
-# z.backward('z_feedback', visualize=True)
-# This would throw an error because z has been backwarded.
+try:
+    z.backward('z_feedback', visualize=True)
+except Exception as e:
+    print("This would throw an error because z has been backwarded.")
+    print(type(e), e)
+    print('\n')
+
 x.zero_feedback()
 final, z = sum_of_integers()
 fig = final.backward('feedback', retain_graph=True, visualize=True)
 fig.view()
 fig = z.backward('__extra__', visualize=True)
 # fig.view()  # This visualizes only the subgraph before z
-print('\n')
 for k, v in x._feedback.items():
     print(f'child {k}: {k.name}: {k.data}: {v}')
