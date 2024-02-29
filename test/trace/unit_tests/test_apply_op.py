@@ -32,20 +32,20 @@ assert foobar.sub_x.y.data == 'foobar'
 
 
 # Test list and dict
-foobar_list = apply_op(lambda *args: list(args), foobar, foo, bar)
-assert foobar_list.x[0].data == 'foo'
-assert foobar_list.x[1].data == 'bar'
-assert foobar_list.dict_x['v'] == 3
-assert foobar_list.dict_x['x'][0][0].data == 'foo1'
-assert foobar_list.dict_x['x'][0][1].data == 'bar1'
-assert foobar_list.dict_x['x'][1][0].data == 'foo2'
-assert foobar_list.dict_x['x'][1][1].data == 'bar2'
+foobar = apply_op(lambda *args: list(args), foobar, foo, bar)
+assert foobar.x[0].data == 'foo'
+assert foobar.x[1].data == 'bar'
+assert foobar.dict_x['v'] == 3
+assert foobar.dict_x['x'][0][0].data == 'foo1'
+assert foobar.dict_x['x'][0][1].data == 'bar1'
+assert foobar.dict_x['x'][1][0].data == 'foo2'
+assert foobar.dict_x['x'][1][1].data == 'bar2'
 
-foobar_dict = apply_op(dict, foobar, foo=foo, bar=bar)
-assert foobar_dict.x['foo'].data == 'foo'
-assert foobar_dict.x['bar'].data == 'bar'
-assert foobar_dict.dict_x['v'] == 3
-assert foobar_list.dict_x['x'][0]['foo'].data == 'foo1'
-assert foobar_list.dict_x['x'][0]['bar'].data == 'bar1'
-assert foobar_list.dict_x['x'][1]['foo'].data == 'foo2'
-assert foobar_list.dict_x['x'][1]['bar'].data == 'bar2'
+foobar = apply_op(dict, foobar, foo=foo, bar=bar)
+assert foobar.x['foo'].data == 'foo'
+assert foobar.x['bar'].data == 'bar'
+assert foobar.dict_x['v'] == 3
+assert foobar.dict_x['x'][0]['foo'].data == 'foo1'
+assert foobar.dict_x['x'][0]['bar'].data == 'bar1'
+assert foobar.dict_x['x'][1]['foo'].data == 'foo2'
+assert foobar.dict_x['x'][1]['bar'].data == 'bar2'
