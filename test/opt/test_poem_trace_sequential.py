@@ -9,9 +9,11 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace
+from autogen.trace.optimizer_autogen import retain_last_only_propagate
 from textwrap import dedent, indent
-# from env_wrapper import LLFBenchUserAgent
 import llfbench
+from autogen.trace.utils import verbalize
+
 
 from autogen.trace.optimizers import DummyOptimizer
 
@@ -25,7 +27,7 @@ assert len(config_list) > 0
 
 termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
-sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem" +
+sys_msg = dedent("You are a student and your teacher gives you an assignment to write a poem. Directly write the poem." +
                  "Reply \"TERMINATE\" in the end when everything is done.")
 
 class PoemStudentAgent(AssistantAgent):
@@ -55,20 +57,20 @@ class PoemExtractor(AssistantAgent):
             max_consecutive_auto_reply=1,
         )
 
-user = UserProxyAgent(
+user = trace(UserProxyAgent)(
     name="User",
     human_input_mode="NEVER",
     is_termination_msg=lambda x: x.get("content", "") and x.get("content", "").rstrip().endswith("TERMINATE"),
+    code_execution_config={'use_docker': False}
 )
 
 max_turn = 1
-poem_agent = PoemStudentAgent()
-extractor_agent = PoemExtractor()
+poem_agent = trace(PoemStudentAgent)()
+extractor_agent = trace(PoemExtractor)()
 
 env = llfbench.make("llf-poem-Haiku-v0", instruction_type='b', feedback_type='a')
 obs, info = env.reset()
 
-# current code won't run because autogen we have does not support this function
 chat_results = user.initiate_chats(
     [
         {
@@ -86,4 +88,14 @@ chat_results = user.initiate_chats(
     ]
 )
 
-import pdb; pdb.set_trace()
+print(chat_results)
+
+last_node = user.last_message_node(extractor_agent)
+next_obs, reward, terminated, truncated, info = env.step(last_node.data['content'])
+feedback = verbalize(next_obs['observation'], next_obs['feedback'], reward)
+
+last_node.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=False)
+
+print("Feedback:", feedback)
+print(poem_agent.parameters[0].feedback())
+print(extractor_agent.parameters[0].feedback())

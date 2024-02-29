@@ -156,14 +156,14 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                         # add a role filtering
                         if role is not None:
                             for message in reversed(conversation):
-                                if message["role"] == role:
+                                if message.data["role"] == role:
                                     return message
                             return None
                         return conversation[-1]
                 raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
             if role is not None:
                 for message in reversed(self.__oai_messages[agent]):
-                    if message["role"] == role:
+                    if message.data["role"] == role:
                         return message
                 return None
             # return self._oai_messages[agent][-1]
