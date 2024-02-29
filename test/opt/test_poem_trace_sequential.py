@@ -97,5 +97,5 @@ feedback = verbalize(next_obs['observation'], next_obs['feedback'], reward)
 last_node.backward(feedback, retain_last_only_propagate(), retain_graph=False, visualize=False)
 
 print("Feedback:", feedback)
-print(poem_agent.parameters[0].feedback())
-print(extractor_agent.parameters[0].feedback())
+print(poem_agent.parameters[0].feedback)
+print(extractor_agent.parameters[0].feedback)
