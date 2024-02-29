@@ -257,11 +257,8 @@ class Node(AbstractNode[T]):
                         # Bypass chain of identity operators (for better visualization)
                         while (get_operator_name(parent.description) in IDENTITY_OPERATORS) and simple_visualization:
                             assert len(parent.parents)==1  # identity operators should have only one parent
-                            if len(parent.children)==1:
-                                visited.add(get_name(parent)) # skip this node in visualization
-                                parent = parent.parents[0]
-                            else:
-                                break
+                            visited.add(get_name(parent)) # skip this node in visualization
+                            parent = parent.parents[0]
 
                         edge = (get_name(node), get_name(parent)) if reverse_plot else (get_name(parent), get_name(node))
                         # Just plot the edge once, since the same node can be

@@ -11,8 +11,7 @@ def sum_of_integers():
     return ops.add(z, y_clone), z
 
 final, z = sum_of_integers()
-fig = final.backward('feedback', visualize=True)
-fig.view()
+final.backward('feedback')
 
 for k, v in x._feedback.items():
     print(f'child {k}: {k.name}: {k.data}: {v}')
@@ -21,7 +20,7 @@ print('\n')
 
 
 try:
-    z.backward('z_feedback', visualize=True)
+    z.backward('z_feedback')
 except Exception as e:
     print("This would throw an error because z has been backwarded.")
     print(type(e), e)
@@ -29,9 +28,9 @@ except Exception as e:
 
 x.zero_feedback()
 final, z = sum_of_integers()
-fig = final.backward('feedback', retain_graph=True, visualize=True)
+fig = final.backward('feedback', retain_graph=True, visualize=True, simple_visualization=False)
 fig.view()
-fig = z.backward('__extra__', visualize=True)
+fig = z.backward('__extra__', visualize=True, simple_visualization=False)
 # fig.view()  # This visualizes only the subgraph before z
 for k, v in x._feedback.items():
     print(f'child {k}: {k.name}: {k.data}: {v}')
