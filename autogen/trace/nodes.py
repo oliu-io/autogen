@@ -139,11 +139,11 @@ class AbstractNode(Generic[T]):
 
 
 # These are operators that do not change the data type and can be viewed as identity operators.
-IDENTITY_OPERATORS = ('identity', 'Copy', 'message_to_dict', 'oai_message')
+IDENTITY_OPERATORS = ('identity', 'clone', 'message_to_dict', 'oai_message')
 
 import re
-def get_operator_type(description):
-    """ Extra the operator type from the description. """
+def get_operator_name(description):
+    """ Extract the operator type from the description. """
     match = re.search(r"\[([^[\]]+)\]", description)  # TODO. right pattern?
     if match:
         operator_type = match.group(1)
@@ -183,7 +183,8 @@ class Node(AbstractNode[T]):
         """ Add feedback from a child. """
         self.feedback[child].append(feedback)
 
-    def backward(self, feedback: str, propagate=None, retain_graph=False, visualize=False, reverse_plot=False, print_limit=100):
+    def backward(self, feedback: str, propagate=None, retain_graph=False,
+                    visualize=False, simple_visualization=False, reverse_plot=False, print_limit=100):
         """ Backward pass.
 
             feedback: feedback given to the current node
@@ -254,10 +255,13 @@ class Node(AbstractNode[T]):
                     if visualize:
                         # Plot the edge from parent to node
                         # Bypass chain of identity operators (for better visualization)
-                        while get_operator_type(parent.description) in IDENTITY_OPERATORS:
+                        while (get_operator_name(parent.description) in IDENTITY_OPERATORS) and simple_visualization:
                             assert len(parent.parents)==1  # identity operators should have only one parent
-                            visited.add(get_name(parent)) # skip this node in visualization
-                            parent = parent.parents[0]
+                            if len(parent.children)==1:
+                                visited.add(get_name(parent)) # skip this node in visualization
+                                parent = parent.parents[0]
+                            else:
+                                break
 
                         edge = (get_name(node), get_name(parent)) if reverse_plot else (get_name(parent), get_name(node))
                         # Just plot the edge once, since the same node can be
@@ -277,7 +281,7 @@ class Node(AbstractNode[T]):
         return digraph
 
     def clone(self):
-        return MessageNode(copy.deepcopy(self.data), inputs=[self], description='[clone] This is a clone operator.')
+        return MessageNode(copy.deepcopy(self.data), inputs=[self], description='[clone] This is a clone operator.', name='clone')
 
     def detach(self):
         return copy.deepcopy(self)
