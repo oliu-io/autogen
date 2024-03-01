@@ -184,7 +184,7 @@ class Node(AbstractNode[T]):
         self.feedback[child].append(feedback)
 
     def backward(self, feedback: str, propagate=None, retain_graph=False,
-                    visualize=False, simple_visualization=False, reverse_plot=False, print_limit=100):
+                    visualize=False, simple_visualization=True, reverse_plot=False, print_limit=100):
         """ Backward pass.
 
             feedback: feedback given to the current node
@@ -286,6 +286,23 @@ class Node(AbstractNode[T]):
     # We do not allow Node to be used bool. The user should access node.data directly.
     def __bool__(self):
         raise AttributeError(f"Cannot convert {self} to bool.")
+
+    def getattr(self, key):
+        attr = self._data[key] if isinstance(self._data, dict) else getattr(self._data, key)
+        return MessageNode(attr, inputs={'container':self}, description=f'[getattr] This is a get attribute operator of {key}.', name=f'getattr')
+
+    def call(self, fun: str, *args, **kwargs):
+        """ fun (str): a callable attribute of the data. """
+        output = getattr(self._data, fun)(*args, **kwargs)
+        if output is not None:
+            if isinstance(output, Node):
+                data = output.data
+                inputs = {'container':self, 'output':output}
+            else:
+                data = output
+                inputs = {'container':self}
+            output = MessageNode(data, inputs=inputs, description=f'[call] This is a call operator of {self._data}.', name=f'call')
+        return output
 
     # We overload magic methods that return a value. These methods return a MessageNode.
     def __add__(self, other):
