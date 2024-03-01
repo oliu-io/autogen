@@ -68,3 +68,17 @@ assert z_copy.data == z.data
 assert z in z_new.parents and len(z_new.parents) == 1 and z_new in z.children
 assert z in z_clone.parents and len(z_clone.parents) == 1 and z_clone in z.children
 assert z not in z_copy.parents and len(z_copy.parents) == 0 and z_copy not in z.children
+
+
+# Test magic function
+x = node('NodeX')
+y = node('NodeY')
+z = x+y
+print(f'Sum of Node[str]')
+print(f" x:{x.data}\n y:{y.data}\n z:{z.data}")
+
+assert z.data == x.data + y.data
+assert x in z.parents and y in z.parents
+assert z in x.children and z in y.children
+for k,v in z._inputs.items():
+    assert locals()[k] == v
