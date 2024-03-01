@@ -39,6 +39,8 @@ def train_with_wrapped_env(env_agent: UserProxyAgent, agent: ConversableAgent, o
             print(f"Prompt at step {k}:", optimizer.parameters[0].data)
 
         init_obs = env_agent.get_starting_message()
+        agent.clear_history()  # this is quite important; also can't wait till zero_grad() step...
+
         env_agent.initiate_chat(agent, message=init_obs, clear_history=True, silent=not verbose)
         feedback = env_agent.last_message_node().data['content']
 
@@ -91,6 +93,8 @@ def train_with_env(env: gym.Env, agent: ConversableAgent, optimizer: Optimizer,
         obs, info = env.reset()
         init_obs = obs['instruction']
 
+        agent.clear_history()  # this is quite important; also can't wait till zero_grad() step...
+
         user_agent.initiate_chat(agent, message=init_obs, clear_history=True, silent=not verbose)
 
         last_message = agent.last_message_node(user_agent, role='assistant')
@@ -120,7 +124,7 @@ def train_with_env(env: gym.Env, agent: ConversableAgent, optimizer: Optimizer,
 def opt_step_with_feedback(feedback: str, last_message, optimizer: Optimizer,
                            propagate_fn=retain_last_only_propagate(), verbose: bool = False):
     optimizer.zero_feedback()
-    last_message.backward(feedback, propagate_fn, retain_graph=False)
+    last_message.backward(feedback, propagate_fn, retain_graph=True)
     optimizer.step()
 
 
