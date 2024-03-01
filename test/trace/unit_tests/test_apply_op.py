@@ -1,12 +1,12 @@
 from autogen.trace import node
-from autogen.trace.trace_operators import apply_op
+from autogen.trace.trace_operators import apply_op, NodeContainer
 import autogen.trace.operators as ops
 
-class SubContainer:
+class SubContainer(NodeContainer):
     def __init__(self, y):
         self.y = node(y)
 
-class Container:
+class Container(NodeContainer):
     def __init__(self, x, v):
         self.x = node(x)
         self.list_x = [node(x+'1'), node(x+'2')]

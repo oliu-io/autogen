@@ -87,6 +87,10 @@ def trace_operator(description, n_outputs=1, node_dict='auto'):  # TODO add a di
         return wrapper
     return decorator
 
+
+class NodeContainer:
+    pass
+
 def apply_op(op, output, *args, **kwargs):
     """ Apply an op to container of Nodes.
 
@@ -110,7 +114,7 @@ def apply_op(op, output, *args, **kwargs):
 
     if isinstance(output,list) or isinstance(output, tuple):
         output = list(output)
-        assert all(isinstance(x,Node) or len(output)==len(x) for x in inputs), "output and inputs are of different lengths."
+        assert all(isinstance(x,Node) or len(output)==len(x) for x in inputs), f"output {output} and inputs {inputs} are of different lengths."
         for k in range(len(output)):
             _args = [ x if isinstance(x, Node) else x[k] for x in args]
             _kwargs = {kk: vv if isinstance(vv, Node) else vv[k] for kk, vv in kwargs.items()}
@@ -121,11 +125,13 @@ def apply_op(op, output, *args, **kwargs):
             _args = [ x if isinstance(x, Node) else x[k] for x in args]
             _kwargs = {kk: vv if isinstance(vv, Node) else vv[k] for kk, vv in kwargs.items()}
             output[k] = apply_op(op, output[k], *_args, **_kwargs)
-    elif hasattr(output, '__dict__'): # this is an object instance
+
+    elif isinstance(output, NodeContainer): # this is a NodeContainer object instance
         for k,v in output.__dict__.items():
             _args = [ x if isinstance(x, Node) else getattr(x,k) for x in args]
             _kwargs = {kk: vv if isinstance(v, Node) else getattr(vv,k) for kk, vv in kwargs.items()}
-            output.__dict__[k] = apply_op(op, output.__dict__[k], *_args, **_kwargs)
+            new_v = apply_op(op,  v, *_args, **_kwargs)
+            setattr(output, k ,new_v )
     else:
         pass
     return output

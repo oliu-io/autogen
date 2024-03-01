@@ -381,7 +381,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                 if isinstance(v, OpenAIWrapper):
                     value = copy.copy(v)
                     setattr(result, k, copy.copy(v))  # This is locked
-                elif k=='TracedAgent__oai_messages':
+                elif k=='_TracedAgent__oai_messages':
                     value = defaultdict(list)  # deepcopy is viewed as detached from the original graph
                 else:
                     value = copy.deepcopy(v, memo)
