@@ -301,7 +301,7 @@ class Node(AbstractNode[T]):
             else:
                 data = output
                 inputs = {'container':self}
-            output = MessageNode(data, inputs=inputs, description=f'[call] This is a call operator of {self._data}.', name=f'call')
+            output = MessageNode(data, inputs=inputs, description=f'[call] This is a call operator of {fun} of {self._data}.', name=f'call')
         return output
 
     # We overload magic methods that return a value. These methods return a MessageNode.

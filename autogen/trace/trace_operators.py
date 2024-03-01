@@ -47,7 +47,7 @@ def trace_operator(description, n_outputs=1, node_dict='auto'):  # TODO add a di
             # Some nodes are used in the operator fun, we need to wrap the output as a MessageNode.
             if isinstance(output, MessageNode):  # If the output is already a Node, we don't need to wrap it.
                 if not all([node in output.parents for node in inputs]):
-                     warnings.warn(f"Not all nodes used in the operator {fun} are part of the inputs of the output. The output may not be consistent with the inputs.")
+                     raise ValueError(f"The operator {fun} returns a MessageNode but not all nodes used in the operator call are part of the inputs of the MessageNode.")
                 return output  # NOTE User who implements fun is responsible for the graph structure.
             # Else, we need to wrap the output as a MessageNode
             return MessageNode(output, description=description, inputs=inputs, name=operator_name)
