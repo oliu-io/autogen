@@ -6,6 +6,7 @@ from textwrap import dedent, indent
 from copy import copy
 from autogen.trace.propagators import get_label, get_name
 from dataclasses import dataclass
+from autogen.trace.utils import SimplePromptParser
 
 """
 We follow the same design principle as trace
@@ -135,9 +136,11 @@ class Block:
         return self.name == other.name and self.output == other.output
 
 
-def construct_block(block_str: str):
+def construct_block(block_str: str, preserve_content_format=True):
     input_llm, output_llm = "", ""
     llm_name_to_cnt = {}
+
+    sep = '\n' if preserve_content_format else ''
 
     llm_name_continued = None
     for line in block_str.split("\n"):
@@ -147,17 +150,16 @@ def construct_block(block_str: str):
             continue
         if "label=" in line:
             name = line.split(" [label=")[0].strip().strip("\"")
-            llm_name_to_cnt[name] = ""
+            llm_name_to_cnt[name] = []
             llm_name_continued = name
             continue
 
-        llm_name_to_cnt[llm_name_continued] += line.rstrip("\"]")
+        llm_name_to_cnt[llm_name_continued].append(line.rstrip("\"]"))
 
-    return Block(name=output_llm, output=llm_name_to_cnt[output_llm], input_llms=[input_llm], output_llms=[],
-                 inputs=[llm_name_to_cnt[input_llm]])
+    return Block(name=output_llm, output=sep.join(llm_name_to_cnt[output_llm]), input_llms=[input_llm], output_llms=[],
+                 inputs=[sep.join(llm_name_to_cnt[input_llm])])
 
-
-def parse_blocks(dot_str):
+def parse_blocks(dot_str, preserve_content_format=True):
     # dot_str = digraph.source
 
     blocks = []
@@ -175,7 +177,7 @@ def parse_blocks(dot_str):
 
     for block in blocks:
         # block = [input -> output, input_llm_str, output_llm_str]
-        block_rep = construct_block(block)
+        block_rep = construct_block(block, preserve_content_format)
         constructed_blocks.append(block_rep)
 
     # re-assemble:
@@ -243,56 +245,60 @@ def display_full_graph(blocks):
         content += "\n"
 
     return content
+
+
 class LLMCallable(object):
-    def __init__(self, llm, config_list, system_message, name="helper"):
-        self.llm = llm
+    def __init__(self, config_list, system_message,
+                 prompt_template,
+                 name="helper"):
         self.config_list = config_list
         self.llm = AssistantAgent(name=name,
                                   system_message=system_message,
                                   llm_config={"config_list": config_list})
+        self.parser = SimplePromptParser(prompt_template, verbose=False)
 
-    def create_response(self, message):
+    def create_simple_response(self, message):
         messages = [{'content': message, 'role': 'user'}]
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         return self.llm.client.extract_text_or_completion_object(response)[0]
 
-class LLMModuleReasoner(LLMCallable):
-    def __init__(self, parameters, config_list, task_description, *args, **kwargs):
-        super().__init__(parameters, *args, **kwargs)
+    def create_response(self, **kwargs):
+        results = self.parser(**kwargs)
+        messages = [{'content': results, 'role': 'user'}]
+        response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
+        return self.llm.client.extract_text_or_completion_object(response)[0]
+
+
+class LLMModuleSummarizer(LLMCallable):
+    def __init__(self, config_list, *args, **kwargs):
         sys_msg = dedent("""
-        You are giving instructions to a student on how to accomplish a task.
-        The student aims to get a high score.
-        Given the feedback the student has received and the instruction you have given,
-        You want to come up with a new instruction that will help the student get a higher score.
+        You are given an analysis report of a module with a list of inputs and the module's output.
+        The module can take many inputs and respond to inputs with a single output.
+        Your goal is to guess what this module is doing and summarize it's functionality.
         """)
-        self.llm = AssistantAgent(name="assistant",
-                                  system_message=sys_msg,
-                                  llm_config={"config_list": config_list})
-        self.task_description = task_description
 
-        self.parameter_copy = {}
-        self.save_parameter_copy()
+        super().__init__(config_list, *args, **kwargs)
 
-    def _step(self, value, feedback):
-        context = [self.task_description, value['content'], feedback]
+    def __call__(self, blocks):
+        """
+        Args:
+            blocks: it's a list of blocks because we might want to summarize the functionality of an entire agent
+                    not just for a sub-function. The list of blocks should be all the functions this agent is asked to provide.
+
+        Returns: str
+        """
+        # TODO: 1. if it's on agent, we reduce the name/change rep
+        on_agent = False
+        if len(blocks) > 1:
+            on_agent = True
+        assert not on_agent, "Not implemented yet"
+
         prompt_space = dedent("""
-        {}
-
-        This is your instruction to the student from the previous round:
-        {}
-
-        Using this instruction, this is the feedback the student received:
-        {}
-
-        Please write down a new instruction to help the student achieve a higher score.
-        Be concise and to the point.
-        Remember the student is starting from scratch, not revising their old work:
-        """.format(*context))
+        This is the execution report of this module:
+        """)
 
         messages = [{'content': prompt_space, 'role': 'user'}]
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        # response = Completion.create(messages=self.llm._oai_system_message + messages)
-        # new_instruct = self.llm.client.extract_text_or_function_call(response)[0]
         new_instruct = self.llm.client.extract_text_or_completion_object(response)[0]
         new_node = {'content': new_instruct, 'role': 'system'}
         return new_node
