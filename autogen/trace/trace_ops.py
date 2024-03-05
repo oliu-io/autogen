@@ -16,7 +16,7 @@ class trace_nodes:
         USED_NODES.pop()
 
 # TODO rename to trace_op
-def trace_operator(description, n_outputs=1, node_dict='auto'):  # TODO add a dict to describe the inputs?
+def trace_op(description, n_outputs=1, node_dict='auto'):  # TODO add a dict to describe the inputs?
     def decorator(fun):
         """ This is a decorator to trace a function. The wrapped function returns a MessageNode.
 
@@ -140,7 +140,7 @@ def apply_op(op, output, *args, **kwargs):
 if __name__=='__main__':
     from autogen.trace.trace import node
     x = node('hello')
-    @trace_operator('[Custom] This is a test function.')
+    @trace_op('[Custom] This is a test function.')
     def test(x):
         return x.data+' world'
 

@@ -1,5 +1,5 @@
 from autogen.trace import node
-from autogen.trace.trace_operators import apply_op, NodeContainer
+from autogen.trace.trace_ops import apply_op, NodeContainer
 import autogen.trace.operators as ops
 
 class SubContainer(NodeContainer):
