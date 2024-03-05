@@ -395,6 +395,10 @@ class MessageNode(Node[T]):
                 assert isinstance(v, Node), f"Input {k} is not a Node."
                 self.add_parent(v)
 
+    @property
+    def inputs(self):
+        return copy.copy(self._inputs)
+
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
         return f'MessageNode: ({self.name}, dtype={type(self._data)})'

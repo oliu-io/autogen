@@ -16,7 +16,7 @@ class trace_nodes:
         USED_NODES.pop()
 
 # TODO rename to trace_op
-def trace_op(description, n_outputs=1, node_dict='auto'):  # TODO add a dict to describe the inputs?
+def trace_op(description, n_outputs=1, node_dict=None):
     def decorator(fun):
         """ This is a decorator to trace a function. The wrapped function returns a MessageNode.
 
@@ -26,13 +26,13 @@ def trace_op(description, n_outputs=1, node_dict='auto'):  # TODO add a dict to 
                 n_outputs (int); the number of outputs of the operator; default is 1.
                 node_dict (dict|str):
                     'auto' : the inputs are represented as a list of nodes.
-                    'signature': the inputs are represented as a dictionary, where the keys are the parameter names and the values are the nodes.
+                    'auto': the inputs are represented as a dictionary, where the keys are the parameter names and the values are the nodes.
                     dict : a dictionary to describe the inputs, where the key is a node used in this operator and the value is the node's name as described in description ; when node_dict is provided, all the used_nodes need to be in node_dict. Providing node_dict can give a correspondance between the inputs and the description of the operator.
 
         """
         assert callable(fun), "fun must be a callable."
         assert description is not None, "description must be provided."
-        assert type(node_dict) is dict or node_dict in ('signature', 'auto'), "node_dict must be a dictionary or None or 'auto."
+        assert isinstance(node_dict, dict) or (node_dict is None) or (node_dict=='auto'),  "node_dict must be a dictionary or None or 'auto."
 
         # TODO how to describe the mapping and inputs automatically?
         # description = getsource(fun)
@@ -64,16 +64,17 @@ def trace_op(description, n_outputs=1, node_dict='auto'):  # TODO add a dict to 
                 outputs = fun(*args, **kwargs)
 
             # Construct the inputs of the MessageNode from the set used_nodes
-            if node_dict=='auto':
+            if node_dict is None:
                 # If no information is provided, we represent inputs as list.
                 # MessageNode will convert inputs as dict based on the names of
                 # the nodes in used_nodes
                 inputs = list(used_nodes)
             else:  # Otherwise we represent inputs as dict
-                if node_dict=='signature':  # Read it from the input signature
-                    spec = inspect.getcallargs(fun, *args, **kwargs)
-                else:
-                    spec = node_dict  # TODO Is this easy to specify?
+
+                assert node_dict == 'auto' or isinstance(node_dict, dict)
+                spec = inspect.getcallargs(fun, *args, **kwargs) # Read it from the input signature
+                if isinstance(node_dict, dict):
+                    spec.update(node_dict)
                 assert isinstance(spec, dict)
                 # Makre sure all nodes in used_nodes are in spec
                 assert all([node in spec.values() for node in used_nodes]), "All used_nodes must be in the spec."
