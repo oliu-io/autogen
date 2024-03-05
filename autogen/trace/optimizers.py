@@ -159,6 +159,7 @@ def construct_block(block_str: str, preserve_content_format=True):
     return Block(name=output_llm, output=sep.join(llm_name_to_cnt[output_llm]), input_llms=[input_llm], output_llms=[],
                  inputs=[sep.join(llm_name_to_cnt[input_llm])])
 
+
 def parse_blocks(dot_str, preserve_content_format=True):
     # dot_str = digraph.source
 
@@ -274,143 +275,138 @@ class LLMModuleSummarizer(LLMCallable):
         sys_msg = dedent("""
         You are given an analysis report of a module with a list of inputs and the module's output.
         The module can take many inputs and respond to inputs with a single output.
-        Your goal is to guess what this module is doing and summarize it's functionality.
+        Your goal is to guess what this module is doing and summarize its functionality.
         """)
 
-        super().__init__(config_list, *args, **kwargs)
+        super().__init__(config_list, sys_msg, *args, **kwargs)
 
-    def __call__(self, blocks):
+        execution_prompt = dedent("""            
+            <Report>
+            {{#each blocks}}
+            {{this.text}}
+
+            {{~/each}}
+            </Report>
+        """)
+
+        summary_prompt = dedent("""
+            Here is the task description:
+            <Task>
+            {{task}}
+            </Task>
+        
+            This is the execution report of this module:
+            
+            <Report>
+            {{#each blocks}}
+            {{this.text}}
+
+            {{~/each}}
+            </Report>
+            
+            Please summarize the functionality of this module below:
+        """)
+
+        block_prompt = dedent("""
+            Inputs: {{input_llms}} -> {{name}}
+            {{#each inputs}}
+            Input{{this.num}} {{this.llm}}:
+                {{this.inpt}}
+
+            {{~/each}}
+
+            Output {{name}}:
+            {{output}}
+        """)
+
+        self.summary_parser = SimplePromptParser(summary_prompt)
+        self.block_parser = SimplePromptParser(block_prompt)
+        self.execution_parser = SimplePromptParser(execution_prompt)
+
+    def __call__(self, task_desc, blocks):
         """
         Args:
-            blocks: it's a list of blocks because we might want to summarize the functionality of an entire agent
-                    not just for a sub-function. The list of blocks should be all the functions this agent is asked to provide.
-
+            blocks: it's a list of blocks because we can run multiple trials of the same module
+                    and have all history.
         Returns: str
         """
-        # TODO: 1. if it's on agent, we reduce the name/change rep
-        on_agent = False
-        if len(blocks) > 1:
-            on_agent = True
-        assert not on_agent, "Not implemented yet"
 
-        prompt_space = dedent("""
-        This is the execution report of this module:
+        # ready to handle multiple blocks, but for on_agent, we might want a different prompt format..
+        # or unify names of the blocks
+        block_texts = []
+        for block in blocks:
+            inputs = [{"llm": llm_name, "inpt": inpt, 'num': str(i + 1)} for i, (llm_name, inpt) in
+                      enumerate(zip(block.input_llms, block.inputs))]
+            block_text = \
+                self.block_parser(input_llms=str(block.input_llms), name=block.name, output=block.output,
+                                  inputs=inputs)[0]['content']
+            block_texts.append(block_text)
+
+        messages = self.summary_parser(blocks=[{'text': b} for b in block_texts], task=task_desc)
+
+        response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
+        summary = self.llm.client.extract_text_or_completion_object(response)[0]
+
+        execution_report = self.execution_parser(blocks=[{'text': b} for b in block_texts])[0]['content']
+
+        return execution_report, summary
+
+
+class LLMModuleVerifier(LLMCallable):
+    def __init__(self, config_list, *args, **kwargs):
+        sys_msg = dedent("""
+        You are given a report of a module's functionality with a list of inputs and the module's output.
+        The module is supposed to process or alter the input to fulfill a functionality.
+        Your job is to be a harsh reviewer to see if the module is doing what it's supposed to do.
         """)
 
-        messages = [{'content': prompt_space, 'role': 'user'}]
+        super().__init__(config_list, sys_msg, *args, **kwargs)
+
+        review_prompt = dedent("""
+        Here is the task description:
+        <Task>
+        {{task}}
+        </Task>
+        
+        This is the execution report of this module:
+        
+        <Report>
+        {{report}}
+        </Report>
+
+        Here is the summary of the functionality of this module:
+        <Summary>
+        {{summary}}
+        </Summary>
+        
+        Please judge if this module successfully fulfilled its designed intentions.
+        One important question is -- did it change the input? How much did it change the input?
+        
+        Write your judgment below -- be succinct:
+        """)
+        self.review_parser = SimplePromptParser(review_prompt)
+
+    def __call__(self, task_desc, execution_report, summary):
+        """
+        Args:
+            execution_report: should come from LLMModuleSummarizer
+            summary: should come from LLMModuleSummarizer
+        """
+        messages = self.review_parser(task=task_desc, report=execution_report, summary=summary)
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        new_instruct = self.llm.client.extract_text_or_completion_object(response)[0]
-        new_node = {'content': new_instruct, 'role': 'system'}
-        return new_node
+        return self.llm.client.extract_text_or_completion_object(response)[0]
+
+# causal attribution
+# blame assignment
+
+# in order to do system updates, we need:
+# delta x, delta y
+# delta y is from feedback, not much we can do or need to do (besides synthesis)
+# delta x is from input, system analysis
+class LLMAgentGraphDesigner(LLMCallable):
+    pass
 
 
-class AgentExecutionSummary:
-    ANALYSIS_PROMPT = dedent("""
-    Considering the following task:
-
-    TASK: {task}
-
-    Here are the list of agents involved in completing the task:
-
-    AGENT LIST:
-    {agent_list}
-
-    Here is a brief summary of how these agents attempted to solve this task:
-
-    """)
-
-
-def simple_shrink(dot_str, shrink=True):
-    """
-    This provides a heuristic shrink to reduce the lines of docstring that describes the graph.
-
-    Args:s
-        dot_str: the returned object from calling backward on a node with (visualize=True, reverse_plot=False)
-        shrink: if set True, the dot_str will not be a valid GraphViz dot str; otherwise it will still be valid
-
-    Returns:
-        A string representation of the graph
-
-    """
-
-    begin_str = """digraph {""" + '\n'
-    end_str = """}"""
-
-    # step 1: break into miniblocks
-    blocks = []
-    block_continued = []
-    for i, line in enumerate(dot_str.split('\n')):
-        if "->" in line and len(block_continued) != 0:
-            blocks.append("\n".join(block_continued))
-            block_continued = [line]
-        elif "}" not in line and line.strip() != "" and "{" not in line:
-            block_continued.append(line)  # give back the line break
-
-    blocks.append('\n'.join(block_continued))
-
-    # step 2: re-order blocks based on "->" directions
-    sorted_blocks = []
-
-    for block in blocks:
-        sub_blocks = []  # should have 3 elements
-        continued_sub = []
-        for b in block.split('\n'):
-            if '->' in b:
-                sub_blocks.append(b)
-            elif b.strip()[-1] == ']' and len(continued_sub) != 0:
-                continued_sub.append(b)
-                sub_blocks.append("\n".join(continued_sub))
-                continued_sub = []
-            else:
-                continued_sub.append(b)
-
-        # check order now
-        ordered_sub_blocks = [sub_blocks[0]]
-        first, second = sub_blocks[0].strip().split(" -> ")
-
-        if first in sub_blocks[1] and second in sub_blocks[2]:
-            ordered_sub_blocks.extend([sub_blocks[1], sub_blocks[2]])
-        else:
-            ordered_sub_blocks.extend([sub_blocks[2], sub_blocks[1]])
-
-        sorted_blocks.append(ordered_sub_blocks)
-
-    blocks = sorted_blocks
-    # reverse the block to reveal computation structure from top to bottom
-    blocks.reverse()
-
-    # step 3: shrink the str representation by the following ops:
-    # (all of these are inspired by Graphviz's actual display)
-    # By default, we only want to display the message sender (parent's node message)
-    # We only display child when remote edges occur
-
-    # 3.1 - if a node has multiple parents, we don't display the child node's content until after displaying all the parents
-    # 3.2 - if a child node is immeidately the parent of another node
-
-    shrunk_blocks = []
-    for i in range(len(sorted_blocks)):
-        # forward search to find common child
-        child = sorted_blocks[i][0].strip().split(" -> ")[1]
-        found = False
-        # condition 1: look-ahead (if the child has multiple parents, we delay till the last parent)
-        for block in sorted_blocks[i + 1:]:
-            if child in block[0]:
-                # see if it's "-> child" or "child ->"
-                left, right = block[0].strip().split(" -> ")
-                if right == child:
-                    found = True
-        # condition 2: if the next immediate step, the child is a message sender, then it will be displayed anyway, we can skip here
-        if i + 1 < len(sorted_blocks):
-            left, right = sorted_blocks[i + 1][0].strip().split(" -> ")
-            if left == child:
-                found = True
-
-        if found:
-            shrunk_blocks.append(sorted_blocks[i][:2])
-        else:
-            shrunk_blocks.append(sorted_blocks[i])
-
-    blocks = shrunk_blocks
-    blocks = ["\n".join(b) for b in blocks]
-
-    return begin_str + "\n".join(blocks) + '\n' + end_str
+if __name__ == '__main__':
+    # add a few unit tests here
+    pass

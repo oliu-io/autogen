@@ -93,6 +93,101 @@ def verbalize(next_obs, feedback, reward):
         message += f"Instruction: {next_obs}\n\n"
     return message
 
+def simple_shrink(dot_str, shrink=True):
+    """
+    This provides a heuristic shrink to reduce the lines of docstring that describes the graph.
+
+    Args:s
+        dot_str: the returned object from calling backward on a node with (visualize=True, reverse_plot=False)
+        shrink: if set True, the dot_str will not be a valid GraphViz dot str; otherwise it will still be valid
+
+    Returns:
+        A string representation of the graph
+
+    """
+
+    begin_str = """digraph {""" + '\n'
+    end_str = """}"""
+
+    # step 1: break into miniblocks
+    blocks = []
+    block_continued = []
+    for i, line in enumerate(dot_str.split('\n')):
+        if "->" in line and len(block_continued) != 0:
+            blocks.append("\n".join(block_continued))
+            block_continued = [line]
+        elif "}" not in line and line.strip() != "" and "{" not in line:
+            block_continued.append(line)  # give back the line break
+
+    blocks.append('\n'.join(block_continued))
+
+    # step 2: re-order blocks based on "->" directions
+    sorted_blocks = []
+
+    for block in blocks:
+        sub_blocks = []  # should have 3 elements
+        continued_sub = []
+        for b in block.split('\n'):
+            if '->' in b:
+                sub_blocks.append(b)
+            elif b.strip()[-1] == ']' and len(continued_sub) != 0:
+                continued_sub.append(b)
+                sub_blocks.append("\n".join(continued_sub))
+                continued_sub = []
+            else:
+                continued_sub.append(b)
+
+        # check order now
+        ordered_sub_blocks = [sub_blocks[0]]
+        first, second = sub_blocks[0].strip().split(" -> ")
+
+        if first in sub_blocks[1] and second in sub_blocks[2]:
+            ordered_sub_blocks.extend([sub_blocks[1], sub_blocks[2]])
+        else:
+            ordered_sub_blocks.extend([sub_blocks[2], sub_blocks[1]])
+
+        sorted_blocks.append(ordered_sub_blocks)
+
+    blocks = sorted_blocks
+    # reverse the block to reveal computation structure from top to bottom
+    blocks.reverse()
+
+    # step 3: shrink the str representation by the following ops:
+    # (all of these are inspired by Graphviz's actual display)
+    # By default, we only want to display the message sender (parent's node message)
+    # We only display child when remote edges occur
+
+    # 3.1 - if a node has multiple parents, we don't display the child node's content until after displaying all the parents
+    # 3.2 - if a child node is immeidately the parent of another node
+
+    shrunk_blocks = []
+    for i in range(len(sorted_blocks)):
+        # forward search to find common child
+        child = sorted_blocks[i][0].strip().split(" -> ")[1]
+        found = False
+        # condition 1: look-ahead (if the child has multiple parents, we delay till the last parent)
+        for block in sorted_blocks[i + 1:]:
+            if child in block[0]:
+                # see if it's "-> child" or "child ->"
+                left, right = block[0].strip().split(" -> ")
+                if right == child:
+                    found = True
+        # condition 2: if the next immediate step, the child is a message sender, then it will be displayed anyway, we can skip here
+        if i + 1 < len(sorted_blocks):
+            left, right = sorted_blocks[i + 1][0].strip().split(" -> ")
+            if left == child:
+                found = True
+
+        if found:
+            shrunk_blocks.append(sorted_blocks[i][:2])
+        else:
+            shrunk_blocks.append(sorted_blocks[i])
+
+    blocks = shrunk_blocks
+    blocks = ["\n".join(b) for b in blocks]
+
+    return begin_str + "\n".join(blocks) + '\n' + end_str
+
 import re
 
 # Currently do not support nested if-statement or for-loop
@@ -126,6 +221,7 @@ class SimplePromptParser:
                 content = self.populate_template_for_each(content, key, **kwargs)
             # content = self.populate_template_for_each(content , **kwargs)
             content = self.populate_vars(content, **kwargs)
+            content = content.strip()
             if self.reduce_linebreaks:
                 # match multiple line breaks and replace with a single line break
                 content = re.sub(r"(\n\s*){2,}", "\n\n", content)
