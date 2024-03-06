@@ -396,6 +396,39 @@ class LLMModuleVerifier(LLMCallable):
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         return self.llm.client.extract_text_or_completion_object(response)[0]
 
+@dataclass
+class Module:
+    name: str
+    summary: str
+    exec_report: str
+    review: str
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "summary": self.summary,
+            "exec_report": self.exec_report,
+            "review": self.review
+        }
+
+class LLMAgentGraphAnalyzer(object):
+    # this is a simple class to process the information
+    # and prep for GraphDesigner or SystemMessageUpdate
+    def __init__(self, config_list, task_desc):
+        self.reviewer = LLMModuleVerifier(config_list)
+        self.summarizer = LLMModuleSummarizer(config_list)
+        self.task_desc = task_desc
+
+    def analyze(self, dot_string):
+        blocks = parse_blocks(dot_string)
+        modules = []
+        for block in blocks:
+            execution_report, summary = self.summarizer(self.task_desc, [block])
+            review = self.reviewer(self.task_desc, execution_report, summary)
+            module = Module(name=blocks[0].name, summary=summary, exec_report=execution_report, review=review)
+            modules.append(module)
+        return modules
+
 # causal attribution
 # blame assignment
 
@@ -404,6 +437,69 @@ class LLMModuleVerifier(LLMCallable):
 # delta y is from feedback, not much we can do or need to do (besides synthesis)
 # delta x is from input, system analysis
 class LLMAgentGraphDesigner(LLMCallable):
+    def __init__(self, config_list, task_desc, *args, **kwargs):
+        sys_msg = dedent("""
+        Someone designed a system of modules that takes inputs and produces outputs.
+        A report is produced on how each module functions and whether they are useful or not.
+        
+        Your job is to update the design of the system given the report.
+        You can introduce more modules or remove modules.
+        """)
+
+        super().__init__(config_list, sys_msg, *args, **kwargs)
+
+        design_prompt = dedent("""
+        Here is the task description:
+        <Task>
+        {{task}}
+        </Task>
+
+        This is a list of modules:
+        <Module List>
+        {{#each modules}}
+        {{this.name}}: {{this.summary}}
+        {{~/each}}
+        </Module List>
+        
+        This is the report for each module:
+        {{#each modules}}
+        Module Name: {{this.name}}
+        <Report>
+        {{this.report}}
+        </Report>
+        
+        <Review>
+        {{this.review}}
+        </Review>
+        {{~/each}}
+        
+        MODULE LIST:
+        {module_list}
+    
+        Hint:
+        # You should consider if the module's name and profile match the task.
+        # Considering the effort, you should select less then {{max_num}} modules; less is better.
+        # Separate module names by commas and use "_" instead of space. For example, Product_manager
+        # Only return the list of module names.
+        """)
+        self.design_parser = SimplePromptParser(design_prompt)
+        self.task_desc = task_desc
+
+    def __call__(self, modules):
+        """
+        Args:
+            execution_report: should come from LLMModuleSummarizer
+            summary: should come from LLMModuleSummarizer
+        """
+        list_of_modules = [m.to_dict() for m in modules]
+        messages = self.design_parser(modules=list_of_modules, task=self.task_desc, max_num=5)
+        response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
+        new_list_of_modules = self.llm.client.extract_text_or_completion_object(response)[0]
+
+        return
+
+
+class LLMSystemMessageUpdate(LLMCallable):
     pass
 
 
