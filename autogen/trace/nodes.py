@@ -339,7 +339,7 @@ class Node(AbstractNode[T]):
 
     def __round__(self, n=None):
         import autogen.trace.operators as ops
-        return ops.round(self, n)
+        return ops.round(self, node(n) if n is not None else None)
 
     def __floor__(self):
         import autogen.trace.operators as ops
@@ -356,55 +356,55 @@ class Node(AbstractNode[T]):
     ## Normal arithmetic operators
     def __add__(self, other):
         import autogen.trace.operators as ops
-        return ops.add(self, other)
+        return ops.add(self, node(other))
 
     def __sub__(self, other):
         import autogen.trace.operators as ops
-        return ops.subtract(self, other)
+        return ops.subtract(self, node(other))
 
     def __mul__(self, other):
         import autogen.trace.operators as ops
-        return ops.multiply(self, other)
+        return ops.multiply(self, node(other))
 
     def __floordiv__(self, other):
         import autogen.trace.operators as ops
-        return ops.floor_divide(self, other)
+        return ops.floor_divide(self, node(other))
 
     def __truediv__(self, other):
         import autogen.trace.operators as ops
-        return ops.divide(self, other)
+        return ops.divide(self, node(other))
 
     def __mod__(self, other):
         import autogen.trace.operators as ops
-        return ops.mod(self, other)
+        return ops.mod(self, node(other))
 
     def __divmod__(self, other):
         import autogen.trace.operators as ops
-        return ops.divmod(self, other)
+        return ops.divmod(self, node(other))
 
     def __pow__(self, other):
         import autogen.trace.operators as ops
-        return ops.power(self, other)
+        return ops.power(self, node(other))
 
     def __lshift__(self, other):
         import autogen.trace.operators as ops
-        return ops.lshift(self, other)
+        return ops.lshift(self, node(other))
 
     def __rshift__(self, other):
         import autogen.trace.operators as ops
-        return ops.rshift(self, other)
+        return ops.rshift(self, node(other))
 
     def __and__(self, other):
         import autogen.trace.operators as ops
-        return ops.and_(self, other)
+        return ops.and_(self, node(other))
 
     def __or__(self, other):
         import autogen.trace.operators as ops
-        return ops.or_(self, other)
+        return ops.or_(self, node(other))
 
     def __xor__(self, other):
         import autogen.trace.operators as ops
-        return ops.xor(self, other)
+        return ops.xor(self, node(other))
 
 
 class ParameterNode(Node[T]):

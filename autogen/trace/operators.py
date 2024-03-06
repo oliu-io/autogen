@@ -7,10 +7,9 @@ from autogen.trace.trace_ops import trace_op
 import copy
 
 
-@trace_op('[identity] This is an identity operator of x.', node_dict='auto')
 def identity(x : Node):
     # identity(x) behaves the same as x.clone()
-    return copy.deepcopy(x.data)
+    return x.clone()
 
 # Unary operators and functions
 
