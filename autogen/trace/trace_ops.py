@@ -77,7 +77,7 @@ def trace_op(description, n_outputs=1, node_dict=None):
                 nodes =  wrap_output(outputs, inputs)
                 parents = set(nodes.parents) if isinstance(nodes, Node) else set()
             else:
-                nodes = (wrap_output(outputs[i], inputs) for i in range(n_outputs))
+                nodes = tuple(wrap_output(outputs[i], inputs) for i in range(n_outputs))
                 parents = set.union(*[set(node.parents) if isinstance(nodes, Node) else set() for node in nodes])
 
             # Make sure all nodes in used_nodes are in the parents of the returned node.
