@@ -15,7 +15,6 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
-# TODO rename to trace_op
 def trace_op(description, n_outputs=1, node_dict=None):
     def decorator(fun):
         """ This is a decorator to trace a function. The wrapped function returns a MessageNode.
@@ -42,14 +41,9 @@ def trace_op(description, n_outputs=1, node_dict=None):
             """ Wrap the output as a MessageNode of inputs as the parents."""
             if output is None:  # We keep None as None.
                 return output
-            if len(inputs)==0:  # If no nodes are used, we don't need to wrap the output as a MessageNode.
-                return Node(output, name=operator_name)
             # Some nodes are used in the operator fun, we need to wrap the output as a MessageNode.
-            if isinstance(output, MessageNode):  # If the output is already a Node, we don't need to wrap it.
-                if not all([node in output.parents for node in inputs]):
-                     raise ValueError(f"The operator {fun} returns a MessageNode but not all nodes used in the operator call are part of the inputs of the MessageNode.")
+            if isinstance(output, Node):  # If the output is already a Node, we don't need to wrap it.
                 return output  # NOTE User who implements fun is responsible for the graph structure.
-            # Else, we need to wrap the output as a MessageNode
             return MessageNode(output, description=description, inputs=inputs, name=operator_name)
 
 
@@ -70,7 +64,6 @@ def trace_op(description, n_outputs=1, node_dict=None):
                 # the nodes in used_nodes
                 inputs = list(used_nodes)
             else:  # Otherwise we represent inputs as dict
-
                 assert node_dict == 'auto' or isinstance(node_dict, dict)
                 spec = inspect.getcallargs(fun, *args, **kwargs) # Read it from the input signature
                 if isinstance(node_dict, dict):
@@ -81,9 +74,16 @@ def trace_op(description, n_outputs=1, node_dict=None):
                 inputs = {k:v for k,v in spec.items() if v in used_nodes}
 
             if n_outputs==1:
-                return wrap_output(outputs, inputs)
+                nodes =  wrap_output(outputs, inputs)
+                parents = set(nodes.parents) if isinstance(nodes, Node) else set()
             else:
-                return (wrap_output(outputs[i], inputs) for i in range(n_outputs))
+                nodes = (wrap_output(outputs[i], inputs) for i in range(n_outputs))
+                parents = set.union(*[set(node.parents) if isinstance(nodes, Node) else set() for node in nodes])
+
+            # Make sure all nodes in used_nodes are in the parents of the returned node.
+            if not all([node in parents for node in used_nodes]):
+                raise ValueError(f"Not all nodes used in the operator {fun} are specified as inputs of the returned node.")
+            return nodes
 
         return wrapper
     return decorator
