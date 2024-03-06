@@ -122,7 +122,7 @@ class AbstractNode(Generic[T]):
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'Node: ({self.name}, dtype={type(self._data)})'
+        return f'Node: ({self.name}, dtype={type(self._data)}, data={self._data})'
 
     def __deepcopy__(self, memo):
         """ This creates a deep copy of the node, which is detached from the original graph. """
@@ -289,6 +289,7 @@ class Node(AbstractNode[T]):
     def __bool__(self):
         raise AttributeError(f"Cannot convert {self} to bool.")
 
+    # Get attribute and call operators
     def getattr(self, key):
         attr = self._data[key] if isinstance(self._data, dict) else getattr(self._data, key)
         return MessageNode(attr, inputs={'container':self}, description=f'[getattr] This is a get attribute operator of {key}.', name=f'getattr')
@@ -307,6 +308,52 @@ class Node(AbstractNode[T]):
         return output
 
     # We overload magic methods that return a value. These methods return a MessageNode.
+    # container magic methods
+    def len(self):
+        import autogen.trace.operators as ops
+        return ops.len_(self)
+
+    def __getitem__(self, key):
+        import autogen.trace.operators as ops
+        return ops.getitem(self, node(key))
+
+    def __contains__(self, item):
+        raise AttributeError(f"Cannot use 'in' operator on {self}.")
+
+    # Unary operators and functions
+    def __pos__(self):
+        import autogen.trace.operators as ops
+        return ops.pos(self)
+
+    def __neg__(self):
+        import autogen.trace.operators as ops
+        return ops.neg(self)
+
+    def __abs__(self):
+        import autogen.trace.operators as ops
+        return ops.abs(self)
+
+    def __invert__(self):
+        import autogen.trace.operators as ops
+        return ops.invert(self)
+
+    def __round__(self, n=None):
+        import autogen.trace.operators as ops
+        return ops.round(self, n)
+
+    def __floor__(self):
+        import autogen.trace.operators as ops
+        return ops.floor(self)
+
+    def __ceil__(self):
+        import autogen.trace.operators as ops
+        return ops.ceil(self)
+
+    def __trunc__(self):
+        import autogen.trace.operators as ops
+        return ops.trunc(self)
+
+    ## Normal arithmetic operators
     def __add__(self, other):
         import autogen.trace.operators as ops
         return ops.add(self, other)
@@ -319,21 +366,33 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
         return ops.multiply(self, other)
 
-    def __truediv__(self, other):
-        import autogen.trace.operators as ops
-        return ops.divide(self, other)
-
     def __floordiv__(self, other):
         import autogen.trace.operators as ops
         return ops.floor_divide(self, other)
+
+    def __truediv__(self, other):
+        import autogen.trace.operators as ops
+        return ops.divide(self, other)
 
     def __mod__(self, other):
         import autogen.trace.operators as ops
         return ops.mod(self, other)
 
+    def __divmod__(self, other):
+        import autogen.trace.operators as ops
+        return ops.divmod(self, other)
+
     def __pow__(self, other):
         import autogen.trace.operators as ops
         return ops.power(self, other)
+
+    def __lshift__(self, other):
+        import autogen.trace.operators as ops
+        return ops.lshift(self, other)
+
+    def __rshift__(self, other):
+        import autogen.trace.operators as ops
+        return ops.rshift(self, other)
 
     def __and__(self, other):
         import autogen.trace.operators as ops
@@ -347,18 +406,6 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
         return ops.xor(self, other)
 
-    def __neg__(self):
-        import autogen.trace.operators as ops
-        return ops.neg(self)
-
-    def __pos__(self):
-        import autogen.trace.operators as ops
-        return ops.pos(self)
-
-    def __invert__(self):
-        import autogen.trace.operators as ops
-        return ops.invert(self)
-
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
@@ -367,7 +414,7 @@ class ParameterNode(Node[T]):
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'ParameterNode: ({self.name}, dtype={type(self._data)})'
+        return f'ParameterNode: ({self.name}, dtype={type(self._data)}, data={self._data})'
 
 class MessageNode(Node[T]):
     """ Output of an operator.
@@ -401,7 +448,7 @@ class MessageNode(Node[T]):
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
-        return f'MessageNode: ({self.name}, dtype={type(self._data)})'
+        return f'MessageNode: ({self.name}, dtype={type(self._data)}, data={self._data})'
 
     def _add_feedback(self, child, feedback):
         """ Add feedback from a child. """
