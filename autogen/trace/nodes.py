@@ -26,6 +26,12 @@ class Graph:
         self._nodes = defaultdict(list)  # a lookup table to find nodes by name
         self._levels = defaultdict(list)  # a lookup table to find nodes at a certain level # TODO do we need this?
 
+    def clear(self):
+        for node in self._nodes.values():
+            del node
+        self._nodes = defaultdict(list)
+        self._levels = defaultdict(list)
+
     def register(self, node):
         assert isinstance(node, Node)
         assert len(node.name.split(':'))==2
@@ -185,7 +191,7 @@ class Node(AbstractNode[T]):
         """ Add feedback from a child. """
         self.feedback[child].append(feedback)
 
-    def backward(self, feedback: str, propagate=None, retain_graph=False,
+    def backward(self, feedback: str='', propagate=None, retain_graph=False,
                     visualize=False, simple_visualization=True, reverse_plot=False, print_limit=100):
         """ Backward pass.
 
@@ -228,7 +234,7 @@ class Node(AbstractNode[T]):
             if visualize:
                 digraph.node(get_name(self), label=get_label(self))
             self._backwarded = not retain_graph
-            return
+            return digraph
 
         # TODO optimize for efficiency
         # TODO check memory leak
