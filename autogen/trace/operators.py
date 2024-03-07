@@ -157,7 +157,7 @@ def not_in(x : Node, y : Node):
 
 # Indexing and slicing
 @trace_op('[getitem] This is a getitem operator of x based on index.', node_dict='auto')
-def getitem(x : Node, index : Node, node_dict='auto'):
+def getitem(x : Node, index : Node):
     return x.data[index.data]
 
 @trace_op('[len] This is a len operator of x.', node_dict='auto')
