@@ -1,4 +1,5 @@
 from autogen.trace.nodes import Node, ParameterNode
+import copy
 
 class NodeContainer:
     pass
@@ -54,3 +55,7 @@ def apply_op(op, output, *args, **kwargs):
     else:
         pass
     return output
+
+def to_data(obj):
+    """ Extract the data from a node or a container of nodes."""
+    return apply_op(lambda x: x.data, copy.deepcopy(obj), obj)

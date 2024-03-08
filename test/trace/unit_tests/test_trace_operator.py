@@ -10,7 +10,7 @@ condition = Node(True)
 # Test node_dict=='auto'
 @trace_op('[auto_cond] This selects x if condition is True, otherwise y.')
 def auto_cond(condition : Node, x : Node, y : Node):
-    x, y, condition = x.data, y.data, condition.data  # This makes sure all data are read
+    x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
 output = auto_cond(condition, x, y)
 assert output.name.split(':')[0] =='auto_cond'
@@ -20,7 +20,7 @@ assert output._inputs[x.name] is x and output._inputs[y.name] is y and output._i
 # here we use the signature to get the keys of message_node._inputs
 @trace_op('[cond] This selects x if condition is True, otherwise y.', node_dict='auto')
 def cond(condition : Node, x : Node, y : Node):
-    x, y, condition = x.data, y.data, condition.data  # This makes sure all data are read
+    x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
 
 output = cond(condition, x, y)
@@ -30,7 +30,7 @@ assert output._inputs['x'] is x and output._inputs['y'] is y and output._inputs[
 # Test dot is okay for operator name
 @trace_op('[fancy.cond] This selects x if condition is True, otherwise y.', node_dict='auto')
 def fancy_cond(condition : Node, x : Node, y : Node):
-    x, y, condition = x.data, y.data, condition.data  # This makes sure all data are read
+    x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
 output = fancy_cond(condition, x, y)
 assert output.name.split(':')[0] =='fancy.cond'
@@ -43,4 +43,4 @@ def foo(x, y):
     return z
 z = foo(x, y)
 assert z.data == 3
-assert z.parents == {x, y}
+assert set(z.parents) == {x, y}
