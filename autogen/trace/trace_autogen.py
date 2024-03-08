@@ -88,7 +88,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             if wrap_all_replies or reply_func in self.default_reply_funcs:
                 if not inspect.iscoroutinefunction(reply_func):
                     _reply_func = reply_func
-                    @trace_op(f'[Agent] {str(reply_func)}.', n_outputs=2, extract_input=False)
+                    @trace_op(f'[Agent] {str(reply_func)}.', n_outputs=2, unpack_input=False)
                     def reply_func(self, messages, sender, config):
                         assert all(isinstance(m, Node) for m in messages), f"All messages must be Node type, but got {messages}."
                         return _reply_func(self, messages=[m.data for m in messages] if messages is not None else messages, sender=sender, config=config)
@@ -362,7 +362,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             raise NotImplementedError
 
         # TODO finalize the ones below
-        @trace_op('[generate_oai_reply] Generate a reply using autogen.oai.', n_outputs=2, extract_input=False)
+        @trace_op('[generate_oai_reply] Generate a reply using autogen.oai.', n_outputs=2, unpack_input=False)
         def generate_oai_reply(
             self,
             messages: Optional[List[None]] = None,

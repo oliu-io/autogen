@@ -18,7 +18,7 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
-def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True, extract_input=True):
+def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True, unpack_input=True):
     """
         Wrap a function as a FunModule, which returns node objects.
         The input signature to the wrapped function stays the same.
@@ -29,7 +29,7 @@ def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True, extract
                          n_outputs=n_outputs,
                          node_dict=node_dict,
                          wrap_output=wrap_output,
-                         extract_input=extract_input)
+                         unpack_input=unpack_input)
         def wrapper(*args, **kwargs):
             return fun(*args, **kwargs)
         return wrapper
@@ -48,7 +48,7 @@ class FunModule(Module):
                 'auto': the inputs are represented as a dictionary, where the keys are the parameter names and the values are the nodes.
                 dict : a dictionary to describe the inputs, where the key is a node used in this operator and the value is the node's name as described in description ; when node_dict is provided, all the used_nodes need to be in node_dict. Providing node_dict can give a correspondance between the inputs and the description of the operator.
             wrap_output (bool): if True, the output of the operator is wrapped as a MessageNode; if False, the output is returned as is if the output is a Node.
-            extract_input (bool): if True, the input is extracted from the container of nodes; if False, the inputs are passed directly to the underlying function.
+            unpack_input (bool): if True, the input is extracted from the container of nodes; if False, the inputs are passed directly to the underlying function.
 
     """
     def __init__(self,
@@ -57,7 +57,7 @@ class FunModule(Module):
                  n_outputs : int = 1,
                  node_dict : Union[dict, None, str]= None,
                  wrap_output : bool = True,
-                 extract_input : bool = True
+                 unpack_input : bool = True
                  ):
         assert callable(fun), "fun must be a callable."
         assert description is not None, "description must be provided."
@@ -70,7 +70,7 @@ class FunModule(Module):
         self.n_outputs = n_outputs
         self.operator_name = get_operator_name(description)  # TODO using a dict?
         self.wrap_output = wrap_output
-        self.extract_input = extract_input
+        self.unpack_input = unpack_input
 
 
     def forward(self, *args, **kwargs):
@@ -82,7 +82,7 @@ class FunModule(Module):
         # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
         with trace_nodes() as used_nodes:
             _args, _kwargs = args, kwargs
-            if self.extract_input:  # extract data from container of nodes
+            if self.unpack_input:  # extract data from container of nodes
                 _args = to_data(args)
                 _kwargs = to_data(kwargs)
             outputs = self.fun(*_args, **_kwargs)
