@@ -18,23 +18,19 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
-def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True, unpack_input=True):
+def trace_op(description=None, n_outputs=1, node_dict=None, wrap_output=True, unpack_input=True):
     """
         Wrap a function as a FunModule, which returns node objects.
         The input signature to the wrapped function stays the same.
     """
     def decorator(fun):
-        fun =  FunModule(fun=fun,
+        return FunModule(fun=fun,
                          description=description,
                          n_outputs=n_outputs,
                          node_dict=node_dict,
                          wrap_output=wrap_output,
                          unpack_input=unpack_input)
-        def wrapper(*args, **kwargs):
-            return fun(*args, **kwargs)
-        return wrapper
     return decorator
-
 
 class FunModule(Module):
     """ This is a decorator to trace a function. The wrapped function returns a MessageNode.
@@ -53,25 +49,33 @@ class FunModule(Module):
     """
     def __init__(self,
                  fun : Callable,
-                 description : str,
+                 description : str = None,
                  n_outputs : int = 1,
                  node_dict : Union[dict, None, str]= None,
                  wrap_output : bool = True,
                  unpack_input : bool = True
                  ):
         assert callable(fun), "fun must be a callable."
-        assert description is not None, "description must be provided."
         assert isinstance(node_dict, dict) or (node_dict is None) or (node_dict=='auto'),  "node_dict must be a dictionary or None or 'auto."
-        # TODO how to describe the mapping and inputs automatically?
-        # description = getsource(fun)
+        self.info = dict(
+            name = fun.__qualname__,
+            doc = fun.__doc__,
+            signature = inspect.signature(fun),
+            source = inspect.getsource(fun),
+            )
+        if description is None:
+            # Generate the description from the function name and docstring.
+            description = f"[{self.info['name']}] {self.info['doc']}."
         self.fun = fun
         self.node_dict = node_dict
         self.description = description
         self.n_outputs = n_outputs
-        self.operator_name = get_operator_name(description)  # TODO using a dict?
         self.wrap_output = wrap_output
         self.unpack_input = unpack_input
 
+    @property
+    def name(self):
+        return get_operator_name(self.description)
 
     def forward(self, *args, **kwargs):
         """
@@ -124,8 +128,11 @@ class FunModule(Module):
             # NOTE User who implements fun is responsible for the graph structure.
             if isinstance(output, Node):
                 return output
-        return MessageNode(output, description=self.description, inputs=inputs, name=self.operator_name)
+        return MessageNode(output, description=self.description, inputs=inputs, name=self.name)
 
+    def __get__(self, obj, objtype):
+        # Support instance methods.
+        return functools.partial(self.__call__, obj)
 
 
 if __name__=='__main__':

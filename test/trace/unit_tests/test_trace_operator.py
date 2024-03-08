@@ -10,6 +10,10 @@ condition = Node(True)
 # Test node_dict=='auto'
 @trace_op('[auto_cond] This selects x if condition is True, otherwise y.')
 def auto_cond(condition : Node, x : Node, y : Node):
+    """
+    A function that selects x if condition is True, otherwise y.
+    """
+    # You can type comments in the function body
     x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
 output = auto_cond(condition, x, y)
@@ -48,6 +52,23 @@ assert set(z.parents) == {x, y}
 # Test tracing class method
 class Foo:
     @trace_op('[Foo.add] Add input x and input y')
+    def add(self, x, y):
+        z = x + y
+        return z
+foo = Foo()
+z = foo.add(x, y)
+
+# Test composition of trace_op with for all_all_methods
+from autogen.trace.utils import for_all_methods
+@for_all_methods
+def test_cls_decorator(fun):
+    def wrapper(*args, **kwargs):
+        return  fun(*args, **kwargs)
+    return wrapper
+@test_cls_decorator
+class Foo:
+    # Test automatic description generation
+    @trace_op()
     def add(self, x, y):
         z = x + y
         return z
