@@ -47,7 +47,7 @@ class DummyOptimizer(Optimizer):
             base = value
         else:
             raise NotImplementedError
-        new = base + " ".join([" ".join(l) for l in feedback.values()])
+        new = base + " ".join([" ".join(v) for v in feedback.values()])
         return new
 
 

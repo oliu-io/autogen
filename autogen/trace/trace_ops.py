@@ -150,8 +150,6 @@ class FunModule(Module):
 
 
 if __name__ == "__main__":
-    from autogen.trace.trace import node
-
     x = node("hello")
 
     @trace_op("[Custom] This is a test function.")

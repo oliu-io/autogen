@@ -1,6 +1,7 @@
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 from autogen.trace.trace import trace
 import copy
+from autogen.trace.optimizers import DummyOptimizer
 
 
 # Load LLM inference endpoints from an env variable or a file
@@ -13,7 +14,6 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 
 
 ## A simple demonstration of using backward and optimizer
-from autogen.trace.optimizers import DummyOptimizer
 
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
 

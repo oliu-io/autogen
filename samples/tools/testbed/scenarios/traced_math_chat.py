@@ -3,6 +3,8 @@ from autogen.agentchat.contrib.math_user_proxy_agent import MathUserProxyAgent
 from autogen.trace.trace import trace, compatibility
 import copy
 import random
+import datasets
+from autogen.trace.optimizers import DummyOptimizer
 
 # from ...include import testbed_utils
 
@@ -60,7 +62,7 @@ math_problem = (
     "Find all $x$ that satisfy the inequality $(2x+10)(x+3)<(3x+9)(x+8)$. Express your answer in interval notation."
 )
 
-import datasets
+
 
 data = datasets.load_dataset("competition_math")
 train_data = data["train"].shuffle(seed=global_seed)
@@ -90,7 +92,7 @@ mathproxyagent.initiate_chat(assistant, problem=math_problem)
 # testbed_utils.finalize(agents=[assistant, mathproxyagent])
 
 ## Using backward and optimizer from the trace_twoagent sample code
-from autogen.trace.optimizers import DummyOptimizer
+
 
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
 

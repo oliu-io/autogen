@@ -19,6 +19,8 @@ from eventlet.timeout import Timeout
 from pyomo.opt import TerminationCondition
 
 from autogen.trace import trace, compatibility
+import autogen
+import requests
 
 # %% System Messages
 WRITER_SYSTEM_MSG = """You are a chatbot to:
@@ -367,9 +369,6 @@ beginning.
 
 # ============= Trace / Optimization Code ===============
 
-import autogen
-import requests
-from autogen.trace import trace
 
 if __name__ == "__main__":
     config_list = autogen.config_list_from_json(

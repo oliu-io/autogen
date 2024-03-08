@@ -1,6 +1,7 @@
 from random import betavariate
 from autogen.trace.trace_ops import trace_op
 from autogen.trace.nodes import Node
+from autogen.trace.utils import for_all_methods
 
 x = Node(1, name="node_x")
 y = Node(2, name="node_y")
@@ -72,7 +73,6 @@ foo = Foo()
 z = foo.add(x, y)
 
 # Test composition of trace_op with for all_all_methods
-from autogen.trace.utils import for_all_methods
 
 
 @for_all_methods
