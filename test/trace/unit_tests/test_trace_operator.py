@@ -44,3 +44,12 @@ def foo(x, y):
 z = foo(x, y)
 assert z.data == 3
 assert set(z.parents) == {x, y}
+
+# Test tracing class method
+class Foo:
+    @trace_op('[Foo.add] Add input x and input y')
+    def add(self, x, y):
+        z = x + y
+        return z
+foo = Foo()
+z = foo.add(x, y)

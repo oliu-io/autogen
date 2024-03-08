@@ -6,6 +6,7 @@ from autogen.trace.nodes import MessageNode, USED_NODES, Node, node, get_operato
 from dill.source import getsource
 from collections.abc import Iterable
 import inspect
+import functools
 
 class trace_nodes:
     """ This is a context manager for keeping track which nodes are read/used in an operator."""
@@ -17,7 +18,7 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
-def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True):
+def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True, extract_input=True):
     """
         Wrap a function as a FunModule, which returns node objects.
         The input signature to the wrapped function stays the same.
@@ -27,7 +28,8 @@ def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True):
                          description=description,
                          n_outputs=n_outputs,
                          node_dict=node_dict,
-                         wrap_output=wrap_output)
+                         wrap_output=wrap_output,
+                         extract_input=extract_input)
     return decorator
 
 
@@ -105,7 +107,7 @@ class FunModule(Module):
             parents = set.union(*[set(node.parents) if isinstance(node, Node) else set() for node in nodes])
 
         # Make sure all nodes in used_nodes are in the parents of the returned node.
-        if not all([node in parents for node in used_nodes]):
+        if nodes is not None and not all([node in parents for node in used_nodes]):
             raise ValueError(f"Not all nodes used in the operator {self.fun} are specified as inputs of the returned node.")
         return nodes
 
@@ -120,6 +122,10 @@ class FunModule(Module):
             if isinstance(output, Node):
                 return output
         return MessageNode(output, description=self.description, inputs=inputs, name=self.operator_name)
+
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        return functools.partial(self.__call__, obj)
 
 
 if __name__=='__main__':
