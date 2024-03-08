@@ -24,12 +24,15 @@ def trace_op(description, n_outputs=1, node_dict=None, wrap_output=True, extract
         The input signature to the wrapped function stays the same.
     """
     def decorator(fun):
-        return FunModule(fun=fun,
+        fun =  FunModule(fun=fun,
                          description=description,
                          n_outputs=n_outputs,
                          node_dict=node_dict,
                          wrap_output=wrap_output,
                          extract_input=extract_input)
+        def wrapper(*args, **kwargs):
+            return fun(*args, **kwargs)
+        return wrapper
     return decorator
 
 
@@ -123,9 +126,6 @@ class FunModule(Module):
                 return output
         return MessageNode(output, description=self.description, inputs=inputs, name=self.operator_name)
 
-    def __get__(self, obj, objtype):
-        """Support instance methods."""
-        return functools.partial(self.__call__, obj)
 
 
 if __name__=='__main__':
