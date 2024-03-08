@@ -63,7 +63,6 @@ math_problem = (
 )
 
 
-
 data = datasets.load_dataset("competition_math")
 train_data = data["train"].shuffle(seed=global_seed)
 test_data = data["test"].shuffle(seed=global_seed)
