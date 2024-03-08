@@ -4,9 +4,9 @@ from graphviz import Digraph
 def for_all_methods(decorator):
     """ Applying a decorator to all methods of a class. """
     def decorate(cls):
-        for attr in cls.__dict__: # there's propably a better way to do this
-            if callable(getattr(cls, attr)) and not attr.startswith("__"):
-                setattr(cls, attr, decorator(getattr(cls, attr)))
+        for name, attr in cls.__dict__.items():
+            if callable(attr) and not name.startswith("__"):
+                setattr(cls, name, decorator(attr))
         return cls
     return decorate
 
@@ -399,7 +399,7 @@ def usage_test_2():
     {{#each examples}}
     {{role}}'s Assignment: {{this.assignment}}
 
-    Your Instruction: 
+    Your Instruction:
     {{this.instruction}}
     ---------------
     {{~/each}}
