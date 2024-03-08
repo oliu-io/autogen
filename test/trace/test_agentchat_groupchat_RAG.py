@@ -38,7 +38,6 @@ from autogen.trace.trace import trace, trace_class, node
 from autogen.trace.groupchat import GroupChat, GroupChatManager
 
 
-
 config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
 
 print("LLM models: ", [config_list[i]["model"] for i in range(len(config_list))])
@@ -127,7 +126,6 @@ def _reset_agents():
 
 
 def rag_chat():
-
     _reset_agents()
     groupchat = GroupChat(
         agents=[boss_aid, coder, pm, reviewer], messages=[], max_round=12, speaker_selection_method="round_robin"
@@ -142,15 +140,14 @@ def rag_chat():
     )
 
     from autogen.trace.propagators import retain_last_only_propagate
-    last_message = boss_aid.last_message_node()
-    print('last_message', last_message.data)
-    figure = last_message.backward('test', propagate=retain_last_only_propagate(), visualize=True, retain_graph=True)
-    figure.view(filename='figures/rag_chat')
 
+    last_message = boss_aid.last_message_node()
+    print("last_message", last_message.data)
+    figure = last_message.backward("test", propagate=retain_last_only_propagate(), visualize=True, retain_graph=True)
+    figure.view(filename="figures/rag_chat")
 
 
 def norag_chat():
-
     _reset_agents()
     groupchat = GroupChat(
         agents=[boss, coder, pm, reviewer],
@@ -168,11 +165,14 @@ def norag_chat():
     )
 
     from autogen.trace.propagators import retain_last_only_propagate
-    figure = boss.last_message_node().backward('test', propagate=retain_last_only_propagate(), visualize=True, simple_visualization=True)
-    figure.view(filename='figures/norag_chat')
+
+    figure = boss.last_message_node().backward(
+        "test", propagate=retain_last_only_propagate(), visualize=True, simple_visualization=True
+    )
+    figure.view(filename="figures/norag_chat")
+
 
 def call_rag_chat():
-
     _reset_agents()
 
     # In this case, we will have multiple user proxy agents and we don't initiate the chat
@@ -243,6 +243,7 @@ def call_rag_chat():
         manager,
         message=PROBLEM,
     )
+
 
 # %% [markdown]
 # ## Start Chat

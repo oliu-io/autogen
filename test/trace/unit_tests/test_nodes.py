@@ -4,28 +4,28 @@ from autogen.trace import operators as ops
 
 
 # Sum of str
-x = node('NodeX')
-y = node('NodeY')
+x = node("NodeX")
+y = node("NodeY")
 z = ops.add(x=x, y=y)
-print(f'Sum of Node[str]')
+print("Sum of Node[str]")
 print(f" x:{x.data}\n y:{y.data}\n z:{z.data}")
 
 assert z.data == x.data + y.data
 assert x in z.parents and y in z.parents
 assert z in x.children and z in y.children
-for k,v in z._inputs.items():
+for k, v in z._inputs.items():
     assert locals()[k] == v
 
-# Sum of intergers
+# Sum of integers
 x = node(1)
 y = node(2)
-z = ops.add(x,y)
-print(f'Sum of Node[int]')
+z = ops.add(x, y)
+print("Sum of Node[int]")
 print(f" x:{x.data}\n y:{y.data}\n z:{z.data}")
 assert z.data == x.data + y.data
 assert x in z.parents and y in z.parents
 assert z in x.children and z in y.children
-for k,v in z._inputs.items():
+for k, v in z._inputs.items():
     assert locals()[k] == v
 
 # Condition
@@ -34,7 +34,7 @@ z = ops.cond(condition, x, y)
 assert z.data == x.data if condition.data else y.data
 assert x in z.parents and y in z.parents and condition in z.parents
 assert z in x.children and z in y.children and z in condition.children
-for k,v in z._inputs.items():
+for k, v in z._inputs.items():
     assert locals()[k] == v
 
 # Getitem of list of Nodes
@@ -44,17 +44,17 @@ z = ops.getitem(x, index)
 assert z.data == x.data[index.data].data
 assert x in z.parents and index in z.parents
 assert z in x.children and z in index.children
-for k,v in z._inputs.items():
+for k, v in z._inputs.items():
     assert locals()[k] == v
 
 # Getitem of list
 index = node(0)
-x = node([1,2,3])
+x = node([1, 2, 3])
 z = ops.getitem(x, index)
 assert z.data == x.data[index.data]
 assert x in z.parents and index in z.parents
 assert z in x.children and z in index.children
-for k,v in z._inputs.items():
+for k, v in z._inputs.items():
     assert locals()[k] == v
 
 # Test copy
@@ -71,14 +71,14 @@ assert z not in z_copy.parents and len(z_copy.parents) == 0 and z_copy not in z.
 
 
 # Test magic function
-x = node('NodeX')
-y = node('NodeY')
-z = x+y
-print(f'Sum of Node[str]')
+x = node("NodeX")
+y = node("NodeY")
+z = x + y
+print("Sum of Node[str]")
 print(f" x:{x.data}\n y:{y.data}\n z:{z.data}")
 
 assert z.data == x.data + y.data
 assert x in z.parents and y in z.parents
 assert z in x.children and z in y.children
-for k,v in z._inputs.items():
+for k, v in z._inputs.items():
     assert locals()[k] == v

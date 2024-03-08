@@ -1,6 +1,6 @@
 """
 This file demonstrates how to do a fixed dataset based optimization
-(Other files focus on interactive enviornments)
+(Other files focus on interactive environments)
 
 Example notebook: https://github.com/microsoft/autogen/blob/main/notebook/agentchat_MathChat.ipynb
 
@@ -11,7 +11,7 @@ import autogen
 from autogen.agentchat.contrib.math_user_proxy_agent import MathUserProxyAgent
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
-from autogen.trace.trace import trace, compatability
+from autogen.trace.trace import trace, compatibility
 from autogen.trace.optimizers import LLMOptimizer
 from autogen.trace.propagators import retain_last_only_propagate
 from textwrap import dedent, indent
@@ -28,12 +28,16 @@ from autogen.math_utils import is_equiv
 
 dataset = load_dataset("hendrycks/competition_math")
 
-config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
-             "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
-         })
+config_list = config_list_from_json(
+    env_or_file="OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
+    },
+)
 assert len(config_list) > 0
 
 # ====== Helper Functions ======
+
 
 def remove_boxed(string: str):
     """Source: https://github.com/hendrycks/math
@@ -88,6 +92,7 @@ def last_boxed_only_string(string: str):
 
     return retval
 
+
 def get_answer(solution):
     if solution is None:
         return None
@@ -99,6 +104,7 @@ def get_answer(solution):
         return None
     return answer
 
+
 def _is_termination_msg_mathchat(message):
     """Check if a message is a termination message."""
     if isinstance(message, dict):
@@ -106,15 +112,14 @@ def _is_termination_msg_mathchat(message):
         if message is None:
             return False
     cb = extract_code(message)
-    contain_code = False
     for c in cb:
         if c[0] == "python" or c[0] == "wolfram":
-            contain_code = True
             break
 
     terminate = get_answer(message) is not None and get_answer(message) != ""
 
     return terminate
+
 
 # 1. create an AssistantAgent instance named "assistant"
 assistant = trace(autogen.AssistantAgent)(
@@ -125,7 +130,7 @@ assistant = trace(autogen.AssistantAgent)(
         "seed": 42,
         "config_list": config_list,
     },
-    max_consecutive_auto_reply=2
+    max_consecutive_auto_reply=2,
 )
 
 # 2. create the MathUserProxyAgent instance named "mathproxyagent"
@@ -134,12 +139,13 @@ mathproxyagent = trace(MathUserProxyAgent)(
     name="mathproxyagent",
     human_input_mode="NEVER",
     code_execution_config={"use_docker": False},
-    is_termination_msg=_is_termination_msg_mathchat
+    is_termination_msg=_is_termination_msg_mathchat,
 )
+
 
 def generate_answer(math_problem):
     mathproxyagent.initiate_chat(assistant, problem=math_problem, clear_history=True)
-    last_message = mathproxyagent.last_message_node(role='user')
+    last_message = mathproxyagent.last_message_node(role="user")
     # "assistant" means self, "user" means the other agent
     return last_message
 
@@ -147,26 +153,37 @@ def generate_answer(math_problem):
 def check_equiv(sol1, sol2):
     return is_equiv(get_answer(sol1), get_answer(sol2))
 
-dp = DatasetProcessor("problem", "solution",
-                      reward_fn=check_equiv)
 
-optimizer = LLMOptimizer(assistant.parameters,
-                         config_list=config_list,
-                         task_description=dedent("""
+dp = DatasetProcessor("problem", "solution", reward_fn=check_equiv)
+
+optimizer = LLMOptimizer(
+    assistant.parameters,
+    config_list=config_list,
+    task_description=dedent(
+        """
                          You are helping a student solve math problems.
                          Give them some instructions on how to avoid errors.
-                         """))
+                         """
+    ),
+)
 
 performances = []
 exp_runs = 1
 optimization_steps = 1
 
 for _ in range(exp_runs):
-    info = train_with_datasets(dataset['train'], dp, generate_answer, optimizer,
-                  steps=optimization_steps, propagate_fn=retain_last_only_propagate(),
-                  verbose=False, seed=123)
-    print("Agent reward history:", info['rewards'])
-    performances.append(info['rewards'])
+    info = train_with_datasets(
+        dataset["train"],
+        dp,
+        generate_answer,
+        optimizer,
+        steps=optimization_steps,
+        propagate_fn=retain_last_only_propagate(),
+        verbose=False,
+        seed=123,
+    )
+    print("Agent reward history:", info["rewards"])
+    performances.append(info["rewards"])
 
 performances = backfill_lists(performances)
 plot_agent_performance(performances, backfilled=True)

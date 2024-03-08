@@ -12,13 +12,16 @@ from autogen.agentchat.conversable_agent import logger
 import asyncio
 import copy
 from autogen.oai.client import OpenAIWrapper
+
 # Here we implement wrapper of Autogen ConversableAgent class
 import warnings
 
-class agent_scope():
-    """ This is a context manager that can be used to add the agent's name to the
+
+class agent_scope:
+    """This is a context manager that can be used to add the agent's name to the
     scope NAME_SCOPES when a method of an agent is called. This is to track
     which agents create nodes."""
+
     def __init__(self, agent_name):
         self.agent_name = agent_name
 
@@ -28,29 +31,31 @@ class agent_scope():
     def __exit__(self, exc_type, exc_value, traceback):
         NAME_SCOPES.pop()
 
+
 @for_all_methods
 def trace_agent_scope(fun):
-    """ This is a decorator that can be applied on all methods of a
+    """This is a decorator that can be applied on all methods of a
     ConversableAgent. For a decorated agent, the agent's name is added to the
     scope NAME_SCOPES when a method of an agent is called. This is to track
     which agents create nodes."""
+
     def wrapper(self, *args, **kwargs):
         assert isinstance(self, ConversableAgent)
         with agent_scope(self.name):
             output = fun(self, *args, **kwargs)
         return output
+
     return wrapper
 
 
 def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
-    """ Return a decorated Agent class who communicates with MessageNode type message, which can be traced."""
+    """Return a decorated Agent class who communicates with MessageNode type message, which can be traced."""
 
     # make all the messages the Node type
     assert issubclass(AgentCls, ConversableAgent)
 
     @trace_agent_scope
     class TracedAgent(AgentCls):
-
         # We wrap the following methods to trace the creation of the nodes.
         default_reply_funcs = (
             ConversableAgent.generate_oai_reply,
@@ -88,31 +93,46 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             if wrap_all_replies or reply_func in self.default_reply_funcs:
                 if not inspect.iscoroutinefunction(reply_func):
                     _reply_func = reply_func
-                    @trace_op(f'[Agent] {str(reply_func)}.', n_outputs=2, unpack_input=False)
+
+                    @trace_op(f"[Agent] {str(reply_func)}.", n_outputs=2, unpack_input=False)
                     def reply_func(self, messages, sender, config):
-                        assert all(isinstance(m, Node) for m in messages), f"All messages must be Node type, but got {messages}."
-                        return _reply_func(self, messages=[m.data for m in messages] if messages is not None else messages, sender=sender, config=config)
+                        assert all(
+                            isinstance(m, Node) for m in messages
+                        ), f"All messages must be Node type, but got {messages}."
+                        return _reply_func(
+                            self,
+                            messages=[m.data for m in messages] if messages is not None else messages,
+                            sender=sender,
+                            config=config,
+                        )
+
                 else:  # TODO: support coroutinefunction
                     warnings.warn(f"Coroutine function {reply_func} is not wrapped by trace_op.")
-            super().register_reply(trigger, reply_func, position, config, reset_config, ignore_async_in_sync_chat=ignore_async_in_sync_chat)
+            super().register_reply(
+                trigger, reply_func, position, config, reset_config, ignore_async_in_sync_chat=ignore_async_in_sync_chat
+            )
 
         @property
         def parameters(self):  # Return a list of ParameterNodes
             return [self.__oai_system_message]
 
-        # We override the self._oai_system_message. Interally, the system prompt
+        # We override the self._oai_system_message. Internally, the system prompt
         # is stored in self.__oai_system_message as a list of ParameterNodes.
         # TODO Add other parameters
         @property
         def _oai_system_message(self):
-            return [self.__oai_system_message.data]  # XXX Not sure why _oai_system_message in Autogen is always a list of length 1
+            return [
+                self.__oai_system_message.data
+            ]  # XXX Not sure why _oai_system_message in Autogen is always a list of length 1
 
         @_oai_system_message.setter
         def _oai_system_message(self, value):  # This is the parameter
             assert isinstance(value, list)
             assert len(value) == 1  # XXX Not sure why _oai_system_message in Autogen is always a list of length 1
             with agent_scope(self.name):  # NOTE setters are not covered by trace_agent_scope
-                self.__oai_system_message = ParameterNode(value[0], description='[Parameter] System message of the agent.')
+                self.__oai_system_message = ParameterNode(
+                    value[0], description="[Parameter] System message of the agent."
+                )
 
         @property
         def _oai_messages(self):  # return a dict of list of dict
@@ -135,16 +155,20 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             return self.__oai_messages
 
         def chat_message_nodes_for_summary(self, agent: Agent) -> List[Dict]:
-            """ This method mirros the original last_message method, but returns a Node type."""
+            """This method mirrors the original last_message method, but returns a Node type."""
             return self.__oai_messages[agent]
 
         # TODO keep the same signature as the original last_message
         def last_message_node(self, agent: Optional[Agent] = None, role: Optional[str] = None) -> Union[Node, None]:
-            """ This method mirros the original last_message method, but returns a Node type."""
+            """This method mirrors the original last_message method, but returns a Node type."""
             # add a role filtering
-            if role == 'self':
-                role = 'assistant'
-            assert role in {'assistant', 'user', None}, f"role must be one of 'assistant', 'user', or None, but got {role}."
+            if role == "self":
+                role = "assistant"
+            assert role in {
+                "assistant",
+                "user",
+                None,
+            }, f"role must be one of 'assistant', 'user', or None, but got {role}."
 
             if agent is None:
                 n_conversations = len(self._oai_messages)
@@ -160,7 +184,9 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                                     return message
                             return None
                         return conversation[-1]
-                raise ValueError("More than one conversation is found. Please specify the sender to get the last message.")
+                raise ValueError(
+                    "More than one conversation is found. Please specify the sender to get the last message."
+                )
             if role is not None:
                 for message in reversed(self.__oai_messages[agent]):
                     if message.data["role"] == role:
@@ -179,7 +205,6 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         #     assert isinstance(message, Node), f"Message {message} must be a Node type"
         #     # return super(TracedAgent, self)._message_to_dict(message.data)
         #     return ConversableAgent._message_to_dict(message.data)
-
 
         #### Modify self._append_oai_message.
         # We override the self._oai_messages and implement it as a property based on an internal attribute self.__oai_messages.
@@ -216,13 +241,14 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             ### End of original code
 
             # XXX To trace the creation of the oai_message, we need to append to self.__oai_messages directly.
-            oai_message_node = MessageNode(oai_message,
-                                        description=f'[oai_message] This is the oai_message created based on a message.',
-                                        inputs={'message': message_node})
+            oai_message_node = MessageNode(
+                oai_message,
+                description="[oai_message] This is the oai_message created based on a message.",
+                inputs={"message": message_node},
+            )
             self.__oai_messages[conversation_id].append(oai_message_node)
 
             return True
-
 
         #### Wrap the output as a Node.
         def generate_init_message(self, **context) -> Union[str, Dict]:
@@ -236,7 +262,9 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             request_reply: Optional[bool] = None,
             silent: Optional[bool] = False,
         ) -> ChatResult:
-            assert message is not None  # self.send is called in either self.initiate_chat or self.receive. In both cases, message is not None.
+            assert (
+                message is not None
+            )  # self.send is called in either self.initiate_chat or self.receive. In both cases, message is not None.
             return super(TracedAgent, self).send(node(message), recipient, request_reply, silent)
 
         async def a_send(
@@ -282,12 +310,11 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         ):
             raise NotImplementedError
 
-
         def clear_history(self, recipient: Optional[Agent] = None, nr_messages_to_preserve: Optional[int] = None):
             # This method clears the chat history in self._oai_messages. We override it to clear the self.__oai_messages directly.
             if recipient is None:
                 if nr_messages_to_preserve:
-                    for key in self.__oai_messages: # XXX
+                    for key in self.__oai_messages:  # XXX
                         # Remove messages from history except last `nr_messages_to_preserve` messages.
                         self.__oai_messages[key] = self.__oai_messages[key][-nr_messages_to_preserve:]  # XXX
                 else:
@@ -301,7 +328,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                             "yellow",
                         ),
                         flush=True,
-                )
+                    )
 
         #### Modify self.generate_reply to use the Node type
         # Most code is the same as super(TracedAgent, self).generate_reply, but
@@ -316,7 +343,6 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             sender: Optional["Agent"] = None,
             **kwargs: Any,
         ) -> Union[Node[Union[str, Dict]], None]:
-
             if all((messages is None, sender is None)):
                 error_msg = f"Either {messages=} or {sender=} must be provided."
                 logger.error(error_msg)
@@ -325,7 +351,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             if messages is None:
                 # messages = self._oai_messages[sender]  # This returns a list of dict
                 messages = self.chat_message_nodes[sender]  # XXX This returns a list of Nodes
-            assert all( isinstance(m, Node) for m in messages), f"All messages must be Node type, but got {messages}."
+            assert all(isinstance(m, Node) for m in messages), f"All messages must be Node type, but got {messages}."
 
             # TODO need to trace process_all_messages and process_last_message
             # Call the hookable method that gives registered hooks a chance to process all messages.
@@ -348,7 +374,6 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                         return reply
             return self._default_auto_reply
 
-
         async def a_generate_reply(
             self,
             messages: Optional[List[Dict[str, Any]]] = None,
@@ -362,12 +387,12 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             raise NotImplementedError
 
         # TODO finalize the ones below
-        @trace_op('[generate_oai_reply] Generate a reply using autogen.oai.', n_outputs=2, unpack_input=False)
+        @trace_op("[generate_oai_reply] Generate a reply using autogen.oai.", n_outputs=2, unpack_input=False)
         def generate_oai_reply(
             self,
             messages: Optional[List[None]] = None,
             sender: Optional[Agent] = None,
-            config= None,
+            config=None,
         ) -> Tuple[bool, Union[str, Dict, None]]:
             """Generate a reply using autogen.oai."""
             return super().generate_oai_reply([m.data for m in messages], sender, config)
@@ -381,7 +406,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                 if isinstance(v, OpenAIWrapper):
                     value = copy.copy(v)
                     setattr(result, k, copy.copy(v))  # This is locked
-                elif k=='_TracedAgent__oai_messages':
+                elif k == "_TracedAgent__oai_messages":
                     value = defaultdict(list)  # deepcopy is viewed as detached from the original graph
                 else:
                     value = copy.deepcopy(v, memo)
@@ -392,7 +417,11 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             assert isinstance(message, Node), "message must be a Node type."
             system_message = self._oai_system_message[0]  # dict
             system_message["content"] = message.data
-            system_message = MessageNode(system_message, description="[update_system_message] Update system message's content.", inputs=[self.__oai_system_message, message])
+            system_message = MessageNode(
+                system_message,
+                description="[update_system_message] Update system message's content.",
+                inputs=[self.__oai_system_message, message],
+            )
             self.__oai_system_message = system_message  # TODO maybe self.__oai_system_message should be a list
 
     return TracedAgent
