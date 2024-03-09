@@ -18,7 +18,9 @@ from gurobipy import GRB
 from eventlet.timeout import Timeout
 from pyomo.opt import TerminationCondition
 
-from autogen.trace import trace, compatability
+from autogen.trace import trace, compatibility
+import autogen
+import requests
 
 # %% System Messages
 WRITER_SYSTEM_MSG = """You are a chatbot to:
@@ -74,15 +76,17 @@ class OptiGuideAgent(AssistantAgent):
     The OptiGuide agent manages two assistant agents (writer and safeguard).
     """
 
-    def __init__(self,
-                 name,
-                 source_code,
-                 solver_software="gurobi",
-                 doc_str="",
-                 example_qa="",
-                 debug_times=3,
-                 use_safeguard=True,
-                 **kwargs):
+    def __init__(
+        self,
+        name,
+        source_code,
+        solver_software="gurobi",
+        doc_str="",
+        example_qa="",
+        debug_times=3,
+        use_safeguard=True,
+        **kwargs,
+    ):
         """
         Args:
             name (str): agent name.
@@ -96,22 +100,18 @@ class OptiGuideAgent(AssistantAgent):
                 [ResponsiveAgent](responsive_agent#__init__).
         """
         assert source_code.find(DATA_CODE_STR) >= 0, "DATA_CODE_STR not found."
-        assert source_code.find(
-            CONSTRAINT_CODE_STR) >= 0, "CONSTRAINT_CODE_STR not found."
+        assert source_code.find(CONSTRAINT_CODE_STR) >= 0, "CONSTRAINT_CODE_STR not found."
 
         super().__init__(name, **kwargs)
         self._source_code = source_code
         self._doc_str = doc_str
         self._example_qa = example_qa
-        assert solver_software in ["gurobi",
-                                   "pyomo"], "Unknown solver software."
+        assert solver_software in ["gurobi", "pyomo"], "Unknown solver software."
 
         self._solver_software = solver_software
-        self._origin_execution_result = _run_with_exec(source_code,
-                                                       self._solver_software)
+        self._origin_execution_result = _run_with_exec(source_code, self._solver_software)
         self._writer = trace(AssistantAgent)("writer", llm_config=self.llm_config)
-        self._safeguard = trace(AssistantAgent)("safeguard",
-                                         llm_config=self.llm_config)
+        self._safeguard = trace(AssistantAgent)("safeguard", llm_config=self.llm_config)
         self._debug_times_left = self.debug_times = debug_times
         self._use_safeguard = use_safeguard
         self._success = False
@@ -128,7 +128,6 @@ class OptiGuideAgent(AssistantAgent):
         sender=None,
         exclude=None,
     ) -> Union[str, Dict, None]:
-
         # Remove unused variables:
         # The message is already stored in self._oai_messages
         # del messages, default_reply
@@ -137,17 +136,18 @@ class OptiGuideAgent(AssistantAgent):
         """Reply based on the conversation history."""
         if sender not in [self._writer, self._safeguard]:
             # Step 1: receive the message from the user
-            user_chat_history = ("\nHere are the history of discussions:\n"
-                                 f"{self._oai_messages[sender]}")
-            writer_sys_msg = (WRITER_SYSTEM_MSG.format(
-                solver_software=self._solver_software,
-                source_code=self._source_code,
-                doc_str=self._doc_str,
-                example_qa=self._example_qa,
-                execution_result=self._origin_execution_result,
-            ) + user_chat_history)
-            safeguard_sys_msg = SAFEGUARD_SYSTEM_MSG.format(
-                source_code=self._source_code) + user_chat_history
+            user_chat_history = "\nHere are the history of discussions:\n" f"{self._oai_messages[sender]}"
+            writer_sys_msg = (
+                WRITER_SYSTEM_MSG.format(
+                    solver_software=self._solver_software,
+                    source_code=self._source_code,
+                    doc_str=self._doc_str,
+                    example_qa=self._example_qa,
+                    execution_result=self._origin_execution_result,
+                )
+                + user_chat_history
+            )
+            safeguard_sys_msg = SAFEGUARD_SYSTEM_MSG.format(source_code=self._source_code) + user_chat_history
             self._writer.update_system_message(writer_sys_msg)
             self._safeguard.update_system_message(safeguard_sys_msg)
             self._writer.reset()
@@ -178,16 +178,14 @@ class OptiGuideAgent(AssistantAgent):
         # Step 3: safeguard
         safe_msg = ""
         if self._use_safeguard:
-            self.initiate_chat(message=SAFEGUARD_PROMPT.format(code=code),
-                               recipient=self._safeguard)
+            self.initiate_chat(message=SAFEGUARD_PROMPT.format(code=code), recipient=self._safeguard)
             safe_msg = self.last_message_node(self._safeguard)["content"]
         else:
             safe_msg = "SAFE"
 
         if safe_msg.find("DANGER") < 0:
             # Step 4 and 5: Run the code and obtain the results
-            src_code = _insert_code(self._source_code, code,
-                                    self._solver_software)
+            src_code = _insert_code(self._source_code, code, self._solver_software)
             execution_rst = _run_with_exec(src_code, self._solver_software)
             print(colored(str(execution_rst), "yellow"))
             if type(execution_rst) in [str, int, float]:
@@ -203,8 +201,7 @@ Please try to find a new way (coding) to answer the question."""
         if self._debug_times_left > 0:
             # Try to debug and write code again (back to step 2)
             self._debug_times_left -= 1
-            return DEBUG_PROMPT.format(error_type=type(execution_rst),
-                                       error_message=str(execution_rst))
+            return DEBUG_PROMPT.format(error_type=type(execution_rst), error_message=str(execution_rst))
 
 
 # %% Helper functions to edit and run code.
@@ -213,8 +210,8 @@ Please try to find a new way (coding) to answer the question."""
 # Then, we use exec to run the code snippet.
 # This approach replicate the evaluation section of the OptiGuide paper.
 
-def _run_with_exec(src_code: str,
-                   solver_software: str) -> Union[str, Exception]:
+
+def _run_with_exec(src_code: str, solver_software: str) -> Union[str, Exception]:
     """Run the code snippet with exec.
 
     Args:
@@ -229,10 +226,7 @@ def _run_with_exec(src_code: str,
     locals_dict.update(globals())
     locals_dict.update(locals())
 
-    timeout = Timeout(
-        60,
-        TimeoutError("This is a timeout exception, in case "
-                     "GPT's code falls into infinite loop."))
+    timeout = Timeout(60, TimeoutError("This is a timeout exception, in case " "GPT's code falls into infinite loop."))
     try:
         exec(src_code, locals_dict, locals_dict)
     except Exception as e:
@@ -322,8 +316,7 @@ def _get_optimization_result(locals_dict: dict, solver_software: str) -> str:
             else:
                 ans = "Model Status:" + str(status)
         else:
-            ans = "Optimization problem solved. The objective value is: " + str(
-                locals_dict["m"].objVal)
+            ans = "Optimization problem solved. The objective value is: " + str(locals_dict["m"].objVal)
     elif solver_software == "pyomo":
         status = locals_dict["m"].solver.termination_condition
         if status != TerminationCondition.optimal:
@@ -336,12 +329,12 @@ def _get_optimization_result(locals_dict: dict, solver_software: str) -> str:
             else:
                 ans = "Model Status:" + str(status)
         else:
-            ans = "Optimization problem solved. The objective value is: " + str(
-                locals_dict["model"].obj())
+            ans = "Optimization problem solved. The objective value is: " + str(locals_dict["model"].obj())
     else:
         raise ValueError("Unknown solver software: " + solver_software)
 
     return ans
+
 
 # %% Prompt for OptiGuide
 CODE_PROMPT = """
@@ -376,12 +369,8 @@ beginning.
 
 # ============= Trace / Optimization Code ===============
 
-import autogen
-import requests
-from autogen.trace import trace
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     config_list = autogen.config_list_from_json(
         "OAI_CONFIG_LIST",
         filter_dict={
@@ -396,7 +385,7 @@ if __name__ == '__main__':
                 "chatgpt-35-turbo-0301",
                 "gpt-35-turbo-v0301",
             }
-        }
+        },
     )
 
     # Get the source code of our coffee example
@@ -445,12 +434,11 @@ if __name__ == '__main__':
         llm_config={
             "seed": 42,
             "config_list": config_list,
-        }
+        },
     )
 
     user = trace(autogen.UserProxyAgent)(
-        "user", max_consecutive_auto_reply=0,
-        human_input_mode="NEVER", code_execution_config=False
+        "user", max_consecutive_auto_reply=0, human_input_mode="NEVER", code_execution_config=False
     )
 
     user.initiate_chat(agent, message="What if we prohibit shipping from supplier 1 to roastery 2?")

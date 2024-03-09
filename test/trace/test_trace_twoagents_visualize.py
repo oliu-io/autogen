@@ -1,6 +1,8 @@
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 from autogen.trace.trace import trace
 import copy
+from autogen.trace.optimizers import DummyOptimizer
+from graphviz import Digraph
 
 
 # Load LLM inference endpoints from an env variable or a file
@@ -13,13 +15,19 @@ user_proxy.initiate_chat(assistant, message="Plot a chart of NVDA and TESLA stoc
 
 
 ## A simple demonstration of using backward and optimizer
-from autogen.trace.optimizers import DummyOptimizer
+
 optimizer = DummyOptimizer(assistant.parameters)  # This just concatenates the feedback into the parameter
+
+
 def propagate(child):
     # a dummy function for testing
-    summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
+    summary = "".join(
+        [f"{str(k)}:{v[0]}" for k, v in child.feedback.items()]
+    )  # we only take the first feedback for testing purposes
     return {parent: summary for parent in child.parents}
-feedback = 'Great job.'
+
+
+feedback = "Great job."
 last_message = assistant.last_message_node()
 optimizer.zero_feedback()
 last_message.backward(feedback, propagate, retain_graph=True)  # Set retain_graph for testing
@@ -27,10 +35,11 @@ optimizer.step()
 
 # Test check a path from output to input
 assert feedback in optimizer.parameters[0]
-assert all([feedback in v[0] for v in optimizer.parameters[0].feedback.values()])  # make sure feedback is propagated to the parameter
+assert all(
+    [feedback in v[0] for v in optimizer.parameters[0].feedback.values()]
+)  # make sure feedback is propagated to the parameter
 node = last_message
 
-from graphviz import Digraph
 
 def back_prop_node_visualization(start_node):
     dot = Digraph()
@@ -43,7 +52,7 @@ def back_prop_node_visualization(start_node):
     # add node names
     while stack:
         current_node = stack.pop()
-        print(f'Node {node.name}: Node Type {node}, Node: {node._data}')
+        print(f"Node {node.name}: Node Type {node}, Node: {node._data}")
         if current_node not in visited:
             dot.node(node.name.replace(":", ""), node.name.replace(":", ""))
             visited.add(current_node)
@@ -62,6 +71,7 @@ def back_prop_node_visualization(start_node):
             stack.extend(current_node.parents)
 
     return dot
+
 
 dot = back_prop_node_visualization(last_message)
 

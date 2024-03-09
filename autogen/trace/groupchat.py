@@ -16,10 +16,12 @@ from autogen.graph_utils import check_graph_validity, invert_disallowed_to_allow
 
 from autogen.trace.trace import node, trace_class
 from autogen.trace.nodes import Node, MessageNode
-from autogen.trace.trace_operators import trace_operator
+from autogen.trace.trace_ops import trace_op
+import copy
+from autogen.agentchat.groupchat import GroupChat as _GroupChat
+from autogen.agentchat.groupchat import GroupChatManager as _GroupChatManager
 
 logger = logging.getLogger(__name__)
-import copy
 
 
 class NoEligibleSpeakerException(Exception):
@@ -29,12 +31,9 @@ class NoEligibleSpeakerException(Exception):
         self.message = message
         super().__init__(self.message)
 
-from autogen.agentchat.groupchat import GroupChat as _GroupChat
-from autogen.agentchat.groupchat import GroupChatManager as _GroupChatManager
 
 @dataclass
 class GroupChat(_GroupChat):
-
     @property
     def messages(self):  # return data
         return [m.data for m in self.__messages]
@@ -50,7 +49,10 @@ class GroupChat(_GroupChat):
     def append(self, message: Node[Dict], speaker_node: Agent):
         # set the name to speaker's name if the role is not function
         # if the role is tool, it is OK to modify the name
-        @trace_operator('[GroupChat.append.process_message] Process a message before appending it to the group chat.')
+        @trace_op(
+            "[GroupChat.append.process_message] Process a message before appending it to the group chat.",
+            unpack_input=False,
+        )
         def process_message(message: Node[Dict], speaker: Node[Agent]):
             message, speaker = copy.deepcopy(message.data), speaker.data
             # Old code
@@ -58,27 +60,38 @@ class GroupChat(_GroupChat):
                 message["name"] = speaker.name  # this depends on the speaker
                 message["content"] = content_str(message["content"])
             return message  # This would be wrapped as a MessageNode
+
         message = process_message(message, speaker_node)
         assert isinstance(message, MessageNode)
         self.__messages.append(message)
 
-    @trace_operator('[GroupChat.manual_select_speaker] Manually select the next speaker.')
+    @trace_op("[GroupChat.agent_by_name] Returns the agent with a given name.", unpack_input=False)
+    def agent_by_name(self, name: Node[str]) -> Agent:
+        """Returns the agent with a given name."""
+        return self.agents[self.agent_names.index(name)]
+
+    @trace_op("[GroupChat.manual_select_speaker] Manually select the next speaker.", unpack_input=False)
     def manual_select_speaker(self, agents: Optional[List[Node[Agent]]] = None) -> Union[Node[Agent], None]:
         return super().manual_select_speaker(agents.data)
 
-    @trace_operator('[GroupChat.next_agent] Select the next speaker.')
-    def next_agent(self, agent: Node[Agent], agents: Optional[List[Node[Agent]]]= None) -> Node[Agent]:
+    @trace_op("[GroupChat.next_agent] Select the next speaker.", unpack_input=False)
+    def next_agent(self, agent: Node[Agent], agents: Optional[List[Node[Agent]]] = None) -> Node[Agent]:
         return super().next_agent(agent.data, agents.data)
 
-    @trace_operator('[GroupChat.random_select_speaker] Randomly select the next speaker.')
+    @trace_op("[GroupChat.random_select_speaker] Randomly select the next speaker.", unpack_input=False)
     def random_select_speaker(self, agents: Optional[List[Node[Agent]]] = None) -> Union[Node[Agent], None]:
         return super().random_select_speaker(agents.data)
 
-    @trace_operator('[GroupChat._prepare_and_select_agents.select_speaker_message] Prompt the user to select the next speaker.')
+    @trace_op(
+        "[GroupChat._prepare_and_select_agents.select_speaker_message] Prompt the user to select the next speaker.",
+        unpack_input=False,
+    )
     def select_speaker_message(self, agents: Node[Node[List[Agent]]]):
         return {"role": "system", "content": self.select_speaker_prompt([a for a in agents.data])}
 
-    @trace_operator('[GroupChat.select_speaker_msg] Return the system message for selecting the next speaker.')
+    @trace_op(
+        "[GroupChat.select_speaker_msg] Return the system message for selecting the next speaker.", unpack_input=False
+    )
     def select_speaker_msg(self, agents: Optional[Node[List[Agent]]] = None) -> str:
         if agents is not None:
             agents = agents.data
@@ -87,8 +100,10 @@ class GroupChat(_GroupChat):
     def _prepare_and_select_agents(
         self, last_speaker: Node[Agent]
     ) -> Tuple[Optional[Node[Agent]], List[Agent], Optional[List[Node[Dict]]]]:
-
-        @trace_operator('[GroupChat._prepare_and_select_agents.get_graph_eligible_agents] Get the eligible agents.')
+        @trace_op(
+            "[GroupChat._prepare_and_select_agents.get_graph_eligible_agents] Get the eligible agents.",
+            unpack_input=False,
+        )
         def get_graph_eligible_agents(last_speaker):
             last_speaker = last_speaker.data
 
@@ -130,7 +145,9 @@ class GroupChat(_GroupChat):
                     funcs += [self.messages[-1]["function_call"]["name"]]
                 if "tool_calls" in self.messages[-1]:
                     funcs += [
-                        tool["function"]["name"] for tool in self.messages[-1]["tool_calls"] if tool["type"] == "function"
+                        tool["function"]["name"]
+                        for tool in self.messages[-1]["tool_calls"]
+                        if tool["type"] == "function"
                     ]
 
                 # find agents with the right function_map which contains the function name
@@ -194,14 +211,19 @@ class GroupChat(_GroupChat):
             select_speaker_messages = self.__messages.copy()  # list[Node[Dict]]
             # If last message is a tool call or function call, blank the call so the api doesn't throw
 
-            @trace_operator('[GroupChat._prepare_and_select_agents.process_speaker_message] Process the speaker message.')
+            @trace_op(
+                "[GroupChat._prepare_and_select_agents.process_speaker_message] Process the speaker message.",
+                unpack_input=False,
+            )
             def process_speaker_message(message: Node[Dict]):
                 if message.data.get("function_call", False):
                     return dict(message.data, function_call=None)
                 if message.data.get("tool_calls", False):
                     return dict(message.data, tool_calls=None)
                 return message.data  # bypass
+
             select_speaker_messages[-1] = process_speaker_message(select_speaker_messages[-1])
+            self.select_speaker_message(graph_eligible_agents)
             select_speaker_messages = select_speaker_messages + [self.select_speaker_message(graph_eligible_agents)]
 
         assert isinstance(selected_agent, Node) or selected_agent is None
@@ -220,9 +242,10 @@ class GroupChat(_GroupChat):
         selector.update_system_message(self.select_speaker_msg(agents))
         final, name = selector.generate_oai_reply(messages)
 
-        @trace_operator('[GroupChat._finalize_speaker] Finalize the speaker selection.')
-        def _finalize_speaker(last_speaker:Node[Agent], final:Node[bool], name:Node[str], agents:Node[List[Agent]]):
+        @trace_op("[GroupChat._finalize_speaker] Finalize the speaker selection.", unpack_input=False)
+        def _finalize_speaker(last_speaker: Node[Agent], final: Node[bool], name: Node[str], agents: Node[List[Agent]]):
             return node(self._finalize_speaker(last_speaker.data, final.data, name.data, agents.data))
+
         return _finalize_speaker(last_speaker_node, final, name, agents)
 
     async def a_select_speaker(self, last_speaker: Agent, selector: ConversableAgent) -> Agent:
@@ -231,12 +254,12 @@ class GroupChat(_GroupChat):
 
 @trace_class
 class GroupChatManager(_GroupChatManager):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert isinstance(self._groupchat, GroupChat), "Need to use the GroupChat class in trace."
-        self.register_reply(Agent, GroupChatManager.run_chat, config=self._groupchat, reset_config=GroupChat.reset)  # XXX override
-
+        self.register_reply(
+            Agent, GroupChatManager.run_chat, config=self._groupchat, reset_config=GroupChat.reset
+        )  # XXX override
 
     # We implement this method to operate with Nodes
     def run_chat(
@@ -250,7 +273,7 @@ class GroupChatManager(_GroupChatManager):
             messages = self.__oai_messages[sender]  # XXX Node[Dict]
         message = messages[-1]
 
-        speaker_node = node(sender) # XXX Convert to Node
+        speaker_node = node(sender)  # XXX Convert to Node
 
         groupchat = config
         if self.client_cache is not None:
@@ -259,7 +282,6 @@ class GroupChatManager(_GroupChatManager):
                 a.previous_cache = a.client_cache
                 a.client_cache = self.client_cache
         for i in range(groupchat.max_round):
-
             # XXX Check types
             assert isinstance(speaker_node, Node), speaker_node
             assert isinstance(speaker_node.data, ConversableAgent)
@@ -268,10 +290,15 @@ class GroupChatManager(_GroupChatManager):
             groupchat.append(message, speaker_node)  # append a MessageNode to groupchat
             # broadcast the message to all agents except the speaker
             for agent in groupchat.agents:
-                @trace_operator('[GroupChatManager.broadcast_message] Broadcast a message to all agents except the speaker.')
-                def broadcast_message(message : Node[dict], agent: Agent, speaker_node: Node[Agent]):
+
+                @trace_op(
+                    "[GroupChatManager.broadcast_message] Broadcast a message to all agents except the speaker.",
+                    unpack_input=False,
+                )
+                def broadcast_message(message: Node[dict], agent: Agent, speaker_node: Node[Agent]):
                     if agent != speaker_node.data:
                         self.send(message, agent, request_reply=False, silent=True)
+
                 broadcast_message(message, agent, speaker_node)
             if self._is_termination_msg(message.data) or i == groupchat.max_round - 1:  # XXX Not traced
                 # The conversation is over or it's the last round
@@ -279,14 +306,13 @@ class GroupChatManager(_GroupChatManager):
             try:
                 # select the next speaker
                 speaker_node = groupchat.select_speaker(speaker_node, self)
-                reply = speaker_node.call('generate_reply', sender=self)
+                reply = speaker_node.call("generate_reply", sender=self)
             except KeyboardInterrupt:
                 # let the admin agent speak if interrupted
                 if groupchat.admin_name in groupchat.agent_names:
-                    raise NotImplementedError  # TODO
                     # admin agent is one of the participants
-                    speaker = groupchat.agent_by_name(groupchat.admin_name)
-                    reply = speaker.generate_reply(sender=self)
+                    speaker_node = groupchat.agent_by_name(node(groupchat.admin_name))
+                    reply = speaker_node.call("generate_reply", sender=self)
                 else:
                     # admin agent is not found in the participants
                     raise
@@ -308,15 +334,19 @@ class GroupChatManager(_GroupChatManager):
                 raise NotImplementedError('Writing to reply["content"] is not supported.')  # TODO
                 reply["content"] = self.clear_agents_history(reply["content"], groupchat)
             # The speaker sends the message without requesting a reply
-            speaker_node.call('send', reply, self, request_reply=False)
+            speaker_node.call("send", reply, self, request_reply=False)
 
-            # @trace_operator('[GroupChatManager.get_last_message] Get the last message.')
+            # @trace_op('[GroupChatManager.get_last_message] Get the last message.')
             def get_last_message(speaker):
                 last_message_node = self.last_message_node(speaker.data)
-                return MessageNode(last_message_node.data, inputs=[last_message_node, speaker], description='[GroupChatManager.get_last_message] Get the last message.')
+                return MessageNode(
+                    last_message_node.data,
+                    inputs=[last_message_node, speaker],
+                    description="[GroupChatManager.get_last_message] Get the last message.",
+                )
                 # return self.last_message_node(speaker.data)
-            message = get_last_message(speaker_node)
 
+            message = get_last_message(speaker_node)
 
         if self.client_cache is not None:
             warnings.warn("Client cache is not supported in trace.")

@@ -10,9 +10,7 @@
 import autogen
 from autogen.trace import trace
 
-config_list_gpt4 = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST"
-)
+config_list_gpt4 = autogen.config_list_from_json("OAI_CONFIG_LIST")
 
 gpt4_config = {
     "cache_seed": 42,  # change the cache_seed for different trials
@@ -66,7 +64,7 @@ groupchat = autogen.GroupChat(
 )
 manager = trace(autogen.GroupChatManager)(groupchat=groupchat, llm_config=gpt4_config)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     user_proxy.initiate_chat(
         manager,
         message="""

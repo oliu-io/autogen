@@ -1,13 +1,16 @@
 from graphviz import Digraph
+import re
 
 
 def for_all_methods(decorator):
-    """ Applying a decorator to all methods of a class. """
+    """Applying a decorator to all methods of a class."""
+
     def decorate(cls):
-        for attr in cls.__dict__: # there's propably a better way to do this
-            if callable(getattr(cls, attr)) and not attr.startswith("__"):
-                setattr(cls, attr, decorator(getattr(cls, attr)))
+        for name, attr in cls.__dict__.items():
+            if callable(attr) and not name.startswith("__"):
+                setattr(cls, name, decorator(attr))
         return cls
+
     return decorate
 
 
@@ -45,6 +48,7 @@ def back_prop_node_visualization(start_node, reverse=False):
 
     return dot
 
+
 def backfill_lists(parent_list):
     max_length = max(len(child) for child in parent_list)
 
@@ -54,6 +58,7 @@ def backfill_lists(parent_list):
             child.append(child[-1])
 
     return parent_list
+
 
 def plot_agent_performance(performances, backfilled=True):
     import matplotlib.pyplot as plt
@@ -73,18 +78,19 @@ def plot_agent_performance(performances, backfilled=True):
 
     # Plotting
     plt.figure(figsize=(10, 6))
-    plt.plot(epochs, means, label='Mean Performance')
+    plt.plot(epochs, means, label="Mean Performance")
     plt.fill_between(epochs, means - stds, means + stds, alpha=0.2)
 
     # Labels and title
-    plt.xlabel('Epoch')
-    plt.ylabel('Performance')
-    plt.title('Performance Across Epochs with Confidence Interval')
+    plt.xlabel("Epoch")
+    plt.ylabel("Performance")
+    plt.title("Performance Across Epochs with Confidence Interval")
     plt.legend()
     plt.grid(True)
 
     # Show plot
     plt.show()
+
 
 def verbalize(next_obs, feedback, reward):
     message = f"""Score: {reward}\n\n"""
@@ -92,6 +98,7 @@ def verbalize(next_obs, feedback, reward):
     if next_obs is not None:
         message += f"Instruction: {next_obs}\n\n"
     return message
+
 
 def simple_shrink(dot_str, shrink=True):
     """
@@ -106,20 +113,20 @@ def simple_shrink(dot_str, shrink=True):
 
     """
 
-    begin_str = """digraph {""" + '\n'
+    begin_str = """digraph {""" + "\n"
     end_str = """}"""
 
     # step 1: break into miniblocks
     blocks = []
     block_continued = []
-    for i, line in enumerate(dot_str.split('\n')):
+    for i, line in enumerate(dot_str.split("\n")):
         if "->" in line and len(block_continued) != 0:
             blocks.append("\n".join(block_continued))
             block_continued = [line]
         elif "}" not in line and line.strip() != "" and "{" not in line:
             block_continued.append(line)  # give back the line break
 
-    blocks.append('\n'.join(block_continued))
+    blocks.append("\n".join(block_continued))
 
     # step 2: re-order blocks based on "->" directions
     sorted_blocks = []
@@ -127,10 +134,10 @@ def simple_shrink(dot_str, shrink=True):
     for block in blocks:
         sub_blocks = []  # should have 3 elements
         continued_sub = []
-        for b in block.split('\n'):
-            if '->' in b:
+        for b in block.split("\n"):
+            if "->" in b:
                 sub_blocks.append(b)
-            elif b.strip()[-1] == ']' and len(continued_sub) != 0:
+            elif b.strip()[-1] == "]" and len(continued_sub) != 0:
                 continued_sub.append(b)
                 sub_blocks.append("\n".join(continued_sub))
                 continued_sub = []
@@ -158,7 +165,7 @@ def simple_shrink(dot_str, shrink=True):
     # We only display child when remote edges occur
 
     # 3.1 - if a node has multiple parents, we don't display the child node's content until after displaying all the parents
-    # 3.2 - if a child node is immeidately the parent of another node
+    # 3.2 - if a child node is immediately the parent of another node
 
     shrunk_blocks = []
     for i in range(len(sorted_blocks)):
@@ -166,7 +173,7 @@ def simple_shrink(dot_str, shrink=True):
         child = sorted_blocks[i][0].strip().split(" -> ")[1]
         found = False
         # condition 1: look-ahead (if the child has multiple parents, we delay till the last parent)
-        for block in sorted_blocks[i + 1:]:
+        for block in sorted_blocks[i + 1 :]:
             if child in block[0]:
                 # see if it's "-> child" or "child ->"
                 left, right = block[0].strip().split(" -> ")
@@ -186,16 +193,15 @@ def simple_shrink(dot_str, shrink=True):
     blocks = shrunk_blocks
     blocks = ["\n".join(b) for b in blocks]
 
-    return begin_str + "\n".join(blocks) + '\n' + end_str
+    return begin_str + "\n".join(blocks) + "\n" + end_str
 
-import re
 
 # Currently do not support nested if-statement or for-loop
 # Handlebar syntax: https://github.com/guidance-ai/guidance/tree/main#template-syntax
 # https://handlebarsjs.com/
 
-class SimplePromptParser:
 
+class SimplePromptParser:
     def __init__(self, template_text, verbose=False, reduce_linebreaks=True):
         self.verbose = verbose
         self.template_text = template_text
@@ -205,7 +211,7 @@ class SimplePromptParser:
         template_text = self.template_text
         labeled_blocks = self.extract_blocks(template_text)
         if labeled_blocks[-1][0] == "assistant":
-            labeled_blocks = labeled_blocks[:-1] # we remove the last assistant block, because that's for generation
+            labeled_blocks = labeled_blocks[:-1]  # we remove the last assistant block, because that's for generation
 
         typed_messages = []
         # messages = [{"role": "system", "content": self.system_prompt},
@@ -238,7 +244,7 @@ class SimplePromptParser:
     def decode_typed_messages(self, typed_messages):
         messages = ""
         for typed_message in typed_messages:
-            messages += typed_message['role'] + ': ' + typed_message['content']
+            messages += typed_message["role"] + ": " + typed_message["content"]
         return messages
 
     def parse_if_block(self, parsed_text, **kwargs):
@@ -253,8 +259,9 @@ class SimplePromptParser:
             cond = kwargs[condition_var]
             if cond:
                 # Remove the {{#if}} and {{/if}} tags, but keep the content
-                parsed_text = parsed_text.replace(r"{{#if " + condition_var + "}}" + block_content + "{{/if}}",
-                                                  block_content)
+                parsed_text = parsed_text.replace(
+                    r"{{#if " + condition_var + "}}" + block_content + "{{/if}}", block_content
+                )
             else:
                 # Remove the entire block
                 parsed_text = parsed_text.replace(r"{{#if " + condition_var + "}}" + block_content + "{{/if}}", "")
@@ -300,7 +307,7 @@ class SimplePromptParser:
 
         # Extract the portion between {{~/each}} and {{~/user}}
         after_each_match = re.search(r"{{~/each}}(.*?)$", template, re.DOTALL)
-        after_each = after_each_match.group(1)if after_each_match else None
+        after_each = after_each_match.group(1) if after_each_match else None
 
         if each_key not in kwargs:
             return template
@@ -311,7 +318,7 @@ class SimplePromptParser:
         keys = re.findall(r"{{this\.(.*?)}}", template)
 
         # Getting the template part inside the {{~#each}} and {{~/each}} tags
-        template_inside_each = re.search(r"{{#each "+each_key+"}}(.*?){{~/each}}", template, re.DOTALL).group(1)
+        template_inside_each = re.search(r"{{#each " + each_key + "}}(.*?){{~/each}}", template, re.DOTALL).group(1)
 
         # Generating the text for each dictionary in examples
         populated_texts = []
@@ -320,7 +327,7 @@ class SimplePromptParser:
             for key in keys:
                 if key in example:
                     example[key] = self.none_to_empty_string(example[key])
-                    populated_text = populated_text.replace("{{this."+key+"}}", example[key])
+                    populated_text = populated_text.replace("{{this." + key + "}}", example[key])
             populated_texts.append(populated_text)
 
         if before_each is not None:
@@ -336,7 +343,7 @@ class SimplePromptParser:
         patterns = {
             "system": re.compile(r"{{#system~}}(.*?){{~/system}}", re.DOTALL),
             "user": re.compile(r"{{#user~}}(.*?){{~/user}}", re.DOTALL),
-            "assistant": re.compile(r"{{#assistant~}}(.*?){{~/assistant}}", re.DOTALL)
+            "assistant": re.compile(r"{{#assistant~}}(.*?){{~/assistant}}", re.DOTALL),
         }
 
         # Find all occurrences of each block and label them
@@ -376,10 +383,7 @@ def usage_test_1():
     {{~/user}}
     """
 
-    kwargs = {
-        "exists_instruction": False,
-        "instruction": "Try to use metaphors and similes to add depth to your poem."
-    }
+    kwargs = {"exists_instruction": False, "instruction": "Try to use metaphors and similes to add depth to your poem."}
 
     parser = SimplePromptParser(parsed_text, verbose=True)
     results = parser(**kwargs)
@@ -399,7 +403,7 @@ def usage_test_2():
     {{#each examples}}
     {{role}}'s Assignment: {{this.assignment}}
 
-    Your Instruction: 
+    Your Instruction:
     {{this.instruction}}
     ---------------
     {{~/each}}
@@ -420,12 +424,10 @@ def usage_test_2():
     """
     examples = [
         {"assignment": "Write about a rainy day.", "instruction": "Imagine the sound of raindrops..."},
-        {"assignment": "Describe a sunny day.", "instruction": "Think of the warmth of the sun..."}
+        {"assignment": "Describe a sunny day.", "instruction": "Think of the warmth of the sun..."},
     ]
 
-    feedbacks = [
-        {"feedback": "Good job!"}
-    ]
+    feedbacks = [{"feedback": "Good job!"}]
 
     new_assignment = "Compose a poem about winter."
     parser = SimplePromptParser(parsed_text, verbose=True)

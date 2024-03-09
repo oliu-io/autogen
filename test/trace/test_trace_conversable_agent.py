@@ -18,7 +18,6 @@ def conversable_agent():
 
 
 def test_trigger(retain_graph=False):
-
     agent = ConversableAgent("a0", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent1 = ConversableAgent("a1", max_consecutive_auto_reply=0, llm_config=False, human_input_mode="NEVER")
     agent.register_reply(agent1, lambda recipient, messages, sender, config: (True, "hello"))
@@ -55,33 +54,35 @@ def test_trigger(retain_graph=False):
     pytest.raises(ValueError, agent.register_reply, 1, lambda recipient, messages, sender, config: (True, "hi"))
     pytest.raises(ValueError, agent._match_trigger, 1, agent1)
 
-
     ##### Test for trace #####
     # Test optimizer
     from autogen.trace.optimizers import DummyOptimizer
+
     optimizer = DummyOptimizer(agent1.parameters)
 
     ## Test backward
     def propagate(child):
         # a dummy function for testing
-        summary =''.join([ f'{str(k)}:{v[0]}' for k,v in child.feedback.items()])  # we only take the first feedback for testing purposes
+        summary = "".join(
+            [f"{str(k)}:{v[0]}" for k, v in child.feedback.items()]
+        )  # we only take the first feedback for testing purposes
         return {parent: summary for parent in child.parents}
+
     output = agent1.last_message_node()
-    dummy_feedback = 'Dummy feedback'
+    dummy_feedback = "Dummy feedback"
     output.backward(dummy_feedback, propagate, retain_graph=retain_graph)
     optimizer.step()  # TODO somehow it's not traced to the parameters
 
     # check a path from output to input
     node = output
     while True:
-        if retain_graph or len(node.parents)==0:
+        if retain_graph or len(node.parents) == 0:
             assert all([dummy_feedback in v[0] for v in node.feedback.values()])
-        print(f'Node {node.name} at level {node.level}: value {node.data} Feedback {node.feedback}')
-        if len(node.parents)>0:
+        print(f"Node {node.name} at level {node.level}: value {node.data} Feedback {node.feedback}")
+        if len(node.parents) > 0:
             node = node.parents[0]
         else:
             break
-
 
 
 def test_context():
@@ -248,16 +249,16 @@ def test_generate_reply():
     dummy_agent_2 = ConversableAgent(
         name="user_proxy", llm_config=False, human_input_mode="TERMINATE", function_map={"add_num": add_num}
     )
-    messsages = [{"function_call": {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}, "role": "assistant"}]
+    messages = [{"function_call": {"name": "add_num", "arguments": '{ "num_to_be_added": 5 }'}, "role": "assistant"}]
 
     # when sender is None, messages is provided
     assert (
-        dummy_agent_2.generate_reply(messages=messsages, sender=None)["content"] == "15"
+        dummy_agent_2.generate_reply(messages=messages, sender=None)["content"] == "15"
     ), "generate_reply not working when sender is None"
 
     # when sender is provided, messages is None
     dummy_agent_1 = ConversableAgent(name="dummy_agent_1", llm_config=False, human_input_mode="ALWAYS")
-    dummy_agent_2._oai_messages[dummy_agent_1] = messsages
+    dummy_agent_2._oai_messages[dummy_agent_1] = messages
     assert (
         dummy_agent_2.generate_reply(messages=None, sender=dummy_agent_1)["content"] == "15"
     ), "generate_reply not working when messages is None"

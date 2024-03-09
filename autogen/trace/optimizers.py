@@ -15,7 +15,6 @@ This file is not dependent of AutoGen library and can be used independently with
 
 
 class Optimizer:
-
     def __init__(self, parameters, *args, **kwargs):
         assert type(parameters) is list
         assert all([isinstance(p, ParameterNode) for p in parameters])
@@ -42,29 +41,28 @@ class DummyOptimizer(Optimizer):
         super().__init__(parameters, *args, **kwargs)
 
     def _step(self, value, feedback):
-
         if isinstance(value, dict):
-            base = value['content']
+            base = value["content"]
         elif isinstance(value, str):
             base = value
         else:
             raise NotImplementedError
-        new = base + ' '.join([' '.join(l) for l in feedback.values()])
+        new = base + " ".join([" ".join(v) for v in feedback.values()])
         return new
 
 
 class LLMOptimizer(Optimizer):
     def __init__(self, parameters, config_list, task_description, *args, **kwargs):
         super().__init__(parameters, *args, **kwargs)
-        sys_msg = dedent("""
+        sys_msg = dedent(
+            """
         You are giving instructions to a student on how to accomplish a task.
         The student aims to get a high score.
         Given the feedback the student has received and the instruction you have given,
         You want to come up with a new instruction that will help the student get a higher score.
-        """)
-        self.llm = AssistantAgent(name="assistant",
-                                  system_message=sys_msg,
-                                  llm_config={"config_list": config_list})
+        """
+        )
+        self.llm = AssistantAgent(name="assistant", system_message=sys_msg, llm_config={"config_list": config_list})
         self.task_description = task_description
 
         self.parameter_copy = {}
@@ -75,8 +73,9 @@ class LLMOptimizer(Optimizer):
         # context = {"task_description": self.task_description,
         #            "instruction": value,
         #            "feedback": feedback}
-        context = [self.task_description, value['content'], feedback]
-        prompt_space = dedent("""
+        context = [self.task_description, value["content"], feedback]
+        prompt_space = dedent(
+            """
         {}
 
         This is your instruction to the student from the previous round:
@@ -88,14 +87,17 @@ class LLMOptimizer(Optimizer):
         Please write down a new instruction to help the student achieve a higher score.
         Be concise and to the point.
         Remember the student is starting from scratch, not revising their old work:
-        """.format(*context))
+        """.format(
+                *context
+            )
+        )
 
-        messages = [{'content': prompt_space, 'role': 'user'}]
+        messages = [{"content": prompt_space, "role": "user"}]
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         # response = Completion.create(messages=self.llm._oai_system_message + messages)
         # new_instruct = self.llm.client.extract_text_or_function_call(response)[0]
         new_instruct = self.llm.client.extract_text_or_completion_object(response)[0]
-        new_node = {'content': new_instruct, 'role': 'system'}
+        new_node = {"content": new_instruct, "role": "system"}
         return new_node
 
     def save_parameter_copy(self):
@@ -140,24 +142,29 @@ def construct_block(block_str: str, preserve_content_format=True):
     input_llm, output_llm = "", ""
     llm_name_to_cnt = {}
 
-    sep = '\n' if preserve_content_format else ''
+    sep = "\n" if preserve_content_format else ""
 
     llm_name_continued = None
     for line in block_str.split("\n"):
         if "->" in line:
             input_llm, output_llm = line.split(" -> ")
-            input_llm, output_llm = input_llm.strip("\""), output_llm.strip("\"")
+            input_llm, output_llm = input_llm.strip('"'), output_llm.strip('"')
             continue
         if "label=" in line:
-            name = line.split(" [label=")[0].strip().strip("\"")
+            name = line.split(" [label=")[0].strip().strip('"')
             llm_name_to_cnt[name] = []
             llm_name_continued = name
             continue
 
-        llm_name_to_cnt[llm_name_continued].append(line.rstrip("\"]"))
+        llm_name_to_cnt[llm_name_continued].append(line.rstrip('"]'))
 
-    return Block(name=output_llm, output=sep.join(llm_name_to_cnt[output_llm]), input_llms=[input_llm], output_llms=[],
-                 inputs=[sep.join(llm_name_to_cnt[input_llm])])
+    return Block(
+        name=output_llm,
+        output=sep.join(llm_name_to_cnt[output_llm]),
+        input_llms=[input_llm],
+        output_llms=[],
+        inputs=[sep.join(llm_name_to_cnt[input_llm])],
+    )
 
 
 def parse_blocks(dot_str, preserve_content_format=True):
@@ -165,7 +172,7 @@ def parse_blocks(dot_str, preserve_content_format=True):
 
     blocks = []
     block_continued = []
-    for i, line in enumerate(dot_str.split('\n')):
+    for i, line in enumerate(dot_str.split("\n")):
         if "->" in line and len(block_continued) != 0:
             blocks.append("\n".join(block_continued))
             block_continued = [line.strip()]
@@ -182,7 +189,7 @@ def parse_blocks(dot_str, preserve_content_format=True):
         constructed_blocks.append(block_rep)
 
     # re-assemble:
-    # rule: if input -> output, if ouput is the same, add the input to the input list (merge)
+    # rule: if input -> output, if output is the same, add the input to the input list (merge)
     # the current merge is on LLM name + function name
     # but we might want to perform this on the LLM agent level
 
@@ -236,9 +243,9 @@ def display_full_graph(blocks):
     for b in blocks:
         # input llms -> output llm
         content += f"Inputs: {b.input_llms} -> {b.name}\n"
-        for i, iput in enumerate(b.inputs):
+        for i, input in enumerate(b.inputs):
             content += f"  Input {b.input_llms[i]}:\n"
-            content += f"    {iput}\n"
+            content += f"    {input}\n"
 
         content += f"Output: {b.name}\n"
         content += f"    {b.output}\n"
@@ -249,65 +256,68 @@ def display_full_graph(blocks):
 
 
 class LLMCallable(object):
-    def __init__(self, config_list, system_message,
-                 prompt_template,
-                 name="helper"):
+    def __init__(self, config_list, system_message, prompt_template, name="helper"):
         self.config_list = config_list
-        self.llm = AssistantAgent(name=name,
-                                  system_message=system_message,
-                                  llm_config={"config_list": config_list})
+        self.llm = AssistantAgent(name=name, system_message=system_message, llm_config={"config_list": config_list})
         self.parser = SimplePromptParser(prompt_template, verbose=False)
 
     def create_simple_response(self, message):
-        messages = [{'content': message, 'role': 'user'}]
+        messages = [{"content": message, "role": "user"}]
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         return self.llm.client.extract_text_or_completion_object(response)[0]
 
     def create_response(self, **kwargs):
         results = self.parser(**kwargs)
-        messages = [{'content': results, 'role': 'user'}]
+        messages = [{"content": results, "role": "user"}]
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         return self.llm.client.extract_text_or_completion_object(response)[0]
 
 
 class LLMModuleSummarizer(LLMCallable):
     def __init__(self, config_list, *args, **kwargs):
-        sys_msg = dedent("""
+        sys_msg = dedent(
+            """
         You are given an analysis report of a module with a list of inputs and the module's output.
         The module can take many inputs and respond to inputs with a single output.
         Your goal is to guess what this module is doing and summarize its functionality.
-        """)
+        """
+        )
 
         super().__init__(config_list, sys_msg, *args, **kwargs)
 
-        execution_prompt = dedent("""            
+        execution_prompt = dedent(
+            """
             <Report>
             {{#each blocks}}
             {{this.text}}
 
             {{~/each}}
             </Report>
-        """)
+        """
+        )
 
-        summary_prompt = dedent("""
+        summary_prompt = dedent(
+            """
             Here is the task description:
             <Task>
             {{task}}
             </Task>
-        
+
             This is the execution report of this module:
-            
+
             <Report>
             {{#each blocks}}
             {{this.text}}
 
             {{~/each}}
             </Report>
-            
-            Please summarize the functionality of this module below:
-        """)
 
-        block_prompt = dedent("""
+            Please summarize the functionality of this module below:
+        """
+        )
+
+        block_prompt = dedent(
+            """
             Inputs: {{input_llms}} -> {{name}}
             {{#each inputs}}
             Input{{this.num}} {{this.llm}}:
@@ -317,7 +327,8 @@ class LLMModuleSummarizer(LLMCallable):
 
             Output {{name}}:
             {{output}}
-        """)
+        """
+        )
 
         self.summary_parser = SimplePromptParser(summary_prompt)
         self.block_parser = SimplePromptParser(block_prompt)
@@ -335,41 +346,46 @@ class LLMModuleSummarizer(LLMCallable):
         # or unify names of the blocks
         block_texts = []
         for block in blocks:
-            inputs = [{"llm": llm_name, "inpt": inpt, 'num': str(i + 1)} for i, (llm_name, inpt) in
-                      enumerate(zip(block.input_llms, block.inputs))]
-            block_text = \
-                self.block_parser(input_llms=str(block.input_llms), name=block.name, output=block.output,
-                                  inputs=inputs)[0]['content']
+            inputs = [
+                {"llm": llm_name, "inpt": inpt, "num": str(i + 1)}
+                for i, (llm_name, inpt) in enumerate(zip(block.input_llms, block.inputs))
+            ]
+            block_text = self.block_parser(
+                input_llms=str(block.input_llms), name=block.name, output=block.output, inputs=inputs
+            )[0]["content"]
             block_texts.append(block_text)
 
-        messages = self.summary_parser(blocks=[{'text': b} for b in block_texts], task=task_desc)
+        messages = self.summary_parser(blocks=[{"text": b} for b in block_texts], task=task_desc)
 
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         summary = self.llm.client.extract_text_or_completion_object(response)[0]
 
-        execution_report = self.execution_parser(blocks=[{'text': b} for b in block_texts])[0]['content']
+        execution_report = self.execution_parser(blocks=[{"text": b} for b in block_texts])[0]["content"]
 
         return execution_report, summary
 
 
 class LLMModuleVerifier(LLMCallable):
     def __init__(self, config_list, *args, **kwargs):
-        sys_msg = dedent("""
+        sys_msg = dedent(
+            """
         You are given a report of a module's functionality with a list of inputs and the module's output.
         The module is supposed to process or alter the input to fulfill a functionality.
         Your job is to be a harsh reviewer to see if the module is doing what it's supposed to do.
-        """)
+        """
+        )
 
         super().__init__(config_list, sys_msg, *args, **kwargs)
 
-        review_prompt = dedent("""
+        review_prompt = dedent(
+            """
         Here is the task description:
         <Task>
         {{task}}
         </Task>
-        
+
         This is the execution report of this module:
-        
+
         <Report>
         {{report}}
         </Report>
@@ -378,12 +394,13 @@ class LLMModuleVerifier(LLMCallable):
         <Summary>
         {{summary}}
         </Summary>
-        
+
         Please judge if this module successfully fulfilled its designed intentions.
         One important question is -- did it change the input? How much did it change the input?
-        
+
         Write your judgment below -- be succinct:
-        """)
+        """
+        )
         self.review_parser = SimplePromptParser(review_prompt)
 
     def __call__(self, task_desc, execution_report, summary):
@@ -396,6 +413,7 @@ class LLMModuleVerifier(LLMCallable):
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
         return self.llm.client.extract_text_or_completion_object(response)[0]
 
+
 @dataclass
 class Module:
     name: str
@@ -404,12 +422,8 @@ class Module:
     review: str
 
     def to_dict(self):
-        return {
-            "name": self.name,
-            "summary": self.summary,
-            "exec_report": self.exec_report,
-            "review": self.review
-        }
+        return {"name": self.name, "summary": self.summary, "exec_report": self.exec_report, "review": self.review}
+
 
 class LLMAgentGraphAnalyzer(object):
     # this is a simple class to process the information
@@ -429,8 +443,10 @@ class LLMAgentGraphAnalyzer(object):
             modules.append(module)
         return modules
 
+
 # causal attribution
 # blame assignment
+
 
 # in order to do system updates, we need:
 # delta x, delta y
@@ -438,17 +454,20 @@ class LLMAgentGraphAnalyzer(object):
 # delta x is from input, system analysis
 class LLMAgentGraphDesigner(LLMCallable):
     def __init__(self, config_list, task_desc, *args, **kwargs):
-        sys_msg = dedent("""
+        sys_msg = dedent(
+            """
         Someone designed a system of modules that takes inputs and produces outputs.
         A report is produced on how each module functions and whether they are useful or not.
-        
+
         Your job is to update the design of the system given the report.
         You can introduce more modules or remove modules.
-        """)
+        """
+        )
 
         super().__init__(config_list, sys_msg, *args, **kwargs)
 
-        design_prompt = dedent("""
+        design_prompt = dedent(
+            """
         Here is the task description:
         <Task>
         {{task}}
@@ -460,28 +479,29 @@ class LLMAgentGraphDesigner(LLMCallable):
         {{this.name}}: {{this.summary}}
         {{~/each}}
         </Module List>
-        
+
         This is the report for each module:
         {{#each modules}}
         Module Name: {{this.name}}
         <Report>
         {{this.report}}
         </Report>
-        
+
         <Review>
         {{this.review}}
         </Review>
         {{~/each}}
-        
+
         MODULE LIST:
         {module_list}
-    
+
         Hint:
         # You should consider if the module's name and profile match the task.
         # Considering the effort, you should select less then {{max_num}} modules; less is better.
         # Separate module names by commas and use "_" instead of space. For example, Product_manager
         # Only return the list of module names.
-        """)
+        """
+        )
         self.design_parser = SimplePromptParser(design_prompt)
         self.task_desc = task_desc
 
@@ -494,7 +514,7 @@ class LLMAgentGraphDesigner(LLMCallable):
         list_of_modules = [m.to_dict() for m in modules]
         messages = self.design_parser(modules=list_of_modules, task=self.task_desc, max_num=5)
         response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        new_list_of_modules = self.llm.client.extract_text_or_completion_object(response)[0]
+        self.llm.client.extract_text_or_completion_object(response)[0]
 
         return
 
@@ -503,6 +523,6 @@ class LLMSystemMessageUpdate(LLMCallable):
     pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # add a few unit tests here
     pass

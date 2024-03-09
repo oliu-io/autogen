@@ -5,12 +5,17 @@ from textwrap import dedent, indent
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints
 # and OAI_CONFIG_LIST_sample
-config_list = config_list_from_json(env_or_file="OAI_CONFIG_LIST", filter_dict={
-    "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
-})
+config_list = config_list_from_json(
+    env_or_file="OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-3.5-turbo-0613", "gpt-3.5-turbo"],
+    },
+)
 assert len(config_list) > 0
 
-termination_msg = lambda x: isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
+
+def termination_msg(x):
+    return isinstance(x, dict) and "TERMINATE" == str(x.get("content", ""))[-9:].upper()
 
 
 class PoemStudentAgent(AssistantAgent):
@@ -18,15 +23,16 @@ class PoemStudentAgent(AssistantAgent):
         super().__init__(
             name="StudentAgent",
             system_message=dedent("You are a student and your teacher gives you an assignment to write a poem."),
-            llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
+            llm_config={"temperature": 0.0, "config_list": config_list, "cache_seed": seed},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
         )
 
 
-sys_msg2 = dedent("You are extracting a poem from the student's message. " +
-                  "Do not extract anything except the poem itself."
-                  "If the student did not write a poem, return an empty string.")
+sys_msg2 = dedent(
+    "You are extracting a poem from the student's message. " + "Do not extract anything except the poem itself."
+    "If the student did not write a poem, return an empty string."
+)
 
 
 class PoemExtractor(AssistantAgent):
@@ -46,10 +52,10 @@ class PoemAgent(AssistantAgent):
         super().__init__(
             name="PoemAgent",
             system_message="",
-            llm_config={"temperature": 0.0, "config_list": config_list, 'cache_seed': seed},
+            llm_config={"temperature": 0.0, "config_list": config_list, "cache_seed": seed},
             max_consecutive_auto_reply=1,
             is_termination_msg=termination_msg,
-            human_input_mode="NEVER"
+            human_input_mode="NEVER",
         )
         self.student_agent = trace(PoemStudentAgent)()
         self.extractor_agent = trace(PoemExtractor)()
@@ -65,11 +71,10 @@ class PoemAgent(AssistantAgent):
 
     def get_last_user_message(self, agent):
         for m in reversed(self.chat_message_nodes[agent]):
-            if m.data['role'] == 'user':
+            if m.data["role"] == "user":
                 return m
 
-    def _generate_poem_reply(self,
-                             messages=None, sender=None, config=None):
+    def _generate_poem_reply(self, messages=None, sender=None, config=None):
         # message = messages[-1]['content']
         message = messages[-1]
 
