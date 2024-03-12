@@ -293,8 +293,13 @@ class Node(AbstractNode[T]):
                 # This is to ensure the feedback is not double counted when retain_graph is True.
                 node.zero_feedback()
 
-                for parent, parent_feedback in propagated_feedback.items():
-                    parent._add_feedback(node, parent_feedback)
+                # for parent, parent_feedback in propagated_feedback.items():
+                #     parent._add_feedback(node, parent_feedback)
+
+                for parent in node.parents:
+                    if parent in propagated_feedback:
+                        parent._add_feedback(node, propagated_feedback[parent])
+
                     # Put parent in the queue if it has not been visited and it's not a root
                     if len(parent.parents) > 0 and parent not in queue:  # and parent not in queue:
                         heapq.heappush(queue, parent)  # put parent in the priority queue
