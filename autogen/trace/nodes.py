@@ -210,7 +210,7 @@ class Node(AbstractNode[T]):
 
     @property
     def info(self):
-        return self.info
+        return self._info
 
     def _add_feedback(self, child, feedback):
         """Add feedback from a child."""

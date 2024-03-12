@@ -12,7 +12,8 @@ class AbtractPropagator:
         assert all(
             [len(f) <= 1 for f in child.feedback.values()]
         )  # All MessageNode feedback should be at most length 1
-        propagated_feedback = self.propagate(child.data, child.description, child.feedback, child.parents)
+        # TODO info and description may be merged
+        propagated_feedback = self.propagate(child.data, child.description, child.feedback, child.parents, child.info)
         # Check propagated feedback has the right format
         # It should be a dictionary with the parents as keys and the feedback as values
         assert isinstance(propagated_feedback, dict)
@@ -20,7 +21,7 @@ class AbtractPropagator:
 
         return propagated_feedback
 
-    def propagate(self, data: Any, description: str, feedback: dict, parents: List[Node]):
+    def propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         """Compute propagated feedback to node.parents based on
         node.description, node.data, and node.feedback. Return a dict where
         the keys are the parents and the values are the
@@ -36,14 +37,14 @@ class Propagator(AbtractPropagator):
     def register(self, operator_name, propagate_function):
         self.override[operator_name] = propagate_function
 
-    def propagate(self, data: Any, description: str, feedback: dict, parents: List[Node]):
+    def propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         operator_name = get_operator_name(description)
         if operator_name in self.override:
-            return self.override[operator_name](data, description, feedback, parents)
+            return self.override[operator_name](data, description, feedback, parents, info)
         else:
-            return self._propagate(data, description, feedback, parents)
+            return self._propagate(data, description, feedback, parents, info)
 
-    def _propagate(self,data: Any, description: str, feedback: dict, parents: List[Node]):
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         """Compute propagated feedback to node.parents based on
         node.description, node.data, and node.feedback. Return a dict where
         the keys are the parents and the values are the
@@ -66,12 +67,14 @@ def get_label(x, print_limit=200):
         content = content[:print_limit] + "..."
     return text + content
 
+
 # Note:
 # if len(feedback) > 1, it means there are two or more child nodes from this node,
 # we might need to perform a "merge" feedback action
 
+
 class sum_propagate(Propagator):
-    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node]):
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         # Simply sum the feedback
         feedback_list = [v[0] for k, v in feedback.items()]
         if len(feedback_list) == 0:
@@ -86,15 +89,20 @@ class sum_propagate(Propagator):
 
 
 class retain_last_only_propagate(Propagator):
-    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node]):
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         summary = "".join([v[0] for k, v in feedback.items()])
         return {parent: summary for parent in parents}
 
 
 class retain_full_history_propagate(Propagator):
-    def _propagate(cls, data: Any, description: str, feedback: dict, parents: List[Node]):
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         # this retains the full history
-        summary = "".join([f"\n\n{get_label(description).capitalize()}:{data}\n\n{get_label(k).capitalize()}{v[0]}" for k, v in feedback.items()])
+        summary = "".join(
+            [
+                f"\n\n{get_label(description).capitalize()}:{data}\n\n{get_label(k).capitalize()}{v[0]}"
+                for k, v in feedback.items()
+            ]
+        )
         return {parent: summary for parent in parents}
 
 
@@ -115,24 +123,27 @@ class self_graph_propagate(Propagator):
         super().__init__()
         self.parser = SimplePromptParser()
 
-        self.partial_graph_format = dedent("""
+        self.partial_graph_format = dedent(
+            """
         Function: {{input_llms}} -> {{name}}
         {{#each inputs}}
-        <Input{{this.num}}> 
+        <Input{{this.num}}>
         Name: {{this.llm}}:
             {{this.input}}
         </Input{{this.num}}>
-        
+
         {{~/each}}
         <Output>
             {{output}}
         </Output>
-        """)
+        """
+        )
 
-    def _propagate(cls, data: Any, description: str, feedback: dict, parents: List[Node]):
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node], info: dict):
         # this retains the full history
         summary = "".join([f"\n\n{get_label(k).capitalize()}{v[0]}" for k, v in feedback.items()])
         return {parent: summary for parent in parents}
+
 
 class partial_graph_propagate(Propagator):
     """
