@@ -70,16 +70,17 @@ class FunModule(Module):
             isinstance(node_dict, dict) or (node_dict is None) or (node_dict == "auto")
         ), "node_dict must be a dictionary or None or 'auto."
         self.info = dict(
-            name=fun.__qualname__,
+            fun_name=fun.__qualname__,
             doc=fun.__doc__,
             signature=inspect.signature(fun),
             source=inspect.getsource(fun),
         )
         if description is None:
             # Generate the description from the function name and docstring.
-            description = f"[{self.info['name']}] {self.info['doc']}."
+            description = f"[{self.info['fun_name']}] {self.info['doc']}."
         self.fun = fun
         self.node_dict = node_dict
+        self.info["node_dict"] = node_dict
         self.description = description
         self.n_outputs = n_outputs
         self.wrap_output = wrap_output

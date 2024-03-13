@@ -5,6 +5,7 @@ from collections import defaultdict
 import heapq
 from typing import TypeVar, Generic
 import re
+from autogen.trace.utils import get_name
 
 
 def node(message, name=None):
@@ -253,9 +254,7 @@ class Node(AbstractNode[T]):
 
             digraph = Digraph()
 
-            def get_name(x):
-                return x.name.replace(":", "")  # using colon in the name causes problems in graphviz
-
+            # using colon in the name causes problems in graphviz
             def get_label(x):
                 text = get_name(x) + "\n" + x.description + "\n"
                 content = str(x.data["content"] if isinstance(x.data, dict) else x.data)
@@ -332,9 +331,9 @@ class Node(AbstractNode[T]):
         return digraph
 
     def clone(self):
-        return MessageNode(
-            copy.deepcopy(self.data), inputs=[self], description="[clone] This is a clone operator.", name="clone"
-        )
+        import autogen.trace.operators as ops
+
+        return ops.clone(self)
 
     def detach(self):
         return copy.deepcopy(self)

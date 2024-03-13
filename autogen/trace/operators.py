@@ -8,6 +8,11 @@ from autogen.trace.trace_ops import trace_op
 import copy
 
 
+@trace_op("[clone] This is a clone operator of x.", node_dict="auto")
+def clone(x: Any):
+    return copy.deepcopy(x)
+
+
 def identity(x: Any):
     # identity(x) behaves the same as x.clone()
     return x.clone()
