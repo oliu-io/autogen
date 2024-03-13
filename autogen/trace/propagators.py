@@ -21,15 +21,16 @@ class AbtractPropagator:
         return propagated_feedback
 
     def propagate(self, child: MessageNode) -> Dict[Node, Any]:
-        """Compute propagated feedback to node.parents based on
-        node.description, node.data, and node.feedback. Return a dict where
+        """Compute propagated feedback to node.parents of a node. Return a dict where
         the keys are the parents and the values are the
         propagated feedback.
         """
         raise NotImplementedError
 
-    def summarize(self, node: Node) -> str:
-        """Compute a text summary of the feedback for the node."""
+    def summarize(self, node: Node) -> Any:
+        """Compute a summary of the feedback at the node. The returned value may
+        be different node.feedback and may include other information such as the
+        data of the node and the description of the node."""
         raise NotImplementedError
 
 
@@ -54,6 +55,9 @@ class Propagator(AbtractPropagator):
         propagated feedback.
         """
         raise NotImplementedError
+
+    def summarize(self, node: Node) -> Any:
+        return node.feedback
 
 
 def format(x):
@@ -119,7 +123,7 @@ class function_propagate(Propagator):
             assert len(v) == 1
             user_feedback = v[0]
         else:
-            aggregated_feedback = self.aggregate(child.feedback)
+            aggregated_feedback = self._aggregate(child.feedback)
             graph = graph + aggregated_feedback["graph"]
             data.update(aggregated_feedback["data"])
             doc.update(aggregated_feedback["doc"])
@@ -135,7 +139,7 @@ class function_propagate(Propagator):
                 graph.append(g)
         return graph
 
-    def aggregate(self, feedback: dict):
+    def _aggregate(self, feedback: dict):
         """Aggregate feedback from multiple children"""
         user_feedback = set()
         graph = []
@@ -156,6 +160,13 @@ class function_propagate(Propagator):
         assert len(user_feedback) == 1, "user feedback should be the same for all children"
         user_feedback = user_feedback.pop()
         return dict(data=data, graph=graph, doc=doc, user_feedback=user_feedback)
+
+    def summarize(self, node: Node) -> Any:
+        summary = self._aggregate(node.feedback)
+        summary["data"].update(
+            {get_name(node): node.data}
+        )  # Add the data of x, since summary only contains data of the children
+        return summary
 
 
 class retain_last_only_propagate(Propagator):
