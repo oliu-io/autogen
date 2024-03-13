@@ -2,6 +2,10 @@ from graphviz import Digraph
 import re
 
 
+def get_name(x):
+    return x.name.replace(":", "")
+
+
 def for_all_methods(decorator):
     """Applying a decorator to all methods of a class."""
 
