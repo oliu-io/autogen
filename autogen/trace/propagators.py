@@ -3,7 +3,7 @@ from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
 from autogen.trace.utils import SimplePromptParser
 from textwrap import dedent
-
+import autogen
 
 class AbtractPropagator:
     def __call__(self, child: MessageNode):
@@ -98,6 +98,82 @@ class retain_full_history_propagate(Propagator):
         return {parent: summary for parent in parents}
 
 
+"""
+Goals:
+1. Simple propagate just concatenate as "sum"
+2. Should have an LLM function to compute the finite difference
+
+Two propagators:
+1. EarlySum
+2. DistributiveSum
+
+Two types of symbolic summary:
+1. LocalSummary (just the current node input/output)
+2. FullSummary (the entire chain up till the node)
+
+Representation of each computation block
+For Local:
+# content first
+x = {}
+y = {}
+# symbol last
+z = f(x, y)
+
+For Full: (use chain representation) (because either EarlySum or DistributiveSum, we just deal with one feedback at a time)
+# content first
+x = {}
+y = {}
+z = {}
+# symbol last
+???
+"""
+
+class LLMCallable(object):
+    def __init__(self, config_list):
+        build_manager = autogen.OpenAIWrapper(config_list=config_list)
+
+class simple_early_sum_propagate(Propagator):
+    def __init__(self):
+        super().__init__()
+        self.parser = SimplePromptParser()
+
+        self.self_node_format = dedent("""
+        Function: {{input_llms}} -> {{name}}
+        {{#each inputs}}
+        <Input{{this.num}}> 
+        Name: {{this.llm}}:
+            {{this.input}}
+        </Input{{this.num}}>
+
+        {{~/each}}
+        <Output>
+            {{output}}
+        </Output>
+        """)
+    def _propagate(self, data: Any, description: str, feedback: dict, parents: List[Node]):
+        # Simply sum the feedback
+        feedback_list = [v[0] for k, v in feedback.items()]
+        if len(feedback_list) == 0:
+            summary = ""
+        else:
+            assert all([type(feedback_list[0]) == type(f) for f in feedback_list]), "error in propagate"
+            if isinstance(feedback_list[0], str):
+                summary = "".join(feedback_list)
+            else:  # isinstance(feedback_list[0], int):
+                summary = sum(feedback_list)
+        return {parent: summary for parent in parents}
+
+"""
+Backprop on the graph needs to do two things:
+1. Provide the symbolic structure / computation of the graph
+2. Provide the actual numerical values of the computation
+
+We can explicitly compute Delta(input, output) and Delta(output, target_output)
+"""
+
+class late_sum_propagate(Propagator):
+    pass
+
 class self_graph_propagate(Propagator):
     """
     This propagator does these things:
@@ -115,7 +191,7 @@ class self_graph_propagate(Propagator):
         super().__init__()
         self.parser = SimplePromptParser()
 
-        self.partial_graph_format = dedent("""
+        self.self_node_format = dedent("""
         Function: {{input_llms}} -> {{name}}
         {{#each inputs}}
         <Input{{this.num}}> 
@@ -128,9 +204,12 @@ class self_graph_propagate(Propagator):
             {{output}}
         </Output>
         """)
+        self.self_node_parser = SimplePromptParser(self.self_node_format)
 
     def _propagate(cls, data: Any, description: str, feedback: dict, parents: List[Node]):
-        # this retains the full history
+        # if len(feedback) > 1, it means there are two or more child nodes from this node
+        # but we are still summarizing it separately
+
         summary = "".join([f"\n\n{get_label(k).capitalize()}{v[0]}" for k, v in feedback.items()])
         return {parent: summary for parent in parents}
 
