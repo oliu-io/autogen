@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Dict
 from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
 from autogen.trace.utils import SimplePromptParser, get_name
@@ -20,12 +20,16 @@ class AbtractPropagator:
         assert all((p in propagated_feedback for p in child.parents))
         return propagated_feedback
 
-    def propagate(self, child: MessageNode):
+    def propagate(self, child: MessageNode) -> Dict[Node, Any]:
         """Compute propagated feedback to node.parents based on
         node.description, node.data, and node.feedback. Return a dict where
         the keys are the parents and the values are the
         propagated feedback.
         """
+        raise NotImplementedError
+
+    def summarize(self, node: Node) -> str:
+        """Compute a text summary of the feedback for the node."""
         raise NotImplementedError
 
 
@@ -36,14 +40,14 @@ class Propagator(AbtractPropagator):
     def register(self, operator_name, propagate_function):
         self.override[operator_name] = propagate_function
 
-    def propagate(self, child: MessageNode):
+    def propagate(self, child: MessageNode) -> Dict[Node, Any]:
         operator_name = get_operator_name(child.description)
         if operator_name in self.override:
             return self.override[operator_name](child)
         else:
             return self._propagate(child)
 
-    def _propagate(self, child: MessageNode):
+    def _propagate(self, child: MessageNode) -> Dict[Node, Any]:
         """Compute propagated feedback to node.parents based on
         node.description, node.data, and node.feedback. Return a dict where
         the keys are the parents and the values are the
