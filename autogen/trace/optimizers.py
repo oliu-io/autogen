@@ -51,7 +51,7 @@ class DummyOptimizer(Optimizer):
         return new
 
 
-class LLMOptimizer(Optimizer):
+class AutogenLLMOptimizer(Optimizer):
     def __init__(self, parameters, config_list, task_description, *args, **kwargs):
         super().__init__(parameters, *args, **kwargs)
         sys_msg = dedent(

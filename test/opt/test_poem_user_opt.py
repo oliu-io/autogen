@@ -6,7 +6,7 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatibility, node, trace_class
-from autogen.trace.optimizers import LLMOptimizer
+from autogen.trace.optimizers import AutogenLLMOptimizer
 from autogen.trace.optimizer_autogen import train_with_env
 from autogen.trace.utils import backfill_lists, plot_agent_performance, verbalize
 from textwrap import dedent, indent
@@ -124,7 +124,7 @@ env = llfbench.make("llf-poem-SyllableConstrainedPoem-v0", instruction_type="b",
 
 # ======= Now with the env reward, we can optimize =======
 
-optimizer = LLMOptimizer(
+optimizer = AutogenLLMOptimizer(
     poem_agent.student_agent.parameters,
     config_list=config_list,
     task_description=dedent(
