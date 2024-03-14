@@ -28,7 +28,7 @@ class AbtractPropagator:
         raise NotImplementedError
 
     def summarize(self, node: Node) -> Any:
-        """Compute a summary of the feedback at the node. The returned value may
+        """Create a summary of the feedback at the node. The returned value may
         be different node.feedback and may include other information such as the
         data of the node and the description of the node."""
         raise NotImplementedError
