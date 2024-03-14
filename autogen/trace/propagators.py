@@ -3,6 +3,7 @@ from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
 from autogen.trace.utils import SimplePromptParser, get_name
 from textwrap import dedent
+import autogen
 
 
 class AbtractPropagator:
@@ -95,6 +96,7 @@ class sum_propagate(Propagator):
         return {parent: summary for parent in child.parents}
 
 
+# Distributive
 class function_propagate(Propagator):
     def _propagate(self, child: MessageNode):
         """Summarize the feedback in terms of code."""
@@ -111,6 +113,9 @@ class function_propagate(Propagator):
         for parent in child.parents:
             function_call += f"{get_name(parent)}, "
         function_call = function_call[:-2] + ")"
+
+        self.child = child
+        self.function_call = function_call
 
         # Only add unique ones
         graph = [(child.level, function_call)]
@@ -129,8 +134,18 @@ class function_propagate(Propagator):
             doc.update(aggregated_feedback["doc"])
             user_feedback = aggregated_feedback["user_feedback"]
 
+        graph = self._post_process(graph)
+
         summary = dict(data=data, graph=graph, doc=doc, user_feedback=user_feedback)
         return {parent: summary for parent in child.parents}
+
+    @staticmethod
+    def repr_function_call(child: MessageNode):
+        function_call = f"{get_name(child)} = {child.info['fun_name']}("
+        for parent in child.parents:
+            function_call += f"{get_name(parent)}, "
+        function_call = function_call[:-2] + ")"
+        return function_call
 
     @staticmethod
     def update_graph(graph: List[str], sub_graph: List[str]):
@@ -161,6 +176,9 @@ class function_propagate(Propagator):
         user_feedback = user_feedback.pop()
         return dict(data=data, graph=graph, doc=doc, user_feedback=user_feedback)
 
+    def _post_process(self, graph: List[str]):
+        return graph
+
     def summarize(self, node: Node) -> Any:
         summary = self._aggregate(node.feedback)
         summary["data"].update(
@@ -169,77 +187,72 @@ class function_propagate(Propagator):
         return summary
 
 
-class retain_last_only_propagate(Propagator):
-    def _propagate(self, child: MessageNode):
-        summary = "".join([v[0] for k, v in child.feedback.items()])
-        return {parent: summary for parent in child.parents}
-
-
-class retain_full_history_propagate(Propagator):
-    def _propagate(self, child: MessageNode):
-        # this retains the full history
-        summary = "".join(
-            [
-                f"\n\n{get_label(child.description).capitalize()}:{child.data}\n\n{get_label(k).capitalize()}{v[0]}"
-                for k, v in child.feedback.items()
-            ]
-        )
-        return {parent: summary for parent in child.parents}
-
-
-class self_graph_propagate(Propagator):
+class function_sum_propagate(function_propagate):
     """
-    This propagator does these things:
-    1. construct a partial graph at each node
-    2. Following visualization principle, ignore identity functions
-
-    We have the following information we want to propagate:
-    1. Myopic graph structure -- only input/output of self, not the full chain
-    2. Input/output of this node
-    3. Delta X (how much did the input/output change)
-    4. Feedback from before
+    This allows us to only reason about 2 processes
     """
 
-    def __init__(self):
-        super().__init__()
-        self.parser = SimplePromptParser()
+    def _post_process(self, graph: List[str]):
+        # now we do a post-process step
+        # grab the graph at the current level, if there are > 1 nodes
+        # we perform a merge (early sum)
+        # single chain representation
+        current_level_graph = list(filter(lambda x: x[0] == self.child.level + 1, graph))
+        if len(current_level_graph) > 1:
+            collect_all = []
+            for level, node in current_level_graph:
+                func_form = node.split(" = ")[1]
+                collect_all.append(func_form)
+            # instead of being literal total derivative
+            # we can use "Merge" as a symbol instead
+            new_graph = " + ".join(collect_all)
+            # graph = [(self.child.level, self.function_call), (self.child.level + 1, new_graph)]
+            # resolve and flatten the level
+            child_name, func_form = self.function_call.split(" = ")
+            new_graph = new_graph.replace(child_name, func_form)
+            graph = [(self.child.level, new_graph)]
 
-        self.partial_graph_format = dedent(
-            """
-        Function: {{input_llms}} -> {{name}}
-        {{#each inputs}}
-        <Input{{this.num}}>
-        Name: {{this.llm}}:
-            {{this.input}}
-        </Input{{this.num}}>
-
-        {{~/each}}
-        <Output>
-            {{output}}
-        </Output>
-        """
-        )
-
-    def _propagate(self, child: MessageNode):
-        # this retains the full history
-        summary = "".join([f"\n\n{get_label(k).capitalize()}{v[0]}" for k, v in child.feedback.items()])
-        return {parent: summary for parent in child.parents}
+        return graph
 
 
-class partial_graph_propagate(Propagator):
-    """
-    This propagator does these things:
-    1. construct a partial graph at each node
-    2. Following visualization principle, ignore identity functions
+class function_distributive_propagate(function_propagate):
+    def _post_process(self, graph: List[str]):
+        # now we do a post-process step
+        # we perform a distributive sum
+        current_level_graph = list(filter(lambda x: x[0] == self.child.level + 1, graph))
+        if len(current_level_graph) > 1:
+            collect_all = []
+            for level, node in current_level_graph:
+                func_form = node.split(" = ")[1]
+                child_name, child_func_form = self.function_call.split(" = ")
+                # we keep the path derivative
+                new_graph = func_form.replace(child_name, child_func_form)
+                collect_all.append((self.child.level, new_graph))
+            graph = collect_all
 
-    We have the following information we want to propagate:
-    1. Graph structure (partial) (what is this node's computation afffecting output)
-      - The entire chain gets rendered
-      (Need parsing)
-      - Since there is no loop,
-    2. Input/output of this node
-    3. Delta X (how much did the input/output change)
-    4. Feedback from before
-    """
+        return graph
 
-    pass
+
+class LLMCallable(object):
+    def __init__(self, config_list):
+        build_manager = autogen.OpenAIWrapper(config_list=config_list)
+
+
+def test_case_shallow_diamond(prop_func):
+    from autogen.trace import node
+
+    a = node(1, name="node_c")
+    b = node(2, name="node_b")
+    c = a + b  # f
+    d = c + 1  # g
+    e = c + 2  # h
+    y = d + e
+    y.backward(visualize=True, feedback="Correct", propagate=prop_func())
+
+    print(a.feedback)
+
+
+if __name__ == '__main__':
+    test_case_shallow_diamond(function_propagate)
+    test_case_shallow_diamond(function_sum_propagate)
+    test_case_shallow_diamond(function_distributive_propagate)
