@@ -515,6 +515,18 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
         return ops.title(self)
 
+    def split(self, sep=None, maxsplit=-1):
+        import autogen.trace.operators as ops
+        return ops.split(self, sep, maxsplit)
+
+    def strip(self, chars=None):
+        import autogen.trace.operators as ops
+        return ops.strip(self, chars)
+
+    def replace(self, old, new, count=-1):
+        import autogen.trace.operators as ops
+        return ops.replace(self, old, new, count)
+
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.

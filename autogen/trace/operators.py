@@ -244,3 +244,15 @@ def swapcase(x: Any):
 @trace_op("[capitalize] Converts the first character of a string to uppercase.", node_dict="auto")
 def capitalize(x: Any):
     return x.capitalize()
+
+@trace_op("[split] Splits the string by finding a substring y in string x, return the first part and second part of string x without y.", node_dict="auto")
+def split(x: Any, y: Any, maxsplit: Any = -1):
+    return x.split(y, maxsplit)
+
+@trace_op("[strip] Removes the leading and trailing characters of x.", node_dict="auto")
+def strip(x: Any):
+    return x.strip()
+
+@trace_op("[replace] Replaces all occurrences of substring y in string x with z.", node_dict="auto")
+def replace(x: Any, old: Any, new: Any, count: Any = -1):
+    return x.replace(old, new, count)
