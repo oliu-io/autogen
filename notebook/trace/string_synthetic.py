@@ -11,8 +11,9 @@ But with trace, we can see into the transformation, therefore, much much much ea
 
 (This is also why it's a toy task)
 
-We are going to sample a constraint (to verify)
-Then we are going
+We have a target string, which is revealed to the LLM
+
+Goal: target string must be in the output of the transformation
 """
 
 from autogen.trace.nodes import node
@@ -27,11 +28,13 @@ def reformat(program_str: str):
     # remove empty lines and leading/trailing spaces
     return dedent(program_str).strip()
 
-string_ops = ["capitalize", "lower", "upper", "swapcase", "title"]
-string_op_programs = {
+unary_sg_ret_string_ops = ["capitalize", "lower", "upper", "swapcase", "title"]
+unary_sg_ret_string_op_programs = {
     "capitalize": reformat("""lambda s: s.capitalize()"""),
     "lower": reformat("""lambda s: s.lower()"""),
     "upper": reformat("""lambda s: s.upper()"""),
     "swapcase": reformat("""lambda s: s.swapcase()"""),
     "title": reformat("""lambda s: s.title()"""),
 }
+
+# split, replace, concat

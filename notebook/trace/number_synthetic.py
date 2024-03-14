@@ -6,9 +6,12 @@ Design space:
 
 If we send in Torch tensor or jax, it should also be traced automatically.
 
+Goal: min/max, OR, hit a target value?
+
 TODO:
 1. add unary operations
 2. Broaden the list of math_ops
+3. Define max/min target (or restrict input domain)
 """
 
 from autogen.trace.nodes import node
@@ -16,6 +19,8 @@ import string
 import random
 import numpy as np
 from textwrap import dedent
+
+from copy import copy
 
 from typing import List
 from autogen.trace.operators import *
@@ -53,7 +58,7 @@ MAX_VALUE = 2
 MIN_VALUE = -2
 
 
-def create_input_var():
+def create_input_var(input_min=-10, input_max=10):
     # sample and return a random 5 letter name
     retry = 10
     cnt = 0
@@ -64,7 +69,7 @@ def create_input_var():
         cnt += 1
         name = "node_".join(random.choices(string.ascii_lowercase, k=5))
 
-    value = random.randint(MIN_VALUE, MAX_VALUE)
+    value = random.randint(input_min, input_max)
     return node(value, name)
 
 
@@ -78,13 +83,16 @@ class NumericalProgramSampler:
                  two_var_mixture=[0.4, 0.4, 0.2],
                  logic_prob=0.3,
                  max_gen_var=10,
-                 seed=None):
+                 seed=1234):
         """
         Args:
             chain_length:
             param_num: for this problem, more natural to have >1 param
             max_gen_var: how many latent variables (not input variables) to generate.
                          A good rule of thumb is -- make it 1.5 times the chain_length
+
+            goal_output: target output to hit
+
         """
 
         assert chain_length > 0, "Chain length should be positive"
@@ -113,6 +121,13 @@ class NumericalProgramSampler:
 
         for _ in range(param_num):
             self.input_var_space.append(create_input_var())
+
+        self.goal_output = self.__call__(self.get_current_input(), seed=seed)
+        self.goal_input = copy(self.get_current_input())
+
+    def reset(self):
+        self.input_var_space = []
+        self.gen_var_space = []
 
     def set_seed(self, seed=None):
         if seed is not None:
