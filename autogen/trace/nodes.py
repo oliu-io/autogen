@@ -496,34 +496,50 @@ class Node(AbstractNode[T]):
 
     # string operators
     def capitalize(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'capitalize'.")
         import autogen.trace.operators as ops
         return ops.capitalize(self)
 
     def lower(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'lower'.")
         import autogen.trace.operators as ops
         return ops.lower(self)
 
     def upper(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'upper'.")
         import autogen.trace.operators as ops
         return ops.upper(self)
 
     def swapcase(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'swapcase'.")
         import autogen.trace.operators as ops
         return ops.swapcase(self)
 
     def title(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'title'.")
         import autogen.trace.operators as ops
         return ops.title(self)
 
     def split(self, sep=None, maxsplit=-1):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'split'.")
         import autogen.trace.operators as ops
         return ops.split(self, sep, maxsplit)
 
     def strip(self, chars=None):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'strip'.")
         import autogen.trace.operators as ops
         return ops.strip(self, chars)
 
     def replace(self, old, new, count=-1):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'replace'.")
         import autogen.trace.operators as ops
         return ops.replace(self, old, new, count)
 
