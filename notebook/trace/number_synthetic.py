@@ -15,6 +15,7 @@ TODO:
 """
 
 from autogen.trace.nodes import node
+from autogen.trace.propagators import function_propagate
 import string
 import random
 import numpy as np
@@ -57,17 +58,16 @@ variable_name_collide_list = set()
 MAX_VALUE = 2
 MIN_VALUE = -2
 
-
 def create_input_var(input_min=-10, input_max=10):
     # sample and return a random 5 letter name
     retry = 10
     cnt = 0
 
-    name = "node_".join(random.choices(string.ascii_lowercase, k=5))
+    name = "node_" + "".join(random.choices(string.ascii_lowercase, k=5))
 
     while name in variable_name_collide_list and cnt < retry:
         cnt += 1
-        name = "node_".join(random.choices(string.ascii_lowercase, k=5))
+        name = "node_" + "".join(random.choices(string.ascii_lowercase, k=5))
 
     value = random.randint(input_min, input_max)
     return node(value, name)
@@ -83,7 +83,7 @@ class NumericalProgramSampler:
                  two_var_mixture=[0.4, 0.4, 0.2],
                  logic_prob=0.3,
                  max_gen_var=10,
-                 seed=1234):
+                 seed=1234, verbose=False):
         """
         Args:
             chain_length:
@@ -92,15 +92,14 @@ class NumericalProgramSampler:
                          A good rule of thumb is -- make it 1.5 times the chain_length
 
             goal_output: target output to hit
-
+            verbose: Print out the computation that's sampled
         """
 
         assert chain_length > 0, "Chain length should be positive"
         assert type(chain_length) == int
         assert type(max_gen_var) == int
 
-        assert sum(two_var_mixture) == 1, "The mixture should sum to 1"
-        assert len(two_var_mixture) == 3, "The mixture should have 3 elements"
+        self.mixture_assertion_check(two_var_mixture, 3)
         assert logic_prob >= 0 and logic_prob <= 1, "Logic prob should be between 0 and 1"
 
         self.set_seed(seed)
@@ -122,8 +121,23 @@ class NumericalProgramSampler:
         for _ in range(param_num):
             self.input_var_space.append(create_input_var())
 
-        self.goal_output = self.__call__(self.get_current_input(), seed=seed)
-        self.goal_input = copy(self.get_current_input())
+        self._goal_output = self.__call__(self.get_current_input(), seed=seed, verbose=verbose)
+        self._goal_input = copy(self.get_current_input())
+
+    @property
+    def goal_input(self):
+        return [i.data for i in self._goal_input]
+
+    @property
+    def goal_output(self):
+        return self._goal_output.data
+
+    def display_computation_graph(self):
+        return self._goal_output.backward(visualize='True', feedback='fine', propagate=function_propagate())
+
+    def mixture_assertion_check(self, mixture, num_elements=2):
+        assert abs(sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
+        assert len(mixture) == num_elements, f"The mixture should have {num_elements} elements"
 
     def reset(self):
         self.input_var_space = []
@@ -150,7 +164,16 @@ class NumericalProgramSampler:
                     sampled_var = random.choice(var_space)
                 sampled_vars.append(sampled_var)
             else:
-                sampled_var = random.choice(var_space)
+                # for input_var
+                # we do a probability curve that favors later items (to increase computational complexity)
+                # once all input_vars have been used
+                if len(self.input_var_space) > self.param_num:
+                    weights = np.exp(np.arange(len(self.input_var_space)))
+                    p = weights / np.sum(weights)
+                else:
+                    p = [1 / len(self.input_var_space)] * len(self.input_var_space)
+                sampled_var_idx = np.random.choice(list(range(len(self.input_var_space))), p=p)
+                sampled_var = var_space[sampled_var_idx]
                 sampled_vars.append(sampled_var)
 
         return sampled_vars
@@ -177,7 +200,7 @@ class NumericalProgramSampler:
           - [0, 2] means 2 values from gen_var_space
           - [2, 0] means 2 values from input_var_space
           if gen_var_space is sampled, we have a chance to create a new latent var
-            the prob of creating a new one and use it is:
+            The prob of creating a new one and use it is:
             1 - len(gen_var_space) / max_gen_var
           This is a probability curve -- the more latent vars we have, the less likely we create a new one
 
@@ -190,7 +213,7 @@ class NumericalProgramSampler:
 
         return op, sampled_vars, is_gen_var
 
-    def sample_step(self):
+    def sample_step(self, verbose=False):
         """
         Sample whether we want a logic op or not
         If yes: sample 2 ops and 1 logic op
@@ -208,6 +231,7 @@ class NumericalProgramSampler:
 
             logic_op = logic_ops_programs[np.random.choice(logic_ops)]
             sampled_vars, is_gen_var = self.sample_two_vars()
+
             if eval(logic_op)(sampled_vars[0], sampled_vars[1]):
                 # first op
                 out_var = eval(op1)(vars1[0], vars2[1])
@@ -224,13 +248,13 @@ class NumericalProgramSampler:
 
         return out_var, out_var_is_gen
 
-    def step(self):
+    def step(self, verbose=False):
         """
         If
         Returns:
 
         """
-        out_var, out_var_is_gen = self.sample_step()
+        out_var, out_var_is_gen = self.sample_step(verbose=verbose)
         if out_var_is_gen:
             self.gen_var_space.append(out_var)
         else:
@@ -242,7 +266,7 @@ class NumericalProgramSampler:
     def get_current_input(self):
         return self.input_var_space[:self.param_num]
 
-    def __call__(self, input_params: List[int], seed=1234):
+    def __call__(self, input_params: List[int], seed=1234, verbose=False):
         """
         Args:
             input_params: a list of input parameters
@@ -260,6 +284,6 @@ class NumericalProgramSampler:
         self.set_seed(seed)
 
         for _ in range(self.chain_length):
-            out_var = self.step()
+            out_var = self.step(verbose=verbose)
         return out_var
 

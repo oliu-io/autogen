@@ -256,7 +256,11 @@ class Node(AbstractNode[T]):
 
             # using colon in the name causes problems in graphviz
             def get_label(x):
-                text = get_name(x) + "\n" + x.description + "\n"
+                description = x.description
+                if len(x.description) > print_limit:
+                    description = x.description[:print_limit] + "..."
+
+                text = get_name(x) + "\n" + description + "\n"
                 content = str(x.data["content"] if isinstance(x.data, dict) else x.data)
                 if len(content) > print_limit:
                     content = content[:print_limit] + "..."
@@ -541,7 +545,7 @@ class Node(AbstractNode[T]):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'replace'.")
         import autogen.trace.operators as ops
-        return ops.replace(self, old, new, count)
+        return ops.replace(self, node(old), node(new), count)
 
 
 class ParameterNode(Node[T]):
