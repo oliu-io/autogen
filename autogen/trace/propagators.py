@@ -213,6 +213,8 @@ class function_sum_propagate(function_propagate):
             graph = [(self.child.level, new_graph)]
 
         return graph
+    def summarize(self, node: Node) -> Any:
+        pass
 
 
 class function_distributive_propagate(function_propagate):
@@ -231,6 +233,8 @@ class function_distributive_propagate(function_propagate):
             graph = collect_all
 
         return graph
+    def summarize(self, node: Node) -> Any:
+        pass
 
 
 class LLMCallable(object):
