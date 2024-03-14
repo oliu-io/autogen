@@ -239,7 +239,7 @@ class function_distributive_propagate(function_propagate):
 
 class LLMCallable(object):
     def __init__(self, config_list):
-        build_manager = autogen.OpenAIWrapper(config_list=config_list)
+        chat_wrapper = autogen.OpenAIWrapper(config_list=config_list)
 
 
 def test_case_shallow_diamond(prop_func):
