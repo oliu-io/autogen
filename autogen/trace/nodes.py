@@ -429,8 +429,10 @@ class Node(AbstractNode[T]):
     ## Normal arithmetic operators
     def __add__(self, other):
         import autogen.trace.operators as ops
-
-        return ops.add(self, node(other))
+        if type(self._data) is str:
+            return ops.concat(self, node(other))
+        else:
+            return ops.add(self, node(other))
 
     def __sub__(self, other):
         import autogen.trace.operators as ops
@@ -491,6 +493,27 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
 
         return ops.xor(self, node(other))
+
+    # string operators
+    def capitalize(self):
+        import autogen.trace.operators as ops
+        return ops.capitalize(self)
+
+    def lower(self):
+        import autogen.trace.operators as ops
+        return ops.lower(self)
+
+    def upper(self):
+        import autogen.trace.operators as ops
+        return ops.upper(self)
+
+    def swapcase(self):
+        import autogen.trace.operators as ops
+        return ops.swapcase(self)
+
+    def title(self):
+        import autogen.trace.operators as ops
+        return ops.title(self)
 
 
 class ParameterNode(Node[T]):

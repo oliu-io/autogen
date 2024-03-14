@@ -5,6 +5,10 @@ Design space:
   2. math operators: +, -, *, /, %, //, **
 
 If we send in Torch tensor or jax, it should also be traced automatically.
+
+TODO:
+1. add unary operations
+2. Broaden the list of math_ops
 """
 
 from autogen.trace.nodes import node
@@ -12,9 +16,9 @@ import string
 import random
 import numpy as np
 from textwrap import dedent
-from dataclasses import dataclass
 
 from typing import List
+from autogen.trace.operators import *
 
 
 def reformat(program_str: str):
@@ -32,6 +36,7 @@ logic_ops_programs = {
     "<=": reformat("""lambda a, b: a <= b"""),
 }
 
+# Not suppoprting unary ops for now
 math_ops = ["+", "-", "*", "/", "%", "//", "**"]
 math_ops_programs = {
     "+": reformat("""lambda a, b: a + b"""),
@@ -40,7 +45,7 @@ math_ops_programs = {
     "/": reformat("""lambda a, b: a / b"""),
     "%": reformat("""lambda a, b: a % b"""),
     "//": reformat("""lambda a, b: a // b"""),
-    "**": reformat("""lambda a, b: a ** b"""),
+    "**": reformat("""lambda a, b: a ** b""")
 }
 
 variable_name_collide_list = set()
