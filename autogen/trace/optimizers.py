@@ -1,5 +1,5 @@
-from typing import Any, List
-from autogen.trace.nodes import ParameterNode
+from typing import Any, List, Dict
+from autogen.trace.nodes import ParameterNode, Node
 from collections import defaultdict
 from autogen import AssistantAgent
 from autogen.oai.completion import Completion
@@ -51,8 +51,8 @@ class Optimizer(AbstractOptimizer):
         return self._propagator
 
     def step(self, *args, **kwargs):
-        new_values = self._step(self.parameters, *args, **kwargs)
-        for p, d in zip(self.parameters, new_values):
+        update_dict = self._step(self.parameters, *args, **kwargs)
+        for p, d in update_dict.items():
             if p.trainable:
                 p._data = d
 
@@ -61,13 +61,17 @@ class Optimizer(AbstractOptimizer):
             p.zero_feedback()
 
     # Subclass should implement the methods below.
-    def _step(self, nodes: List[ParameterNode], *args, **kwargs) -> List[Any]:
+    def _step(self, nodes: List[ParameterNode], *args, **kwargs) -> Dict[ParameterNode, Any]:
         """Return the new data of parameter nodes based on the feedback."""
         raise NotImplementedError
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
         raise NotImplementedError
+
+    def backward(self, node: Node, *args, **kwargs):
+        """Propagate the feedback backward."""
+        return node.backward(*args, propagator=self.propagator, **kwargs)
 
 
 # class DummyOptimizer(Optimizer):
@@ -119,9 +123,13 @@ class FunctionOptimizer(Optimizer):
         - #Others: the values of other inputs to the code, or intermediate values created through the code.
         - #Feedback: the feedback about the code's execution result.
 
-        You need to change the values of the variables in #Variables to improve the code's output in accordance to #Feedback. The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
+        In #Variables, #Outputs, and #Others, the format is:
+        <type> <variable_name> = <value>
+        You need to change the values of the variables in #Variables to improve the code's output in accordance to #Feedback and their data types.
+        The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
 
-        You should write down your thought process and finally make a suggestion of the desired values of #Variables in the format of
+        You should write down your thought process and finally make a suggestion of the desired values of #Variables in the format below.
+        If no changes are needed, include TERMINATE in #Reasoning and do not output #Suggestion.
 
         #Reasoning
         <Your reasoning>
@@ -162,9 +170,9 @@ class FunctionOptimizer(Optimizer):
         self.example_problem = self.problem_template.format(
             code="y = add(a,b)\nz = subtract(y, c)",
             documentation="add: add two numbers\nsubtract: subtract two numbers",
-            variables="a = 5",
-            outputs="z = 1",
-            others="b = 1\nc = 5",
+            variables="(int) a = 5",
+            outputs="(int) z = 1",
+            others="(int) b = 1\n(int) c = 5",
             feedback="The result of the code is not as expected. The result should be 10, but the code returns 1",
         )
         self.example_response = dedent(
@@ -181,20 +189,28 @@ class FunctionOptimizer(Optimizer):
         """Return the default Propagator object of the optimizer."""
         return FunctionPropagator()
 
-    def _step(self, nodes: List[ParameterNode], verbose=False, **kwargs) -> List[Any]:
+    def _step(self, nodes: List[ParameterNode], verbose=False, *args, **kwargs) -> Dict[ParameterNode, Any]:
         assert isinstance(self.propagator, FunctionPropagator)
 
-        for node in nodes:
-            summary = self.propagator.aggregate(node.feedback)
-            others = {get_name(p): p.data for p in self.parameters if not p.trainable}
-            others.update(summary.others)
+        # Aggregate feedback from all the nodes
+        feedbacks = [self.propagator.aggregate(node.feedback) for node in nodes]
+        summary = sum(feedbacks[1:], feedbacks[0])
 
+        # Construct variables and update others
+        others = {get_name(p): p.data for p in self.parameters if not p.trainable}
+        others.update(summary.others)
+        variables = {get_name(p): p.data for p in self.parameters if p.trainable}
+
+        def repr_node_value(node_dict):
+            return "\n".join([f"({type(v).__name__}) {k}={v}" for k, v in node_dict.items()])
+
+        # Format prompt
         problem_instance = self.problem_template.format(
             code="\n".join([v for k, v in sorted(summary.graph)]),
-            documentation="\n".join([v for k, v in summary.documentation.items()]),
-            variables="\n".join([f"{get_name(p)}={p.data}" for p in self.parameters if p.trainable]),
-            outputs="\n".join([f"{k}={v}" for k, v in summary.output.items()]),
-            others="\n".join([f"{k}={v}" for k, v in others.items()]),
+            documentation="\n".join([v for v in summary.documentation.values()]),
+            variables=repr_node_value(variables),
+            outputs=repr_node_value(summary.output),
+            others=repr_node_value(summary.others),
             feedback=summary.user_feedback,
         )
 
@@ -203,16 +219,36 @@ class FunctionOptimizer(Optimizer):
             example_response=self.example_response,
             problem_instance=problem_instance,
         )
+        response = self.call_llm(prompt, verbose=verbose)
+
+        if "TERMINATE" in response:
+            return {}
+
+        # Extract the suggestion from the response
+        suggestion = self.extract_suggestion(response)
+
+        # Convert the suggestion in text into the right data type
+        update_dict = {}
+        for node in nodes:
+            if node.trainable:
+                update_dict[node] = type(node.data)(suggestion[get_name(node)])
+        return update_dict
+
+    def extract_suggestion(self, response) -> dict:
+        suggestion = response.split("#Suggestion")[1]
+        suggestion = suggestion.split("\n")
+        output = {}
+        for s in suggestion:
+            if "=" in s:
+                k, v = s.replace("`", "").split("=")
+                output[k.strip()] = v.strip()
+        return output
+
+    def call_llm(self, prompt, verbose=False):  # TODO Get this from utils?
+        """Call the LLM with a prompt and return the response."""
         if verbose:
             print("Prompt\n", prompt)
-        response = self.call_llm(prompt)
-        if verbose:
-            print("LLM response:\n", response)
-        response.split("#Suggestion")[1]  # TODO
-        raise NotImplementedError
 
-    def call_llm(self, prompt):  # TODO Get this from utils?
-        """Call the LLM with a prompt and return the response."""
         response = (
             self.llm.create(
                 messages=[
@@ -225,6 +261,8 @@ class FunctionOptimizer(Optimizer):
             .choices[0]
             .message.content
         )
+        if verbose:
+            print("LLM response:\n", response)
         return response
 
 

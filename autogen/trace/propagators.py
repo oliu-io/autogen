@@ -167,7 +167,7 @@ class FunctionPropagator(Propagator):
                 documentation=documentation,
                 others={},  # there's no other intermediate nodes
                 user_feedback=user_feedback,
-                output={get_name(child): str(child.data)},  # This node is the output, not intermediate nodes
+                output={get_name(child): child.data},  # This node is the output, not intermediate nodes
             )
 
         else:  # This is an intermediate node
@@ -176,7 +176,7 @@ class FunctionPropagator(Propagator):
             feedback = aggregated_feedback + FunctionFeedback(
                 graph=graph,
                 documentation=documentation,
-                others={get_name(child): str(child.data)},  # record the data of the child,
+                others={get_name(child): child.data},  # record the data of the child,
                 # since there should be only one
                 user_feedback=aggregated_feedback.user_feedback,
                 output=aggregated_feedback.output,
