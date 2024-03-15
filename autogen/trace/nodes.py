@@ -256,7 +256,11 @@ class Node(AbstractNode[T]):
 
             # using colon in the name causes problems in graphviz
             def get_label(x):
-                text = get_name(x) + "\n" + x.description + "\n"
+                description = x.description
+                if len(x.description) > print_limit:
+                    description = x.description[:print_limit] + "..."
+
+                text = get_name(x) + "\n" + description + "\n"
                 content = str(x.data["content"] if isinstance(x.data, dict) else x.data)
                 if len(content) > print_limit:
                     content = content[:print_limit] + "..."
@@ -430,7 +434,10 @@ class Node(AbstractNode[T]):
     def __add__(self, other):
         import autogen.trace.operators as ops
 
-        return ops.add(self, node(other))
+        if type(self._data) is str:
+            return ops.concat(self, node(other))
+        else:
+            return ops.add(self, node(other))
 
     def __sub__(self, other):
         import autogen.trace.operators as ops
@@ -491,6 +498,63 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
 
         return ops.xor(self, node(other))
+
+    # string operators
+    def capitalize(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'capitalize'.")
+        import autogen.trace.operators as ops
+
+        return ops.capitalize(self)
+
+    def lower(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'lower'.")
+        import autogen.trace.operators as ops
+
+        return ops.lower(self)
+
+    def upper(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'upper'.")
+        import autogen.trace.operators as ops
+
+        return ops.upper(self)
+
+    def swapcase(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'swapcase'.")
+        import autogen.trace.operators as ops
+
+        return ops.swapcase(self)
+
+    def title(self):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'title'.")
+        import autogen.trace.operators as ops
+
+        return ops.title(self)
+
+    def split(self, sep=None, maxsplit=-1):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'split'.")
+        import autogen.trace.operators as ops
+
+        return ops.split(self, sep, maxsplit)
+
+    def strip(self, chars=None):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'strip'.")
+        import autogen.trace.operators as ops
+
+        return ops.strip(self, chars)
+
+    def replace(self, old, new, count=-1):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'replace'.")
+        import autogen.trace.operators as ops
+
+        return ops.replace(self, node(old), node(new), count)
 
 
 class ParameterNode(Node[T]):

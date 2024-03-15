@@ -211,3 +211,48 @@ def getitem(x: Any, index: Any):
 @trace_op("[len] This is a len operator of x.", node_dict="auto")
 def len_(x: Any):
     return len(x)
+
+# String operators
+@trace_op("[ord] The unicode number of a character.", node_dict="auto")
+def ord_(x: Any):
+    return ord(x)
+
+@trace_op("[chr] The character of a unicode number.", node_dict="auto")
+def chr_(x: Any):
+    return chr(x)
+
+@trace_op("[concat] This is a concatenation operator of x and y.", node_dict="auto")
+def concat(x: Any, y: Any):
+    return x + y
+
+@trace_op("[lower] This makes all characters in x lower case.", node_dict="auto")
+def lower(x: Any):
+    return x.lower()
+
+@trace_op("[upper] This makes all characters in x upper case.", node_dict="auto")
+def upper(x: Any):
+    return x.upper()
+
+@trace_op("[title] This makes the first character to upper case and the rest to lower case.", node_dict="auto")
+def title(x: Any):
+    return x.title()
+
+@trace_op("[swapcase] Swaps the case of all characters: uppercase character to lowercase and viceversa.", node_dict="auto")
+def swapcase(x: Any):
+    return x.swapcase()
+
+@trace_op("[capitalize] Converts the first character of a string to uppercase.", node_dict="auto")
+def capitalize(x: Any):
+    return x.capitalize()
+
+@trace_op("[split] Splits the string by finding a substring y in string x, return the first part and second part of string x without y.", node_dict="auto")
+def split(x: Any, y: Any, maxsplit: Any = -1):
+    return x.split(y, maxsplit)
+
+@trace_op("[strip] Removes the leading and trailing characters of x.", node_dict="auto")
+def strip(x: Any):
+    return x.strip()
+
+@trace_op("[replace] Replaces all occurrences of substring y in string x with z.", node_dict="auto")
+def replace(x: Any, old: Any, new: Any, count: Any = -1):
+    return x.replace(old, new, count)
