@@ -12,7 +12,7 @@ from autogen.agentchat.contrib.math_user_proxy_agent import MathUserProxyAgent
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatibility
-from autogen.trace.optimizers import AutogenLLMOptimizer
+from autogen.trace.optimizers import TeacherLLMOptimizer
 from autogen.trace.propagators import retain_last_only_propagate
 from textwrap import dedent, indent
 from autogen.trace.optimizer_autogen import train_with_datasets, DatasetProcessor
@@ -156,7 +156,7 @@ def check_equiv(sol1, sol2):
 
 dp = DatasetProcessor("problem", "solution", reward_fn=check_equiv)
 
-optimizer = AutogenLLMOptimizer(
+optimizer = TeacherLLMOptimizer(
     assistant.parameters,
     config_list=config_list,
     task_description=dedent(

@@ -1,12 +1,15 @@
+from typing import Any, List
 from autogen.trace.nodes import ParameterNode
 from collections import defaultdict
 from autogen import AssistantAgent
 from autogen.oai.completion import Completion
 from textwrap import dedent, indent
 from copy import copy
-from autogen.trace.propagators import get_label, get_name
+from autogen.trace.propagators import Propagator, FunctionPropagator
 from dataclasses import dataclass
-from autogen.trace.utils import SimplePromptParser
+from autogen.trace.utils import SimplePromptParser, get_name
+import autogen
+
 
 """
 We follow the same design principle as trace
@@ -14,47 +17,221 @@ This file is not dependent of AutoGen library and can be used independently with
 """
 
 
-class Optimizer:
-    def __init__(self, parameters, *args, **kwargs):
+class AbstractOptimizer:
+    """An optimizer is responsible for updating the parameters based on the feedback."""
+
+    def __init__(self, parameters: List[ParameterNode], *args, **kwargs):
         assert type(parameters) is list
         assert all([isinstance(p, ParameterNode) for p in parameters])
         self.parameters = parameters
 
     def step(self):
-        for p in self.parameters:
-            if p.trainable:
-                p._data = self._step(p._data, p._feedback)  # NOTE: This is an in-place update
-
-    def _step(self, value, feedback):
+        """Update the parameters based on the feedback."""
         raise NotImplementedError
 
     def zero_feedback(self):
+        """Reset the feedback."""
+        raise NotImplementedError
+
+    @property
+    def propagator(self):
+        """Return a Propagator object that can be used to propagate feedback in backward."""
+        raise NotImplementedError
+
+
+class Optimizer(AbstractOptimizer):
+    def __init__(self, parameters: List[ParameterNode], *args, propagator: Propagator = None, **kwargs):
+        super().__init__(parameters)
+        propagator = propagator if propagator is not None else self.default_propagator()
+        assert isinstance(propagator, Propagator)
+        self._propagator = propagator
+
+    @property
+    def propagator(self):
+        return self._propagator
+
+    def step(self, *args, **kwargs):
+        new_values = self._step(self.parameters, *args, **kwargs)
+        for p, d in zip(self.parameters, new_values):
+            if p.trainable:
+                p._data = d
+
+    def zero_feedback(self):
         for p in self.parameters:
-            # trace the children of parameters and clean their feedback
             p.zero_feedback()
 
+    # Subclass should implement the methods below.
+    def _step(self, nodes: List[ParameterNode], *args, **kwargs) -> List[Any]:
+        """Return the new data of parameter nodes based on the feedback."""
+        raise NotImplementedError
 
-class DummyOptimizer(Optimizer):
-    # FOR TESTING PURPOSES ONLY
-
-    def __init__(self, parameters, *args, **kwargs):
-        super().__init__(parameters, *args, **kwargs)
-
-    def _step(self, value, feedback):
-        if isinstance(value, dict):
-            base = value["content"]
-        elif isinstance(value, str):
-            base = value
-        else:
-            raise NotImplementedError
-        new = base + " ".join([" ".join(v) for v in feedback.values()])
-        return new
+    def default_propagator(self):
+        """Return the default Propagator object of the optimizer."""
+        raise NotImplementedError
 
 
-class AutogenLLMOptimizer(Optimizer):
+# class DummyOptimizer(Optimizer):
+#     # FOR TESTING PURPOSES ONLY
+#     def _step(self, node: ParameterNode):
+#         value, feedback = node.data, node.feedback
+#         if isinstance(value, dict):
+#             base = value["content"]
+#         elif isinstance(value, str):
+#             base = value
+#         else:
+#             raise NotImplementedError
+#         new = base + " ".join([" ".join(v) for v in feedback.values()])
+#         return new
+
+
+class FunctionOptimizer(Optimizer):
+    problem_template = dedent(
+        """
+        #Code
+        {code}
+
+        #Documentation
+        {documentation}
+
+        #Variables
+        {variables}
+
+        #Outputs
+        {outputs}
+
+        #Others
+        {others}
+
+        #Feedback:
+        {feedback}
+        """
+    )
+
+    system_message_template = dedent(
+        """
+        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the code's execution result. Your goal is to improve the code's output based on the feedback by changing variables used in the code.
+
+        Specifically, a problem will be composed of the following parts:
+        - #Code: the code whose results you need to improve.
+        - #Documentation: the documentation of each function used in the code.
+        - #Variables: the values of the variables that you need to change.
+        - #Outputs: the result of the code.
+        - #Others: the values of other inputs to the code, or intermediate values created through the code.
+        - #Feedback: the feedback about the code's execution result.
+
+        You need to change the values of the variables in #Variables to improve the code's output in accordance to #Feedback. The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
+
+        You should write down your thought process and finally make a suggestion of the desired values of #Variables in the format of
+
+        #Reasoning
+        <Your reasoning>
+
+        #Suggestion
+        <variable_1> = <suggested_value_1>
+        <variable_2> = <suggested_value_2>
+        ...
+
+        Here is an example of problem instance:
+
+        ================================
+
+        {example_problem}
+
+        ================================
+
+        Below is an ideal response for the problem above.
+
+        ================================
+
+        {example_response}
+
+        ================================
+
+        Now you see problem instance:
+
+        {problem_instance}
+
+        """
+    )
+
+    def __init__(
+        self, parameters: List[ParameterNode], config_list: List, *args, propagator: Propagator = None, **kwargs
+    ):
+        super().__init__(parameters, *args, propagator=propagator, **kwargs)
+        self.llm = autogen.OpenAIWrapper(config_list=config_list)
+        self.example_problem = self.problem_template.format(
+            code="y = add(a,b)\nz = subtract(y, c)",
+            documentation="add: add two numbers\nsubtract: subtract two numbers",
+            variables="a = 5",
+            outputs="z = 1",
+            others="b = 1\nc = 5",
+            feedback="The result of the code is not as expected. The result should be 10, but the code returns 1",
+        )
+        self.example_response = dedent(
+            """
+            #Reasoning
+            In this case, the desired response would be to change the value of input a to 14, as that would make the code return 10.
+
+            #Suggestion
+            a = 10
+            """
+        )
+
+    def default_propagator(self):
+        """Return the default Propagator object of the optimizer."""
+        return FunctionPropagator()
+
+    def _step(self, nodes: List[ParameterNode], verbose=False, **kwargs) -> List[Any]:
+        assert isinstance(self.propagator, FunctionPropagator)
+
+        for node in nodes:
+            summary = self.propagator.aggregate(node.feedback)
+            others = {get_name(p): p.data for p in self.parameters if not p.trainable}
+            others.update(summary.others)
+
+        problem_instance = self.problem_template.format(
+            code="\n".join([v for k, v in sorted(summary.graph)]),
+            documentation="\n".join([v for k, v in summary.documentation.items()]),
+            variables="\n".join([f"{get_name(p)}={p.data}" for p in self.parameters if p.trainable]),
+            outputs="\n".join([f"{k}={v}" for k, v in summary.output.items()]),
+            others="\n".join([f"{k}={v}" for k, v in others.items()]),
+            feedback=summary.user_feedback,
+        )
+
+        prompt = self.system_message_template.format(
+            example_problem=self.example_problem,
+            example_response=self.example_response,
+            problem_instance=problem_instance,
+        )
+        if verbose:
+            print("Prompt\n", prompt)
+        response = self.call_llm(prompt)
+        if verbose:
+            print("LLM response:\n", response)
+        response.split("#Suggestion")[1]  # TODO
+        raise NotImplementedError
+
+    def call_llm(self, prompt):  # TODO Get this from utils?
+        """Call the LLM with a prompt and return the response."""
+        response = (
+            self.llm.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ]
+            )
+            .choices[0]
+            .message.content
+        )
+        return response
+
+
+class TeacherLLMOptimizer(Optimizer):
     def __init__(self, parameters, config_list, task_description, *args, **kwargs):
         super().__init__(parameters, *args, **kwargs)
-        sys_msg = dedent(
+        system_message = dedent(
             """
         You are giving instructions to a student on how to accomplish a task.
         The student aims to get a high score.
@@ -62,43 +239,47 @@ class AutogenLLMOptimizer(Optimizer):
         You want to come up with a new instruction that will help the student get a higher score.
         """
         )
-        self.llm = AssistantAgent(name="assistant", system_message=sys_msg, llm_config={"config_list": config_list})
+        self.llm = AssistantAgent(
+            name="assistant", system_message=system_message, llm_config={"config_list": config_list}
+        )
         self.task_description = task_description
 
         self.parameter_copy = {}
         self.save_parameter_copy()
 
-    def _step(self, value, feedback):
+    def _step(self, nodes: ParameterNode):
         # `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`
         # context = {"task_description": self.task_description,
         #            "instruction": value,
         #            "feedback": feedback}
-        context = [self.task_description, value["content"], feedback]
-        prompt_space = dedent(
-            """
-        {}
+        raise NotImplementedError  # TODO
 
-        This is your instruction to the student from the previous round:
-        {}
+        # context = [self.task_description, node.value["content"], node.feedback]
+        # prompt_space = dedent(
+        #     """
+        # {}
 
-        Using this instruction, this is the feedback the student received:
-        {}
+        # This is your instruction to the student from the previous round:
+        # {}
 
-        Please write down a new instruction to help the student achieve a higher score.
-        Be concise and to the point.
-        Remember the student is starting from scratch, not revising their old work:
-        """.format(
-                *context
-            )
-        )
+        # Using this instruction, this is the feedback the student received:
+        # {}
 
-        messages = [{"content": prompt_space, "role": "user"}]
-        response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        # response = Completion.create(messages=self.llm._oai_system_message + messages)
-        # new_instruct = self.llm.client.extract_text_or_function_call(response)[0]
-        new_instruct = self.llm.client.extract_text_or_completion_object(response)[0]
-        new_node = {"content": new_instruct, "role": "system"}
-        return new_node
+        # Please write down a new instruction to help the student achieve a higher score.
+        # Be concise and to the point.
+        # Remember the student is starting from scratch, not revising their old work:
+        # """.format(
+        #         *context
+        #     )
+        # )
+
+        # messages = [{"content": prompt_space, "role": "user"}]
+        # response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
+        # # response = Completion.create(messages=self.llm._oai_system_message + messages)
+        # # new_instruct = self.llm.client.extract_text_or_function_call(response)[0]
+        # new_instruct = self.llm.client.extract_text_or_completion_object(response)[0]
+        # new_node = {"content": new_instruct, "role": "system"}
+        # return new_node
 
     def save_parameter_copy(self):
         # this is to be able to go back
@@ -275,7 +456,7 @@ class LLMCallable(object):
 
 class LLMModuleSummarizer(LLMCallable):
     def __init__(self, config_list, *args, **kwargs):
-        sys_msg = dedent(
+        system_message = dedent(
             """
         You are given an analysis report of a module with a list of inputs and the module's output.
         The module can take many inputs and respond to inputs with a single output.
@@ -283,7 +464,7 @@ class LLMModuleSummarizer(LLMCallable):
         """
         )
 
-        super().__init__(config_list, sys_msg, *args, **kwargs)
+        super().__init__(config_list, system_message, *args, **kwargs)
 
         execution_prompt = dedent(
             """
@@ -367,7 +548,7 @@ class LLMModuleSummarizer(LLMCallable):
 
 class LLMModuleVerifier(LLMCallable):
     def __init__(self, config_list, *args, **kwargs):
-        sys_msg = dedent(
+        system_message = dedent(
             """
         You are given a report of a module's functionality with a list of inputs and the module's output.
         The module is supposed to process or alter the input to fulfill a functionality.
@@ -375,7 +556,7 @@ class LLMModuleVerifier(LLMCallable):
         """
         )
 
-        super().__init__(config_list, sys_msg, *args, **kwargs)
+        super().__init__(config_list, system_message, *args, **kwargs)
 
         review_prompt = dedent(
             """
@@ -454,7 +635,7 @@ class LLMAgentGraphAnalyzer(object):
 # delta x is from input, system analysis
 class LLMAgentGraphDesigner(LLMCallable):
     def __init__(self, config_list, task_desc, *args, **kwargs):
-        sys_msg = dedent(
+        system_message = dedent(
             """
         Someone designed a system of modules that takes inputs and produces outputs.
         A report is produced on how each module functions and whether they are useful or not.
@@ -464,7 +645,7 @@ class LLMAgentGraphDesigner(LLMCallable):
         """
         )
 
-        super().__init__(config_list, sys_msg, *args, **kwargs)
+        super().__init__(config_list, system_message, *args, **kwargs)
 
         design_prompt = dedent(
             """

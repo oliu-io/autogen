@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
 from autogen.trace.utils import SimplePromptParser, get_name
@@ -78,17 +78,19 @@ class SumPropagator(Propagator):
 class FunctionFeedback:
     """Feedback container used by FunctionPropagator."""
 
+    graph: List[
+        Tuple[int, str]
+    ]  # Each item is is a representation of function call. The items are topologically sorted.
+    documentation: Dict[str, str]  # Function name and its documentationstring
     others: Dict[str, Any]  # Intermediate variable names and their data
     _output: Dict[str, Any]  # Leaf variable name and its data
-    graph: List[str]  # Each item is is a representation of function call. The items are topologically sorted.
-    documentation: Dict[str, str]  # Function name and its documentationstring
     user_feedback: str  # User feedback at the leaf of the graph
 
     def __init__(
         self,
-        others: Dict[str, Any],
-        graph: List[str],
+        graph: List[Tuple[int, str]],
         documentation: Dict[str, str],
+        others: Dict[str, Any],
         user_feedback: str,
         output: Dict[str, Any],
     ):
@@ -106,6 +108,36 @@ class FunctionFeedback:
     def output(self, value):
         assert isinstance(value, dict) and len(value) == 1
         self._output = value
+
+    def __add__(self, other):
+        """Merge two FunctionFeedback objects and return a new FunctionFeedback object."""
+        # This operator is commutative
+
+        assert isinstance(other, FunctionFeedback)
+
+        # Create a copy
+        graph = self.graph.copy()
+        others = self.others.copy()
+        documentation = self.documentation.copy()
+        user_feedback = self.user_feedback
+        output = self.output.copy()
+
+        # Update the copy
+        self.update_graph(graph, other.graph)
+        others.update(other.others)
+        documentation.update(other.documentation)
+        assert self.output == other.output, "output should be the same for all children"
+        assert self.user_feedback == other.user_feedback, "user feedback should be the same for all children"
+
+        return FunctionFeedback(
+            graph=graph, documentation=documentation, others=others, user_feedback=user_feedback, output=output
+        )
+
+    @staticmethod
+    def update_graph(graph: List[str], sub_graph: List[str]):
+        for g in sub_graph:
+            if g not in graph:
+                graph.append(g)
 
 
 # Distributive
@@ -128,28 +160,31 @@ class FunctionPropagator(Propagator):
 
         if "user" in child.feedback:  # This is the leaf node where the feedback is given.
             assert len(child.feedback) == 1, "user feedback should be the only feedback"
-            v = child.feedback["user"]
-            assert len(v) == 1
-            user_feedback = v[0]
-            output = {get_name(child): str(child.data)}  # The node is the output, not intermediate nodes
-            others = {}
+            assert len(child.feedback["user"]) == 1
+            user_feedback = child.feedback["user"][0]
+            feedback = FunctionFeedback(
+                graph=graph,
+                documentation=documentation,
+                others={},  # there's no other intermediate nodes
+                user_feedback=user_feedback,
+                output={get_name(child): str(child.data)},  # This node is the output, not intermediate nodes
+            )
+
         else:  # This is an intermediate node
-            others = {get_name(child): str(child.data)}  # record the data of the child
             aggregated_feedback = self.aggregate(child.feedback)
-            graph = graph + aggregated_feedback.graph
-            others.update(aggregated_feedback.others)
-            documentation.update(aggregated_feedback.documentation)
-            user_feedback = aggregated_feedback.user_feedback
-            output = aggregated_feedback.output
+
+            feedback = aggregated_feedback + FunctionFeedback(
+                graph=graph,
+                documentation=documentation,
+                others={get_name(child): str(child.data)},  # record the data of the child,
+                # since there should be only one
+                user_feedback=aggregated_feedback.user_feedback,
+                output=aggregated_feedback.output,
+            )
 
         # post-process the graph
-        graph = self._post_process_graph(graph)
-
-        summary = FunctionFeedback(
-            graph=graph, documentation=documentation, user_feedback=user_feedback, others=others, output=output
-        )
-
-        return {parent: summary for parent in child.parents}
+        feedback.graph = self._post_process_graph(feedback.graph)
+        return {parent: feedback for parent in child.parents}
 
     @staticmethod
     def repr_function_call(child: MessageNode):
@@ -159,39 +194,10 @@ class FunctionPropagator(Propagator):
         function_call = function_call[:-2] + ")"
         return function_call
 
-    @staticmethod
-    def update_graph(graph: List[str], sub_graph: List[str]):
-        for g in sub_graph:
-            if g not in graph:
-                graph.append(g)
-        return graph
-
     def aggregate(self, feedback: Dict[Node, List[FunctionFeedback]]):
         """Aggregate feedback from multiple children"""
-        user_feedback = set()
-        graph = []
-        others = {}
-        documentation = {}
-        output = {}
-        # aggregate feedback
-        for k, v in feedback.items():
-            assert isinstance(v, list) and len(v) <= 1
-            # Some children might not have feedback, since they're not
-            # connected the node to which the feedback is provided.
-            if len(v) > 0:
-                v = v[0]
-                assert isinstance(v, FunctionFeedback)  # TODO use a dataclass instead?
-                user_feedback.add(v.user_feedback)
-                output.update(v.output)
-                self.update_graph(graph, v.graph)
-                others.update(v.others)
-                documentation.update(v.documentation)
-        assert len(user_feedback) == 1, "user feedback should be the same for all children"
-        user_feedback = user_feedback.pop()
-        assert len(output) == 1, "output should be the same for all children"
-        return FunctionFeedback(
-            others=others, graph=graph, documentation=documentation, user_feedback=user_feedback, output=output
-        )
+        values = [v[0] for v in feedback.values()]
+        return sum(values[1:], values[0])
 
     def _post_process_graph(self, graph: List[str]):
         return graph
