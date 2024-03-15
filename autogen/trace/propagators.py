@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Any, List, Dict
 from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
@@ -28,12 +29,6 @@ class AbtractPropagator:
         """
         raise NotImplementedError
 
-    def summarize(self, node: Node) -> Any:
-        """Create a summary of the feedback at the node. The returned value may
-        be different node.feedback and may include other information such as the
-        data of the node and the description of the node."""
-        raise NotImplementedError
-
 
 class Propagator(AbtractPropagator):
     def __init__(self):
@@ -57,31 +52,14 @@ class Propagator(AbtractPropagator):
         """
         raise NotImplementedError
 
-    def summarize(self, node: Node) -> Any:
-        return node.feedback
-
-
-def format(x):
-    return x.name.replace(":", "")
-
-
-def get_label(x, print_limit=200):
-    if isinstance(x, str):
-        return x
-
-    text = format(x) + "\n" + x.description + "\n"
-    content = str(x.data["content"] if isinstance(x.data, dict) else x.data)
-    if len(content) > print_limit:
-        content = content[:print_limit] + "..."
-    return text + content
-
 
 # Note:
 # if len(feedback) > 1, it means there are two or more child nodes from this node,
 # we might need to perform a "merge" feedback action
 
 
-class sum_propagate(Propagator):
+class SumPropagator(Propagator):
+    # TODO remove this or add prompt
     def _propagate(self, child: MessageNode):
         # Simply sum the feedback
         feedback_list = [v[0] for k, v in child.feedback.items()]
@@ -96,47 +74,81 @@ class sum_propagate(Propagator):
         return {parent: summary for parent in child.parents}
 
 
+@dataclass
+class FunctionFeedback:
+    """Feedback container used by FunctionPropagator."""
+
+    others: Dict[str, Any]  # Intermediate variable names and their data
+    _output: Dict[str, Any]  # Leaf variable name and its data
+    graph: List[str]  # Each item is is a representation of function call. The items are topologically sorted.
+    documentation: Dict[str, str]  # Function name and its documentationstring
+    user_feedback: str  # User feedback at the leaf of the graph
+
+    def __init__(
+        self,
+        others: Dict[str, Any],
+        graph: List[str],
+        documentation: Dict[str, str],
+        user_feedback: str,
+        output: Dict[str, Any],
+    ):
+        self.others = others
+        self.graph = graph
+        self.documentation = documentation
+        self.user_feedback = user_feedback
+        self.output = output
+
+    @property
+    def output(self):
+        return self._output
+
+    @output.setter
+    def output(self, value):
+        assert isinstance(value, dict) and len(value) == 1
+        self._output = value
+
+
 # Distributive
-class function_propagate(Propagator):
+class FunctionPropagator(Propagator):
+    """A propagator that summarizes the graph and the feedback in terms of calls of function calls."""
+
     def _propagate(self, child: MessageNode):
-        """Summarize the feedback in terms of code."""
-
-        # A summary is a dictionary with the following keys
-        # data: (dict) variable_name and its data
-        # graph: (list of str) each element is is a representation of function call
-        # doc: (dict) function_name and its docstring
-        # user_feedback: (str) user feedback at the leaf of the graph
-
         # Construct the function_call.
         # It should read as a function call. e.g. "output = fun_name(x,y,z)"
-        function_call = f"{get_name(child)} = {child.info['fun_name']}("
-        for parent in child.parents:
-            function_call += f"{get_name(parent)}, "
-        function_call = function_call[:-2] + ")"
+        function_call = self.repr_function_call(child)
 
+        # TODO remove these. Since they're not declared and propagator is used persistently
         self.child = child
         self.function_call = function_call
 
-        # Only add unique ones
+        # Construct the propagated feedback.
+        # The feedback from children might share subgraphs. Only add unique ones.
         graph = [(child.level, function_call)]
-        data = {get_name(child): str(child.data)}  # record the data of the child
-        doc = {child.info["fun_name"]: child.description}  # TODO which description to use/ how to format it?
+        documentation = {child.info["fun_name"]: child.description}  # TODO which description to use/ how to format it?
 
-        if "user" in child.feedback:
+        if "user" in child.feedback:  # This is the leaf node where the feedback is given.
             assert len(child.feedback) == 1, "user feedback should be the only feedback"
             v = child.feedback["user"]
             assert len(v) == 1
             user_feedback = v[0]
-        else:
-            aggregated_feedback = self._aggregate(child.feedback)
-            graph = graph + aggregated_feedback["graph"]
-            data.update(aggregated_feedback["data"])
-            doc.update(aggregated_feedback["doc"])
-            user_feedback = aggregated_feedback["user_feedback"]
+            output = {get_name(child): str(child.data)}  # The node is the output, not intermediate nodes
+            others = {}
+        else:  # This is an intermediate node
+            others = {get_name(child): str(child.data)}  # record the data of the child
+            aggregated_feedback = self.aggregate(child.feedback)
+            graph = graph + aggregated_feedback.graph
+            others.update(aggregated_feedback.others)
+            documentation.update(aggregated_feedback.documentation)
+            user_feedback = aggregated_feedback.user_feedback
+            output = aggregated_feedback.output
 
-        graph = self._post_process(graph)
+        # post-process the graph
+        graph = self._post_process_graph(graph)
 
-        summary = dict(data=data, graph=graph, doc=doc, user_feedback=user_feedback)
+        summary = FunctionFeedback(
+            graph=graph, documentation=documentation, user_feedback=user_feedback, others=others, output=output
+        )
+
         return {parent: summary for parent in child.parents}
 
     @staticmethod
@@ -154,12 +166,13 @@ class function_propagate(Propagator):
                 graph.append(g)
         return graph
 
-    def _aggregate(self, feedback: dict):
+    def aggregate(self, feedback: Dict[Node, List[FunctionFeedback]]):
         """Aggregate feedback from multiple children"""
         user_feedback = set()
         graph = []
-        data = {}
-        doc = {}
+        others = {}
+        documentation = {}
+        output = {}
         # aggregate feedback
         for k, v in feedback.items():
             assert isinstance(v, list) and len(v) <= 1
@@ -167,32 +180,29 @@ class function_propagate(Propagator):
             # connected the node to which the feedback is provided.
             if len(v) > 0:
                 v = v[0]
-                assert type(v) is dict  # TODO use a dataclass instead?
-                user_feedback.add(v["user_feedback"])
-                self.update_graph(graph, v["graph"])
-                data.update(v["data"])
-                doc.update(v["doc"])
+                assert isinstance(v, FunctionFeedback)  # TODO use a dataclass instead?
+                user_feedback.add(v.user_feedback)
+                output.update(v.output)
+                self.update_graph(graph, v.graph)
+                others.update(v.others)
+                documentation.update(v.documentation)
         assert len(user_feedback) == 1, "user feedback should be the same for all children"
         user_feedback = user_feedback.pop()
-        return dict(data=data, graph=graph, doc=doc, user_feedback=user_feedback)
+        assert len(output) == 1, "output should be the same for all children"
+        return FunctionFeedback(
+            others=others, graph=graph, documentation=documentation, user_feedback=user_feedback, output=output
+        )
 
-    def _post_process(self, graph: List[str]):
+    def _post_process_graph(self, graph: List[str]):
         return graph
 
-    def summarize(self, node: Node) -> Any:
-        summary = self._aggregate(node.feedback)
-        summary["data"].update(
-            {get_name(node): node.data}
-        )  # Add the data of x, since summary only contains data of the children
-        return summary
 
-
-class function_sum_propagate(function_propagate):
+class FunctionSumPropagator(FunctionPropagator):
     """
     This allows us to only reason about 2 processes
     """
 
-    def _post_process(self, graph: List[str]):
+    def _post_process_graph(self, graph: List[str]):
         # now we do a post-process step
         # grab the graph at the current level, if there are > 1 nodes
         # we perform a merge (early sum)
@@ -213,12 +223,10 @@ class function_sum_propagate(function_propagate):
             graph = [(self.child.level, new_graph)]
 
         return graph
-    def summarize(self, node: Node) -> Any:
-        pass
 
 
-class function_distributive_propagate(function_propagate):
-    def _post_process(self, graph: List[str]):
+class FunctionDistributivePropagate(FunctionPropagator):
+    def _post_process_graph(self, graph: List[str]):
         # now we do a post-process step
         # we perform a distributive sum
         current_level_graph = list(filter(lambda x: x[0] == self.child.level + 1, graph))
@@ -233,13 +241,11 @@ class function_distributive_propagate(function_propagate):
             graph = collect_all
 
         return graph
-    def summarize(self, node: Node) -> Any:
-        pass
 
 
 class LLMCallable(object):
     def __init__(self, config_list):
-        build_manager = autogen.OpenAIWrapper(config_list=config_list)
+        autogen.OpenAIWrapper(config_list=config_list)
 
 
 def test_case_shallow_diamond(prop_func):
@@ -251,12 +257,12 @@ def test_case_shallow_diamond(prop_func):
     d = c + 1  # g
     e = c + 2  # h
     y = d + e
-    y.backward(visualize=True, feedback="Correct", propagate=prop_func())
+    y.backward(visualize=True, feedback="Correct", propagator=prop_func())
 
     print(a.feedback)
 
 
-if __name__ == '__main__':
-    test_case_shallow_diamond(function_propagate)
-    test_case_shallow_diamond(function_sum_propagate)
-    test_case_shallow_diamond(function_distributive_propagate)
+if __name__ == "__main__":
+    test_case_shallow_diamond(FunctionPropagator)
+    test_case_shallow_diamond(FunctionSumPropagator)
+    test_case_shallow_diamond(FunctionDistributivePropagate)

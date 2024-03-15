@@ -139,11 +139,9 @@ def rag_chat():
         n_results=3,
     )
 
-    from autogen.trace.propagators import retain_last_only_propagate
-
     last_message = boss_aid.last_message_node()
     print("last_message", last_message.data)
-    figure = last_message.backward("test", propagate=retain_last_only_propagate(), visualize=True, retain_graph=True)
+    figure = last_message.backward("test", visualize=True, retain_graph=True)
     figure.view(filename="figures/rag_chat")
 
 
@@ -164,11 +162,7 @@ def norag_chat():
         message=PROBLEM,
     )
 
-    from autogen.trace.propagators import retain_last_only_propagate
-
-    figure = boss.last_message_node().backward(
-        "test", propagate=retain_last_only_propagate(), visualize=True, simple_visualization=True
-    )
+    figure = boss.last_message_node().backward("test", visualize=True, simple_visualization=True)
     figure.view(filename="figures/norag_chat")
 
 

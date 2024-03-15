@@ -220,7 +220,7 @@ class Node(AbstractNode[T]):
     def backward(
         self,
         feedback: str = "",
-        propagate=None,
+        propagator=None,
         retain_graph=False,
         visualize=False,
         simple_visualization=True,
@@ -240,10 +240,10 @@ class Node(AbstractNode[T]):
         print_limit: the maximum number of characters to print in the graph.
 
         """
-        if propagate is None:
-            from autogen.trace.propagators import sum_propagate  # this avoids circular import
+        if propagator is None:
+            from autogen.trace.propagators import SumPropagator  # this avoids circular import
 
-            propagate = sum_propagate()
+            propagator = SumPropagator()
 
         # assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
 
@@ -286,7 +286,7 @@ class Node(AbstractNode[T]):
                     raise AttributeError(f"{node} has been backwarded.")
 
                 # Propagate information from child to parent
-                propagated_feedback = propagate(node)
+                propagated_feedback = propagator(node)
 
                 # Zero-out the feedback once it's propagated.
                 # This is to ensure the feedback is not double counted when retain_graph is True.
