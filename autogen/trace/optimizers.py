@@ -131,7 +131,7 @@ class FunctionOptimizer(Optimizer):
         Objective: {objective}
 
         You should write down your thought process and finally make a suggestion of the desired values of #Variables in the format below.
-        If no changes are needed, include TERMINATE in #Reasoning and do not output #Suggestion.
+        If no changes are needed, include TERMINATE_UPDATE in #Reasoning and do not output #Suggestion.
 
         #Reasoning
         <Your reasoning>
@@ -234,7 +234,7 @@ class FunctionOptimizer(Optimizer):
         )
         response = self.call_llm(prompt, verbose=verbose)
 
-        if "TERMINATE" in response:
+        if "TERMINATE_UPDATE" in response:
             return {}
 
         # Extract the suggestion from the response

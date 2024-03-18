@@ -8,15 +8,22 @@ import re
 from autogen.trace.utils import get_name
 
 
-def node(message, name=None):
+def node(message, name=None, trainable=False):
     """Create a Node from a message. If message is already a Node, return it.
     This method is for the convenience of the user, it should be used over
     directly invoking Node."""
-    if isinstance(message, Node):
-        if name is not None:
-            warnings.warn(f"Name {name} is ignored because message is already a Node.")
-        return message
-    return Node(message, name=name)
+    if trainable:
+        if isinstance(message, Node):
+            message = message._data
+            name = name or message.name
+        return ParameterNode(message, name=name, trainable=True)
+    else:
+        if isinstance(message, Node):
+            if name is not None:
+                warnings.warn(f"Name {name} is ignored because message is already a Node.")
+            return message
+        else:
+            return Node(message, name=name)
 
 
 NAME_SCOPES = []  # A stack of name scopes
