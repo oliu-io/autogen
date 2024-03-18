@@ -1,4 +1,4 @@
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Union
 from autogen.trace.nodes import ParameterNode, Node
 from collections import defaultdict
 from autogen import AssistantAgent
@@ -9,7 +9,7 @@ from autogen.trace.propagators import Propagator, FunctionPropagator
 from dataclasses import dataclass
 from autogen.trace.utils import SimplePromptParser, get_name
 import autogen
-
+import warnings
 
 """
 We follow the same design principle as trace
@@ -113,7 +113,7 @@ class FunctionOptimizer(Optimizer):
 
     system_message_template = dedent(
         """
-        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the code's execution result. Your goal is to improve the code's output based on the feedback by changing variables used in the code.
+        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the code's execution result.
 
         Specifically, a problem will be composed of the following parts:
         - #Code: the code whose results you need to improve.
@@ -127,6 +127,8 @@ class FunctionOptimizer(Optimizer):
         <type> <variable_name> = <value>
         You need to change the values of the variables in #Variables to improve the code's output in accordance to #Feedback and their data types.
         The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
+
+        Objective: {objective}
 
         You should write down your thought process and finally make a suggestion of the desired values of #Variables in the format below.
         If no changes are needed, include TERMINATE in #Reasoning and do not output #Suggestion.
@@ -163,10 +165,20 @@ class FunctionOptimizer(Optimizer):
     )
 
     def __init__(
-        self, parameters: List[ParameterNode], config_list: List, *args, propagator: Propagator = None, **kwargs
+        self,
+        parameters: List[ParameterNode],
+        config_list: List,
+        *args,
+        propagator: Propagator = None,
+        objective: Union[None, str] = None,
+        **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
+        self.objective = (
+            objective
+            or "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
+        )
         self.example_problem = self.problem_template.format(
             code="y = add(a,b)\nz = subtract(y, c)",
             documentation="add: add two numbers\nsubtract: subtract two numbers",
@@ -215,6 +227,7 @@ class FunctionOptimizer(Optimizer):
         )
 
         prompt = self.system_message_template.format(
+            objective=self.objective,
             example_problem=self.example_problem,
             example_response=self.example_response,
             problem_instance=problem_instance,
@@ -231,7 +244,10 @@ class FunctionOptimizer(Optimizer):
         update_dict = {}
         for node in nodes:
             if node.trainable:
-                update_dict[node] = type(node.data)(suggestion[get_name(node)])
+                try:
+                    update_dict[node] = type(node.data)(suggestion[get_name(node)])
+                except KeyError:
+                    warnings.warn(f"Node {node} not found in the response {response}")
         return update_dict
 
     def extract_suggestion(self, response) -> dict:
