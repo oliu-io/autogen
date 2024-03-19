@@ -28,7 +28,7 @@ import numpy as np
 from textwrap import dedent
 
 from typing import List
-from copy import copy
+import copy
 
 from functools import reduce
 
@@ -123,7 +123,7 @@ class StringProgramSampler:
             self.input_var_space.append(create_input_var())
 
         self._goal_output = self.__call__(self.get_current_input(), seed=seed, verbose=verbose)
-        self._goal_input = copy(self.get_current_input())
+        self._goal_input = copy.copy(self.get_current_input())
 
     @property
     def goal_input(self):
@@ -137,7 +137,7 @@ class StringProgramSampler:
         return self._goal_output.backward(visualize='True', feedback='fine', propagate=FunctionPropagator())
 
     def mixture_assertion_check(self, mixture, num_elements=2):
-        assert abs(sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
+        assert np.abs(np.sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
         assert len(mixture) == num_elements, f"The mixture should have {num_elements} elements"
 
     def reset(self):

@@ -134,7 +134,8 @@ class FunModule(Module):
                 spec.update(self.node_dict)
             assert isinstance(spec, dict)
             # Makre sure all nodes in used_nodes are in spec
-            assert all([node in spec.values() for node in used_nodes]), "All used_nodes must be in the spec."
+            spec_values = [item for sublist in spec.values() for item in (sublist if isinstance(sublist, Iterable) else [sublist])]
+            assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
             inputs = {k: v for k, v in spec.items() if isinstance(v, Node) and (v in used_nodes)}
 
         # Wrap the output as a MessageNode
