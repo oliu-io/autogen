@@ -1,6 +1,5 @@
-from random import betavariate
 from autogen.trace.trace_ops import trace_op
-from autogen.trace.nodes import Node
+from autogen.trace.nodes import Node, node
 from autogen.trace.utils import for_all_methods
 
 x = Node(1, name="node_x")
@@ -94,3 +93,16 @@ class Foo:
 
 foo = Foo()
 z = foo.add(x, y)
+
+
+# Test functions with *args and *kwargs
+@trace_op()
+def fun(a, *args, **kwargs):
+    print(a)
+    print(args)
+    print(kwargs)
+    return a
+
+
+x = fun(node(1), node(2), 3, 4, 5, 6, 7, 8, 9, 10, b=2, c=3, d=4, e=5, f=6, g=7, h=8, i=9, j=10)
+print(x, x.parents)
