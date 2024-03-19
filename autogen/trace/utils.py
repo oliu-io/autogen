@@ -2,6 +2,35 @@ from graphviz import Digraph
 import re
 
 
+def parse_eqs_to_dict(text):
+    """
+    Parse the text of equations into a didctionary
+
+        x0 = 1
+        x1=2
+        x2=`2`
+        x3= def fun():\n    print('hello')\n
+        abc_test1=test
+
+    would be parsed into
+
+    {'x0': '1', 'x1': '2', 'x2': '2', 'x3': "def fun():\nprint('hello')", 'abc_test1': 'test'}
+    """
+    lines = text.split("\n")
+    result_dict = {}
+    last_key = None
+    for line in lines:
+        if line == "":
+            continue
+        if "=" in line:
+            key, value = line.split("=", 1)
+            last_key = key.strip()
+            result_dict[last_key] = value.replace("`", "")
+        elif last_key:
+            result_dict[last_key] += "\n" + line.replace("`", "")
+    return result_dict
+
+
 def get_name(x):
     return x.name.replace(":", "")
 

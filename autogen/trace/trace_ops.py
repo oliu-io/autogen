@@ -2,11 +2,12 @@ from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen import trace
 from autogen.trace.modules import apply_op, to_data, Module
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, node, get_operator_name
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name
 from dill.source import getsource
 from collections.abc import Iterable
 import inspect
 import functools
+import re
 
 
 class trace_nodes:
@@ -21,7 +22,7 @@ class trace_nodes:
         USED_NODES.pop()
 
 
-def trace_op(description=None, n_outputs=1, node_dict=None, wrap_output=True, unpack_input=True):
+def trace_op(description=None, n_outputs=1, node_dict=None, wrap_output=True, unpack_input=True, variable=False):
     """
     Wrap a function as a FunModule, which returns node objects.
     The input signature to the wrapped function stays the same.
@@ -35,6 +36,7 @@ def trace_op(description=None, n_outputs=1, node_dict=None, wrap_output=True, un
             node_dict=node_dict,
             wrap_output=wrap_output,
             unpack_input=unpack_input,
+            variable=variable,
         )
 
     return decorator
@@ -48,11 +50,12 @@ class FunModule(Module):
         description (str): a description of the operator; see the MessageNode for syntax.
         n_outputs (int); the number of outputs of the operator; default is 1.
         node_dict (dict|str):
-            'auto' : the inputs are represented as a list of nodes.
+            None : the inputs are represented as a list of nodes.
             'auto': the inputs are represented as a dictionary, where the keys are the parameter names and the values are the nodes.
             dict : a dictionary to describe the inputs, where the key is a node used in this operator and the value is the node's name as described in description ; when node_dict is provided, all the used_nodes need to be in node_dict. Providing node_dict can give a correspondence between the inputs and the description of the operator.
         wrap_output (bool): if True, the output of the operator is wrapped as a MessageNode; if False, the output is returned as is if the output is a Node.
         unpack_input (bool): if True, the input is extracted from the container of nodes; if False, the inputs are passed directly to the underlying function.
+        variable (bool): if True, the block of code is treated as a variable in the optimization
 
     """
 
@@ -61,30 +64,46 @@ class FunModule(Module):
         fun: Callable,
         description: str = None,
         n_outputs: int = 1,
-        node_dict: Union[dict, None, str] = None,
+        node_dict: Union[dict, None, str] = "auto",
         wrap_output: bool = True,
         unpack_input: bool = True,
+        variable=False,
     ):
         assert callable(fun), "fun must be a callable."
         assert (
             isinstance(node_dict, dict) or (node_dict is None) or (node_dict == "auto")
         ), "node_dict must be a dictionary or None or 'auto."
+        match = re.search(r"@trace_op\(.*\)\n(def.*)", inspect.getsource(fun), re.DOTALL)
+        source = match.group(1).strip()
         self.info = dict(
             fun_name=fun.__qualname__,
             doc=fun.__doc__,
             signature=inspect.signature(fun),
-            source=inspect.getsource(fun),
+            source=source,
         )
         if description is None:
             # Generate the description from the function name and docstring.
             description = f"[{self.info['fun_name']}] {self.info['doc']}."
-        self.fun = fun
+        self._fun = fun
         self.node_dict = node_dict
         self.info["node_dict"] = node_dict
         self.description = description
         self.n_outputs = n_outputs
         self.wrap_output = wrap_output
         self.unpack_input = unpack_input
+        self.parameter = None
+        if variable:
+            self.parameter = ParameterNode(self.info["source"], name="__code")
+
+    @property
+    def fun(self, *args, **kwargs):
+        # This is called within trace_nodes context manager.
+        if self.parameter is None:
+            return self._fun
+        else:
+            code = self.parameter._data  # This is not traced, but we will add this as the parent later.
+            exec(code)  # define the function
+            return locals()[self.info["fun_name"]]
 
     @property
     def name(self):
@@ -116,7 +135,7 @@ class FunModule(Module):
             assert isinstance(spec, dict)
             # Makre sure all nodes in used_nodes are in spec
             assert all([node in spec.values() for node in used_nodes]), "All used_nodes must be in the spec."
-            inputs = {k: v for k, v in spec.items() if v in used_nodes}
+            inputs = {k: v for k, v in spec.items() if isinstance(v, Node) and (v in used_nodes)}
 
         # Wrap the output as a MessageNode
         if self.n_outputs == 1:
@@ -143,7 +162,14 @@ class FunModule(Module):
             # NOTE User who implements fun is responsible for the graph structure.
             if isinstance(output, Node):
                 return output
-        return MessageNode(output, description=self.description, inputs=inputs, name=self.name, info=self.info)
+        if self.parameter is not None:
+            inputs.update({"__code": self.parameter})
+            description = "[eval] This operator eval(__code, *args, **kwargs) evaluates the code block, where __code is the code (str) and *args and **kwargs are the arguments of the function. The output is the result of the evaluation, i.e., __code(*args, **kwargs)."
+            name = "eval"
+        else:
+            description = self.description
+            name = self.name
+        return MessageNode(output, description=description, inputs=inputs, name=name, info=self.info)
 
     def __get__(self, obj, objtype):
         # Support instance methods.

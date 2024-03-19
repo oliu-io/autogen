@@ -1,4 +1,4 @@
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Union
 from autogen.trace.nodes import ParameterNode, Node
 from collections import defaultdict
 from autogen import AssistantAgent
@@ -7,9 +7,10 @@ from textwrap import dedent, indent
 from copy import copy
 from autogen.trace.propagators import Propagator, FunctionPropagator
 from dataclasses import dataclass
-from autogen.trace.utils import SimplePromptParser, get_name
+from autogen.trace.utils import SimplePromptParser, get_name, parse_eqs_to_dict
 import autogen
-
+import warnings
+import json
 
 """
 We follow the same design principle as trace
@@ -113,7 +114,7 @@ class FunctionOptimizer(Optimizer):
 
     system_message_template = dedent(
         """
-        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the code's execution result. Your goal is to improve the code's output based on the feedback by changing variables used in the code.
+        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the code's execution result.
 
         Specifically, a problem will be composed of the following parts:
         - #Code: the code whose results you need to improve.
@@ -125,19 +126,25 @@ class FunctionOptimizer(Optimizer):
 
         In #Variables, #Outputs, and #Others, the format is:
         <type> <variable_name> = <value>
-        You need to change the values of the variables in #Variables to improve the code's output in accordance to #Feedback and their data types.
+        You need to change the <value> of the variables in #Variables to improve the code's output in accordance to #Feedback and their data types specified in <type>. If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
         The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
 
-        You should write down your thought process and finally make a suggestion of the desired values of #Variables in the format below.
-        If no changes are needed, include TERMINATE in #Reasoning and do not output #Suggestion.
+        Objective: {objective}
 
-        #Reasoning
-        <Your reasoning>
+        Output format:
 
-        #Suggestion
-        <variable_1> = <suggested_value_1>
-        <variable_2> = <suggested_value_2>
-        ...
+        You should write down your thought process and finally make a suggestion of the desired values of #Variables. You cannot change the lines of code in #Code but only the values in #Variables. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
+        Your output should be in the following json format, satisfying the json syntax (json does support single quotes):
+        {{
+        "reasoning": <Your reasoning>,
+        "suggestion": {{
+            <variable_1>: <suggested_value_1>,
+            <variable_2>: <suggested_value_2>,
+        }}
+        }}
+
+        If no changes are needed, just output TERMINATE_UPDATE as opposed to the json format above.
+
 
         Here is an example of problem instance:
 
@@ -163,10 +170,20 @@ class FunctionOptimizer(Optimizer):
     )
 
     def __init__(
-        self, parameters: List[ParameterNode], config_list: List, *args, propagator: Propagator = None, **kwargs
+        self,
+        parameters: List[ParameterNode],
+        config_list: List,
+        *args,
+        propagator: Propagator = None,
+        objective: Union[None, str] = None,
+        **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
+        self.objective = (
+            objective
+            or "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
+        )
         self.example_problem = self.problem_template.format(
             code="y = add(a,b)\nz = subtract(y, c)",
             documentation="add: add two numbers\nsubtract: subtract two numbers",
@@ -177,11 +194,9 @@ class FunctionOptimizer(Optimizer):
         )
         self.example_response = dedent(
             """
-            #Reasoning
-            In this case, the desired response would be to change the value of input a to 14, as that would make the code return 10.
-
-            #Suggestion
-            a = 10
+            {"reasoning": 'In this case, the desired response would be to change the value of input a to 14, as that would make the code return 10.',
+             "suggestion": {"a": 10}
+            }
             """
         )
 
@@ -202,7 +217,12 @@ class FunctionOptimizer(Optimizer):
         variables = {get_name(p): p.data for p in self.parameters if p.trainable}
 
         def repr_node_value(node_dict):
-            return "\n".join([f"({type(v).__name__}) {k}={v}" for k, v in node_dict.items()])
+            return "\n".join(
+                [
+                    f"({type(v).__name__}) {k}={v}" if "__code" not in k else f"(code) {k}:{v}"
+                    for k, v in node_dict.items()
+                ]
+            )
 
         # Format prompt
         problem_instance = self.problem_template.format(
@@ -215,52 +235,55 @@ class FunctionOptimizer(Optimizer):
         )
 
         prompt = self.system_message_template.format(
+            objective=self.objective,
             example_problem=self.example_problem,
             example_response=self.example_response,
             problem_instance=problem_instance,
         )
         response = self.call_llm(prompt, verbose=verbose)
 
-        if "TERMINATE" in response:
+        if "TERMINATE_UPDATE" in response:
             return {}
 
         # Extract the suggestion from the response
-        suggestion = self.extract_suggestion(response)
+        try:
+            suggestion = json.loads(response)["suggestion"]
+        except json.JSONDecodeError:  # TODO try to fix it
+            response = response.replace("'", '"')
 
         # Convert the suggestion in text into the right data type
         update_dict = {}
         for node in nodes:
-            if node.trainable:
+            if node.trainable and get_name(node) in suggestion:
                 update_dict[node] = type(node.data)(suggestion[get_name(node)])
         return update_dict
-
-    def extract_suggestion(self, response) -> dict:
-        suggestion = response.split("#Suggestion")[1]
-        suggestion = suggestion.split("\n")
-        output = {}
-        for s in suggestion:
-            if "=" in s:
-                k, v = s.replace("`", "").split("=")
-                output[k.strip()] = v.strip()
-        return output
 
     def call_llm(self, prompt, verbose=False):  # TODO Get this from utils?
         """Call the LLM with a prompt and return the response."""
         if verbose:
             print("Prompt\n", prompt)
 
-        response = (
-            self.llm.create(
+        try:  # Try tp force it to be a json object
+            response = self.llm.create(
                 messages=[
                     {
                         "role": "user",
                         "content": prompt,
                     }
-                ]
+                ],
+                response_format={"type": "json_object"},
             )
-            .choices[0]
-            .message.content
-        )
+        except Exception:
+            response = self.llm.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+            )
+        response = response.choices[0].message.content
+
         if verbose:
             print("LLM response:\n", response)
         return response
