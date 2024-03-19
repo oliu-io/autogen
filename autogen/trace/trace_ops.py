@@ -73,7 +73,7 @@ class FunModule(Module):
         assert (
             isinstance(node_dict, dict) or (node_dict is None) or (node_dict == "auto")
         ), "node_dict must be a dictionary or None or 'auto."
-        match = re.search(r"@trace_op\(.*\)\n(def.*)", inspect.getsource(fun), re.DOTALL)
+        match = re.search(r"\s*@trace_op\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
         source = match.group(1).strip()
         self.info = dict(
             fun_name=fun.__qualname__,
