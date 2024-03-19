@@ -21,7 +21,7 @@ use output as target.
 """
 
 from autogen.trace.nodes import node
-from autogen.trace.propagators import function_propagate
+from autogen.trace.propagators import FunctionPropagator
 import string
 import random
 import numpy as np
@@ -134,7 +134,7 @@ class StringProgramSampler:
         return self._goal_output.data
 
     def display_computation_graph(self):
-        return self._goal_output.backward(visualize='True', feedback='fine', propagate=function_propagate())
+        return self._goal_output.backward(visualize='True', feedback='fine', propagate=FunctionPropagator())
 
     def mixture_assertion_check(self, mixture, num_elements=2):
         assert abs(sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
