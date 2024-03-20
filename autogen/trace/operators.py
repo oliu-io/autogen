@@ -256,3 +256,8 @@ def strip(x: Any):
 @trace_op("[replace] Replaces all occurrences of substring y in string x with z.", node_dict="auto")
 def replace(x: Any, old: Any, new: Any, count: Any = -1):
     return x.replace(old, new, count)
+
+# Exception operator
+@trace_op("[error] x triggers an error during execution. The error message is e.", node_dict="auto")
+def throws_exception(e: Any, input_params: Any):
+    return e

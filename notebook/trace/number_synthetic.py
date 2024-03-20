@@ -21,7 +21,7 @@ import random
 import numpy as np
 from textwrap import dedent
 
-from copy import copy
+import copy
 
 from typing import List
 from autogen.trace.operators import *
@@ -122,7 +122,9 @@ class NumericalProgramSampler:
             self.input_var_space.append(create_input_var())
 
         self._goal_output = self.__call__(self.get_current_input(), seed=seed, verbose=verbose)
-        self._goal_input = copy(self.get_current_input())
+        self._goal_input = copy.copy(self.get_current_input())
+
+        self.execution_exception = None
 
     @property
     def goal_input(self):
@@ -132,11 +134,22 @@ class NumericalProgramSampler:
     def goal_output(self):
         return self._goal_output.data
 
+    def feedback(self, y_hat):
+        if self.execution_exception is not None:
+            return "The input throws an error and is invalid. Please try another input."
+
+        if y_hat == self._goal_output.data:
+            return "Success."
+        elif y_hat < self._goal_output.data:
+            return "The number needs to be larger."
+        elif y_hat > self._goal_output.data:
+            return "The number needs to be smaller."
+
     def display_computation_graph(self):
         return self._goal_output.backward(visualize='True', feedback='fine', propagate=FunctionPropagator())
 
     def mixture_assertion_check(self, mixture, num_elements=2):
-        assert abs(sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
+        assert np.abs(np.sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
         assert len(mixture) == num_elements, f"The mixture should have {num_elements} elements"
 
     def reset(self):
@@ -283,7 +296,13 @@ class NumericalProgramSampler:
         # by choosing a seed
         self.set_seed(seed)
 
-        for _ in range(self.chain_length):
-            out_var = self.step(verbose=verbose)
+        self.execution_exception = None
+        try:
+            for _ in range(self.chain_length):
+                out_var = self.step(verbose=verbose)
+        except Exception as e:
+            self.execution_exception = repr(e)
+            out_var = throws_exception(node(repr(e)), *input_params)
+
         return out_var
 
