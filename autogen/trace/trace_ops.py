@@ -19,7 +19,7 @@ class trace_nodes:
         USED_NODES.pop()
 
 
-def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, variable=False):
+def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, trainable=False):
     """
     Wrap a function as a FunModule, which returns node objects.
     The input signature to the wrapped function stays the same.
@@ -33,7 +33,7 @@ def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, 
             node_dict=node_dict,
             wrap_output=wrap_output,
             unpack_input=unpack_input,
-            variable=variable,
+            trainable=trainable,
         )
 
     return decorator
@@ -64,7 +64,7 @@ class FunModule(Module):
         node_dict: Union[dict, None, str] = "auto",
         wrap_output: bool = True,
         unpack_input: bool = True,
-        variable=False,
+        trainable=False,
     ):
         assert callable(fun), "fun must be a callable."
         assert (
@@ -89,7 +89,7 @@ class FunModule(Module):
         self.wrap_output = wrap_output
         self.unpack_input = unpack_input
         self.parameter = None
-        if variable:
+        if trainable:
             self.parameter = ParameterNode(self.info["source"], name="__code")
 
     @property
@@ -100,7 +100,8 @@ class FunModule(Module):
         else:
             code = self.parameter._data  # This is not traced, but we will add this as the parent later.
             exec(code)  # define the function
-            return locals()[self.info["fun_name"]]
+            fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
+            return locals()[fun_name]
 
     @property
     def name(self):
@@ -181,6 +182,7 @@ class FunModule(Module):
             inputs.update({"__code": self.parameter})
             description = "[eval] This operator eval(__code, *args, **kwargs) evaluates the code block, where __code is the code (str) and *args and **kwargs are the arguments of the function. The output is the result of the evaluation, i.e., __code(*args, **kwargs)."
             name = "eval"
+            self.info["fun_name"] = "eval"
         else:
             description = self.description
             name = self.name
