@@ -161,9 +161,9 @@ optimizer = TeacherLLMOptimizer(
     config_list=config_list,
     task_description=dedent(
         """
-                         You are helping a student solve math problems.
-                         Give them some instructions on how to avoid errors.
-                         """
+         You are helping a student solve math problems.
+         Give them some instructions on how to avoid errors.
+         """
     ),
 )
 
