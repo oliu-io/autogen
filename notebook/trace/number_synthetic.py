@@ -162,11 +162,12 @@ class NumericalProgramSampler:
             return []
 
         if is_gen:
-            max_curr_len = min(len(var_space), self.max_gen_var)
-            prob_new_var = 1 - max_curr_len / self.max_gen_var
-            if np.random.rand() < prob_new_var:
-                sampled_var = create_var()
-                var_space.append(sampled_var)
+            for _ in range(num_sample):
+                max_curr_len = min(len(var_space), self.max_gen_var)
+                prob_new_var = 1 - max_curr_len / self.max_gen_var
+                if np.random.rand() < prob_new_var:
+                    sampled_var = create_var()
+                    var_space.append(sampled_var)
             sampled_var_idx = np.random.choice(list(range(len(var_space))), num_sample, replace=False)
             sampled_vars = [var_space[i] for i in sampled_var_idx]
         else:
