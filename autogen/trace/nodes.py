@@ -59,7 +59,7 @@ class Graph:
         return self._nodes[name][id]
 
     @property
-    def leaves(self):
+    def roots(self):
         return self._levels[0]
 
     def __str__(self):
@@ -84,7 +84,7 @@ class AbstractNode(Generic[T]):
     def __init__(self, value, *, name=None, trainable=False) -> None:
         self._parents = []
         self._children = []
-        self._level = 0  # leaves are at level 0
+        self._level = 0  # roots are at level 0
         self._name = str(type(value).__name__) + ":0" if name is None else name + ":0"  # name:version
         if isinstance(value, Node):  # just a reference
             self._data = value._data

@@ -215,6 +215,8 @@ class FunctionOptimizer(Optimizer):
         others = {get_name(p): p.data for p in self.parameters if not p.trainable}
         others.update(summary.others)
         variables = {get_name(p): p.data for p in self.parameters if p.trainable}
+        non_variable_roots = {k: v for k, v in summary.roots.items() if k not in variables}
+        others.update(non_variable_roots)
 
         def repr_node_value(node_dict):
             return "\n".join(
@@ -230,7 +232,7 @@ class FunctionOptimizer(Optimizer):
             documentation="\n".join([v for v in summary.documentation.values()]),
             variables=repr_node_value(variables),
             outputs=repr_node_value(summary.output),
-            others=repr_node_value(summary.others),
+            others=repr_node_value(others),
             feedback=summary.user_feedback,
         )
 
@@ -293,7 +295,6 @@ class FunctionDistributiveOptimizer(FunctionOptimizer):
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
         return FunctionDistributivePropagate()
-
 
 
 if __name__ == "__main__":

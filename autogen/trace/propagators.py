@@ -83,18 +83,22 @@ class FunctionFeedback:
     ]  # Each item is is a representation of function call. The items are topologically sorted.
     documentation: Dict[str, str]  # Function name and its documentationstring
     others: Dict[str, Any]  # Intermediate variable names and their data
+    roots: Dict[str, Any]  # Root variable name and its data
     _output: Dict[str, Any]  # Leaf variable name and its data
     user_feedback: str  # User feedback at the leaf of the graph
 
     def __init__(
         self,
+        *,
         graph: List[Tuple[int, str]],
         documentation: Dict[str, str],
         others: Dict[str, Any],
+        roots: Dict[str, Any],
         user_feedback: str,
         output: Dict[str, Any],
     ):
         self.others = others
+        self.roots = roots
         self.graph = graph
         self.documentation = documentation
         self.user_feedback = user_feedback
@@ -118,6 +122,7 @@ class FunctionFeedback:
         # Create a copy
         graph = self.graph.copy()
         others = self.others.copy()
+        roots = self.roots.copy()
         documentation = self.documentation.copy()
         user_feedback = self.user_feedback
         output = self.output.copy()
@@ -125,12 +130,18 @@ class FunctionFeedback:
         # Update the copy
         self.update_graph(graph, other.graph)
         others.update(other.others)
+        roots.update(other.roots)
         documentation.update(other.documentation)
         assert self.output == other.output, "output should be the same for all children"
         assert self.user_feedback == other.user_feedback, "user feedback should be the same for all children"
 
         return FunctionFeedback(
-            graph=graph, documentation=documentation, others=others, user_feedback=user_feedback, output=output
+            graph=graph,
+            documentation=documentation,
+            others=others,
+            user_feedback=user_feedback,
+            output=output,
+            roots=roots,
         )
 
     @staticmethod
@@ -158,6 +169,7 @@ class FunctionPropagator(Propagator):
         graph = [(child.level, function_call)]
         documentation = {child.info["fun_name"]: child.description}  # TODO which description to use/ how to format it?
 
+        roots = {get_name(parent): parent.data for parent in child.parents if parent.is_root}
         if "user" in child.feedback:  # This is the leaf node where the feedback is given.
             assert len(child.feedback) == 1, "user feedback should be the only feedback"
             assert len(child.feedback["user"]) == 1
@@ -166,17 +178,18 @@ class FunctionPropagator(Propagator):
                 graph=graph,
                 documentation=documentation,
                 others={},  # there's no other intermediate nodes
+                roots=roots,
                 user_feedback=user_feedback,
                 output={get_name(child): child.data},  # This node is the output, not intermediate nodes
             )
 
         else:  # This is an intermediate node
             aggregated_feedback = self.aggregate(child.feedback)
-
             feedback = aggregated_feedback + FunctionFeedback(
                 graph=graph,
                 documentation=documentation,
                 others={get_name(child): child.data},  # record the data of the child,
+                roots=roots,
                 # since there should be only one
                 user_feedback=aggregated_feedback.user_feedback,
                 output=aggregated_feedback.output,
