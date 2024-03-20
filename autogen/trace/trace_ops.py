@@ -1,10 +1,7 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen import trace
 from autogen.trace.modules import apply_op, to_data, Module
 from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name
-from dill.source import getsource
-from collections.abc import Iterable
 import inspect
 import functools
 import re
@@ -22,7 +19,7 @@ class trace_nodes:
         USED_NODES.pop()
 
 
-def trace_op(description=None, n_outputs=1, node_dict=None, wrap_output=True, unpack_input=True, variable=False):
+def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, variable=False):
     """
     Wrap a function as a FunModule, which returns node objects.
     The input signature to the wrapped function stays the same.
@@ -133,9 +130,27 @@ class FunModule(Module):
             if isinstance(self.node_dict, dict):
                 spec.update(self.node_dict)
             assert isinstance(spec, dict)
-            # Makre sure all nodes in used_nodes are in spec
-            assert all([node in spec.values() for node in used_nodes]), "All used_nodes must be in the spec."
-            inputs = {k: v for k, v in spec.items() if isinstance(v, Node) and (v in used_nodes)}
+
+            # Make sure all nodes in used_nodes are in spec
+            # Construct the inputs of the MessageNode from the set used_nodes
+            spec_values = []
+            inputs = {}
+            for k, v in spec.items():
+                if k == "args":
+                    spec_values.extend(v)
+                    for i, n in enumerate(v):
+                        if isinstance(n, Node) and (n in used_nodes):
+                            inputs[f"args{i}"] = n
+                elif k == "kwargs":
+                    spec_values.extend(v.values())
+                    for k, n in v.items():
+                        if isinstance(n, Node) and (n in used_nodes):
+                            inputs[k] = n
+                else:
+                    spec_values.append(v)
+                    if isinstance(v, Node) and (v in used_nodes):
+                        inputs[k] = v
+            assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
 
         # Wrap the output as a MessageNode
         if self.n_outputs == 1:

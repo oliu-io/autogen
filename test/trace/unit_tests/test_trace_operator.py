@@ -7,8 +7,8 @@ y = Node(2, name="node_y")
 condition = Node(True)
 
 
-# Test node_dict=='auto'
-@trace_op("[auto_cond] This selects x if condition is True, otherwise y.")
+# Test node_dict==None
+@trace_op("[auto_cond] This selects x if condition is True, otherwise y.", node_dict=None)
 def auto_cond(condition: Node, x: Node, y: Node):
     """
     A function that selects x if condition is True, otherwise y.
@@ -98,11 +98,11 @@ z = foo.add(x, y)
 # Test functions with *args and *kwargs
 @trace_op()
 def fun(a, *args, **kwargs):
-    print(a)
-    print(args)
-    print(kwargs)
+    # print(a)
+    # print(args)
+    # print(kwargs)
     return a
 
 
 x = fun(node(1), node(2), 3, 4, 5, 6, 7, 8, 9, 10, b=2, c=3, d=4, e=5, f=6, g=7, h=8, i=9, j=10)
-print(x, x.parents)
+print(x, x.inputs)
