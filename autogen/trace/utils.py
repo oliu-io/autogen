@@ -31,6 +31,71 @@ def parse_eqs_to_dict(text):
     return result_dict
 
 
+class MinHeap:
+    def __init__(self, arr=None):
+        if arr is None:
+            self.heap = []
+        else:
+            self.heap = arr
+            self.heapify(self.heap)
+
+    def __contains__(self, item):
+        return item in self.heap
+
+    def __len__(self):
+        return len(self.heap)
+
+    def push(self, item):
+        self.heap.append(item)
+        self._siftup(len(self.heap) - 1)
+
+    def pop(self):
+        if len(self.heap) == 1:
+            return self.heap.pop()
+        root = self.heap[0]
+        self.heap[0] = self.heap.pop()  # Move the last element to the root
+        self._siftdown(0)
+        return root
+
+    def peek(self):
+        return self.heap[0] if self.heap else None
+
+    def _siftup(self, idx):
+        while idx > 0:
+            parent_idx = (idx - 1) // 2
+            if self.heap[parent_idx].gt(self.heap[idx]):
+                self.heap[parent_idx], self.heap[idx] = self.heap[idx], self.heap[parent_idx]
+                idx = parent_idx
+            else:
+                break
+
+    def _siftdown(self, idx):
+        last_idx = len(self.heap) - 1
+        while True:
+            left_child_idx = 2 * idx + 1
+            right_child_idx = 2 * idx + 2
+            smallest_idx = idx
+
+            # if left_child_idx <= last_idx and self.heap[left_child_idx] < self.heap[smallest_idx]:
+            if left_child_idx <= last_idx and self.heap[left_child_idx].lt(self.heap[smallest_idx]):
+                smallest_idx = left_child_idx
+            # if right_child_idx <= last_idx and self.heap[right_child_idx] < self.heap[smallest_idx]:
+            if right_child_idx <= last_idx and self.heap[right_child_idx].lt(self.heap[smallest_idx]):
+                smallest_idx = right_child_idx
+
+            if smallest_idx != idx:
+                self.heap[idx], self.heap[smallest_idx] = self.heap[smallest_idx], self.heap[idx]
+                idx = smallest_idx
+            else:
+                break
+
+    def heapify(self, arr):
+        import copy
+        self.heap = copy.copy(arr)
+        for i in range((len(self.heap) - 2) // 2, -1, -1):
+            self._siftdown(i)
+
+
 def get_name(x):
     return x.name.replace(":", "")
 
@@ -206,7 +271,7 @@ def simple_shrink(dot_str, shrink=True):
         child = sorted_blocks[i][0].strip().split(" -> ")[1]
         found = False
         # condition 1: look-ahead (if the child has multiple parents, we delay till the last parent)
-        for block in sorted_blocks[i + 1 :]:
+        for block in sorted_blocks[i + 1:]:
             if child in block[0]:
                 # see if it's "-> child" or "child ->"
                 left, right = block[0].strip().split(" -> ")

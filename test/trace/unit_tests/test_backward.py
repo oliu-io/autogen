@@ -1,7 +1,6 @@
 import copy
 from autogen.trace import node
 from autogen.trace import operators as ops
-from autogen.trace.propagators import sum_propagate
 
 x = node(1)
 
