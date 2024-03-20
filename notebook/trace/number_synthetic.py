@@ -14,7 +14,7 @@ TODO:
 3. Define max/min target (or restrict input domain)
 """
 
-from autogen.trace.nodes import node
+from autogen.trace.nodes import node, Node
 from autogen.trace.propagators import FunctionPropagator
 import string
 import random
@@ -32,18 +32,16 @@ def reformat(program_str: str):
     return dedent(program_str).strip()
 
 
-logic_ops = [">", "<", "==", "!=", ">=", "<="]
+logic_ops = [">", "<", ">=", "<="]
 logic_ops_programs = {
     ">": reformat("""lambda a, b: a > b"""),
     "<": reformat("""lambda a, b: a < b"""),
-    "==": reformat("""lambda a, b: a == b"""),
-    "!=": reformat("""lambda a, b: a != b"""),
     ">=": reformat("""lambda a, b: a >= b"""),
     "<=": reformat("""lambda a, b: a <= b"""),
 }
 
 # Not suppoprting unary ops for now
-math_ops = ["+", "-", "*", "/", "%", "//", "**"]
+math_ops = ["+", "-", "*", "/", "%", "//"]  # , "**"
 math_ops_programs = {
     "+": reformat("""lambda a, b: a + b"""),
     "-": reformat("""lambda a, b: a - b"""),
@@ -51,7 +49,7 @@ math_ops_programs = {
     "/": reformat("""lambda a, b: a / b"""),
     "%": reformat("""lambda a, b: a % b"""),
     "//": reformat("""lambda a, b: a // b"""),
-    "**": reformat("""lambda a, b: a ** b""")
+    # "**": reformat("""lambda a, b: a ** b""")
 }
 
 variable_name_collide_list = set()
@@ -80,7 +78,7 @@ def create_var():
 
 class NumericalProgramSampler:
     def __init__(self, chain_length, param_num=1, include_logic=False,
-                 two_var_mixture=[0.4, 0.4, 0.2],
+                 two_var_mixture=[0.5, 0.5],
                  logic_prob=0.3,
                  max_gen_var=10,
                  seed=1234, verbose=False):
@@ -88,6 +86,7 @@ class NumericalProgramSampler:
         Args:
             chain_length:
             param_num: for this problem, more natural to have >1 param
+            two_var_mixture: the probability of which pool to sample from
             max_gen_var: how many latent variables (not input variables) to generate.
                          A good rule of thumb is -- make it 1.5 times the chain_length
 
@@ -99,7 +98,7 @@ class NumericalProgramSampler:
         assert type(chain_length) == int
         assert type(max_gen_var) == int
 
-        self.mixture_assertion_check(two_var_mixture, 3)
+        self.mixture_assertion_check(two_var_mixture, 2)
         assert logic_prob >= 0 and logic_prob <= 1, "Logic prob should be between 0 and 1"
 
         self.set_seed(seed)
@@ -109,7 +108,7 @@ class NumericalProgramSampler:
         self.max_gen_var = max_gen_var
 
         self.two_var_mixture = two_var_mixture
-        self.mixture_dec_space = [(1, 1), (2, 0), (0, 2)]
+        self.mixture_dec_space = [(1, 1), (2, 0)]
         # (num1, num2): sample {num1} vars in input_var_space, sample {num2} in gen_var_space
 
         self.logic_prob = logic_prob
@@ -118,11 +117,8 @@ class NumericalProgramSampler:
         self.input_var_space = []
         self.gen_var_space = []
 
-        for _ in range(param_num):
-            self.input_var_space.append(create_input_var())
-
-        self._goal_output = self.__call__(self.get_current_input(), seed=seed, verbose=verbose)
-        self._goal_input = copy.copy(self.get_current_input())
+        self._goal_input = [create_input_var()] * param_num
+        self._goal_output = self.__call__(self._goal_input, seed=seed, verbose=verbose)
 
         self.execution_exception = None
 
@@ -165,29 +161,24 @@ class NumericalProgramSampler:
         if num_sample == 0:
             return []
 
-        sampled_vars = []
-        for _ in range(num_sample):
-            if is_gen:
+        if is_gen:
+            for _ in range(num_sample):
                 max_curr_len = min(len(var_space), self.max_gen_var)
                 prob_new_var = 1 - max_curr_len / self.max_gen_var
                 if np.random.rand() < prob_new_var:
                     sampled_var = create_var()
                     var_space.append(sampled_var)
-                else:
-                    sampled_var = random.choice(var_space)
-                sampled_vars.append(sampled_var)
+            sampled_var_idx = np.random.choice(list(range(len(var_space))), num_sample, replace=False)
+            sampled_vars = [var_space[i] for i in sampled_var_idx]
+        else:
+            # for input_var
+            if len(self.input_var_space) > self.param_num:
+                weights = np.exp(np.arange(len(self.input_var_space)))
+                p = weights / np.sum(weights)
             else:
-                # for input_var
-                # we do a probability curve that favors later items (to increase computational complexity)
-                # once all input_vars have been used
-                if len(self.input_var_space) > self.param_num:
-                    weights = np.exp(np.arange(len(self.input_var_space)))
-                    p = weights / np.sum(weights)
-                else:
-                    p = [1 / len(self.input_var_space)] * len(self.input_var_space)
-                sampled_var_idx = np.random.choice(list(range(len(self.input_var_space))), p=p)
-                sampled_var = var_space[sampled_var_idx]
-                sampled_vars.append(sampled_var)
+                p = [1 / len(self.input_var_space)] * len(self.input_var_space)
+            sampled_var_idx = np.random.choice(list(range(len(self.input_var_space))), num_sample, p=p, replace=False)
+            sampled_vars = [var_space[i] for i in sampled_var_idx]
 
         return sampled_vars
 
@@ -205,7 +196,7 @@ class NumericalProgramSampler:
 
         return sampled_vars, is_gen_var
 
-    def sample_op(self):
+    def sample_op(self, verbose=False):
         """
         Automatic unit that does two actions:
         1. sample 2 values from the input_var_space and gen_var_space
@@ -221,8 +212,18 @@ class NumericalProgramSampler:
 
         Returns: op, (var1, var2), (is_gen_var, is_gen_var)
         """
-        op = math_ops_programs[np.random.choice(math_ops)]
         sampled_vars, is_gen_var = self.sample_two_vars()
+        allowed_math_ops = math_ops
+        if is_gen_var[1] is True:
+            if sampled_vars[1] <= 0:
+                # we don't modulo by non-positive number (if the variable is provided by us)
+                # we don't divide by 0 (if the variable is provided by us)
+                allowed_math_ops = ["+", "-", "*"]  # , "**"
+
+        op_name = np.random.choice(allowed_math_ops)
+        op = math_ops_programs[op_name]
+        if verbose:
+            print("Op:", op_name, "Vars from:", is_gen_var, "Vars:", [str(i) for i in sampled_vars])
 
         return op, sampled_vars, is_gen_var
 
@@ -239,11 +240,14 @@ class NumericalProgramSampler:
         """
         if self.include_logic and np.random.rand() < self.logic_prob:
             # sample 2 ops and 1 logic op
-            op1, vars1, is_gen1 = self.sample_op()
-            op2, vars2, is_gen2 = self.sample_op()
+            op1, vars1, is_gen1 = self.sample_op(verbose)
+            op2, vars2, is_gen2 = self.sample_op(verbose)
 
             logic_op = logic_ops_programs[np.random.choice(logic_ops)]
             sampled_vars, is_gen_var = self.sample_two_vars()
+            for i in range(len(sampled_vars)):
+                if not is_gen_var[i]:
+                    sampled_vars[i] = sampled_vars[i].data
 
             if eval(logic_op)(sampled_vars[0], sampled_vars[1]):
                 # first op
@@ -255,7 +259,7 @@ class NumericalProgramSampler:
                 out_var_is_gen = is_gen2[0] * is_gen2[1]
         else:
             # sample 1 op
-            op, vars, is_gen = self.sample_op()
+            op, vars, is_gen = self.sample_op(verbose)
             out_var = eval(op)(vars[0], vars[1])
             out_var_is_gen = is_gen[0] * is_gen[1]
 
@@ -279,24 +283,26 @@ class NumericalProgramSampler:
     def get_current_input(self):
         return self.input_var_space[:self.param_num]
 
-    def __call__(self, input_params: List[int], seed=1234, verbose=False):
+    def __call__(self, input_params: List, seed=1234, verbose=False):
         """
         Args:
             input_params: a list of input parameters
 
         Returns: the final value of the program
         """
+        self.reset()
+
         if type(input_params) != list:
             input_params = [input_params]
 
         assert len(input_params) == self.param_num, "The number of input params should be the same as param_num"
-        self.input_var_space = input_params
+
+        self.input_var_space += input_params
 
         # so we get the same computation graph actually
         # by choosing a seed
         self.set_seed(seed)
 
-        self.execution_exception = None
         try:
             for _ in range(self.chain_length):
                 out_var = self.step(verbose=verbose)

@@ -5,7 +5,7 @@ from collections import defaultdict
 import heapq
 from typing import TypeVar, Generic
 import re
-from autogen.trace.utils import get_name
+from autogen.trace.utils import get_name, MinHeap
 
 
 def node(message, name=None, trainable=False):
@@ -160,6 +160,15 @@ class AbstractNode(Generic[T]):
     def __lt__(self, other):  # for heapq (since it is a min heap)
         return -self._level < -other._level
 
+    # def lt(self, other):
+    #     return -self._level < -other._level
+    #
+    # def gt(self, other):
+    #     return -self._level > -other._level
+
+    # def __hash__(self):
+    #     return super().__hash__()
+
 
 # These are operators that do not change the data type and can be viewed as identity operators.
 IDENTITY_OPERATORS = ("identity", "clone", "message_to_dict", "oai_message")
@@ -288,9 +297,11 @@ class Node(AbstractNode[T]):
         # TODO optimize for efficiency
         # TODO check memory leak
         queue = [self]  # priority queue
+        # queue = MinHeap([self])
         while True:
             try:
                 node = heapq.heappop(queue)
+                # node = queue.pop()
                 # Each node is a MessageNode, which has at least one parent.
                 assert len(node.parents) > 0 and isinstance(node, MessageNode)
                 if node._backwarded:
@@ -313,6 +324,7 @@ class Node(AbstractNode[T]):
                     # Put parent in the queue if it has not been visited and it's not a root
                     if len(parent.parents) > 0 and parent not in queue:  # and parent not in queue:
                         heapq.heappush(queue, parent)  # put parent in the priority queue
+                        # queue.push(parent)  # put parent in the priority queue
 
                     if visualize:
                         # Plot the edge from parent to node
@@ -505,6 +517,30 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
 
         return ops.xor(self, node(other))
+
+    # def __lt__(self, other):
+    #     import autogen.trace.operators as ops
+    #
+    #     return ops.lt(self, node(other))
+    #
+    # def __le__(self, other):
+    #     import autogen.trace.operators as ops
+    #
+    #     return ops.le(self, node(other))
+    #
+    # def __gt__(self, other):
+    #     import autogen.trace.operators as ops
+    #
+    #     return ops.gt(self, node(other))
+    #
+    # def __ge__(self, other):
+    #     import autogen.trace.operators as ops
+    #
+    #     return ops.ge(self, node(other))
+    #
+    # def __bool__(self):
+    #     # not tracing this conversion
+    #     return bool(self._data)
 
     # string operators
     def capitalize(self):

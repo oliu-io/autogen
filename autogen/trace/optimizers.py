@@ -5,7 +5,7 @@ from autogen import AssistantAgent
 from autogen.oai.completion import Completion
 from textwrap import dedent, indent
 from copy import copy
-from autogen.trace.propagators import Propagator, FunctionPropagator
+from autogen.trace.propagators import Propagator, FunctionPropagator, FunctionDistributivePropagate
 from dataclasses import dataclass
 from autogen.trace.utils import SimplePromptParser, get_name, parse_eqs_to_dict
 import autogen
@@ -289,69 +289,11 @@ class FunctionOptimizer(Optimizer):
         return response
 
 
-class TeacherLLMOptimizer(Optimizer):
-    def __init__(self, parameters, config_list, task_description, *args, **kwargs):
-        super().__init__(parameters, *args, **kwargs)
-        system_message = dedent(
-            """
-        You are giving instructions to a student on how to accomplish a task.
-        The student aims to get a high score.
-        Given the feedback the student has received and the instruction you have given,
-        You want to come up with a new instruction that will help the student get a higher score.
-        """
-        )
-        self.llm = AssistantAgent(
-            name="assistant", system_message=system_message, llm_config={"config_list": config_list}
-        )
-        self.task_description = task_description
+class FunctionDistributiveOptimizer(FunctionOptimizer):
+    def default_propagator(self):
+        """Return the default Propagator object of the optimizer."""
+        return FunctionDistributivePropagate()
 
-        self.parameter_copy = {}
-        self.save_parameter_copy()
-
-    def _step(self, nodes: ParameterNode):
-        # `prompt="Complete the following sentence: {prefix}, context={"prefix": "Today I feel"}`
-        # context = {"task_description": self.task_description,
-        #            "instruction": value,
-        #            "feedback": feedback}
-        raise NotImplementedError  # TODO
-
-    def save_parameter_copy(self):
-        # this is to be able to go back
-        for p in self.parameters:
-            if p.trainable:
-                self.parameter_copy[p] = {"_data": copy(p._data), "_feedback": copy(p._feedback)}
-
-    def zero_feedback(self):
-        # if we are ready to perform another round of update
-        # we save the current parameters
-        self.save_parameter_copy()
-        super().zero_feedback()
-
-    def restore_parameters(self, parameters):
-        # revert back to a saved copy
-        for p in self.parameters:
-            if p.trainable:
-                assert p in self.parameter_copy
-                p._data = self.parameter_copy[p]["_data"]
-                p._feedback = self.parameter_copy[p]["_feedback"]
-
-
-class LLMCallable(object):
-    def __init__(self, config_list, system_message, prompt_template, name="helper"):
-        self.config_list = config_list
-        self.llm = AssistantAgent(name=name, system_message=system_message, llm_config={"config_list": config_list})
-        self.parser = SimplePromptParser(prompt_template, verbose=False)
-
-    def create_simple_response(self, message):
-        messages = [{"content": message, "role": "user"}]
-        response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        return self.llm.client.extract_text_or_completion_object(response)[0]
-
-    def create_response(self, **kwargs):
-        results = self.parser(**kwargs)
-        messages = [{"content": results, "role": "user"}]
-        response = self.llm.client.create(messages=self.llm._oai_system_message + messages)
-        return self.llm.client.extract_text_or_completion_object(response)[0]
 
 
 if __name__ == "__main__":
