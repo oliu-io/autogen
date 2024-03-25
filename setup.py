@@ -52,7 +52,7 @@ setuptools.setup(
         "autobuild": ["chromadb", "sentence-transformers", "huggingface-hub"],
         "teachable": ["chromadb"],
         "lmm": ["replicate", "pillow"],
-        "trace": ["graphviz==0.20.1"],
+        "trace": ["graphviz==0.20.1", "scikit-learn"],
         "graph": ["networkx", "matplotlib"],
         "websurfer": ["beautifulsoup4", "markdownify", "pdfminer.six", "pathvalidate"],
         "redis": ["redis"],
