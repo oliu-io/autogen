@@ -60,10 +60,10 @@ class FullCode:
 
 class EmptyCode:
     """
-    Can be more barebone than this...
+    Can be more bare-bone than this...
     """
     @staticmethod
-    @trace_op(trainable=True)
+    @trace_op(trainable=True, node_dict="auto")
     def get_env(parms, args, env=None):
         # Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env.
         new_env = {'_outer':env}
