@@ -128,6 +128,7 @@ class FunModule(Module):
         else:  # Otherwise we represent inputs as dict
             assert self.node_dict == "auto" or isinstance(self.node_dict, dict)
             spec = inspect.getcallargs(self.fun, *args, **kwargs)  # Read it from the input signature
+
             if isinstance(self.node_dict, dict):
                 spec.update(self.node_dict)
             assert isinstance(spec, dict)
@@ -136,21 +137,27 @@ class FunModule(Module):
             # Construct the inputs of the MessageNode from the set used_nodes
             spec_values = []
             inputs = {}
+
+            # the issue is: if there is a default positional variable called `args` or `kwargs`, then this won't work
             for k, v in spec.items():
-                if k == "args":
-                    spec_values.extend(v)
-                    for i, n in enumerate(v):
-                        if isinstance(n, Node) and (n in used_nodes):
-                            inputs[f"args{i}"] = n
-                elif k == "kwargs":
-                    spec_values.extend(v.values())
-                    for k, n in v.items():
-                        if isinstance(n, Node) and (n in used_nodes):
-                            inputs[k] = n
-                else:
-                    spec_values.append(v)
-                    if isinstance(v, Node) and (v in used_nodes):
-                        inputs[k] = v
+                # if k == "args":
+                #     spec_values.extend(v)
+                #     for i, n in enumerate(v):
+                #         if isinstance(n, Node) and (n in used_nodes):
+                #             inputs[f"args{i}"] = n
+                # elif k == "kwargs":
+                #     spec_values.extend(v.values())
+                #     for k, n in v.items():
+                #         if isinstance(n, Node) and (n in used_nodes):
+                #             inputs[k] = n
+                # else:
+                #     spec_values.append(v)
+                #     if isinstance(v, Node) and (v in used_nodes):
+                #         inputs[k] = v
+                spec_values.append(v)
+                if isinstance(v, Node) and (v in used_nodes):
+                    inputs[k] = v
+
             assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
 
         # Wrap the output as a MessageNode
