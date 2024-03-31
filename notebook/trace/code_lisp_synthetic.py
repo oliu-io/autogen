@@ -10,6 +10,9 @@ Backup task: Robotic planning
 
 Think about how you can "ablate" this...ok, we write two versions of the function, both are traced
 and we just load whichever one we decide.
+
+Original Parsel needs to backtrack and do error trace, and few-shot demonstration
+We are making this task harder
 """
 
 from autogen.trace.nodes import node, GRAPH
@@ -47,36 +50,3 @@ distinct_functions = {
     "otherwise_case", "not_list_case", "parse", "tokenize", "read_from_tokens",
     "atom", "nested_list_to_str"
 }
-
-class FullCode:
-    @staticmethod
-    @trace_op(trainable=True, node_dict="auto")
-    def get_env(parms, args, env=None):
-        # Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env.
-        new_env = {'_outer':env}
-        for (parm, arg) in zip(parms, args):
-            new_env[parm] = arg
-        return new_env
-
-class EmptyCode:
-    """
-    Can be more bare-bone than this...
-    """
-    @staticmethod
-    @trace_op(trainable=True, node_dict="auto")
-    def get_env(parms, args, env=None):
-        # Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env.
-        new_env = {'_outer':env}
-        return new_env
-
-def bug1():
-    GRAPH.clear()
-
-    parms = node([1, 2], trainable=False)
-    args = node(['arg1', 'arg2'], trainable=False)
-
-    FullCode.get_env(parms, args)
-
-    # AssertionError: All used_nodes must be in the spec.
-    # Sepc values: ["Node: (list:0, dtype=<class 'list'>, data=[1, 2])", "MessageNode: (getitem:0, dtype=<class 'str'>, data=arg1)", "MessageNode: (getitem:1, dtype=<class 'str'>, data=arg2)", 'None']
-    # used nodes: ["Node: (list:1, dtype=<class 'list'>, data=['arg1', 'arg2'])", "Node: (list:0, dtype=<class 'list'>, data=[1, 2])"]

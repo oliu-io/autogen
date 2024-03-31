@@ -19,7 +19,8 @@ class trace_nodes:
         USED_NODES.pop()
 
 
-def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, trainable=False):
+def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, trainable=False,
+             decorator_name='trace_op'):
     """
     Wrap a function as a FunModule, which returns node objects.
     The input signature to the wrapped function stays the same.
@@ -34,6 +35,7 @@ def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, 
             wrap_output=wrap_output,
             unpack_input=unpack_input,
             trainable=trainable,
+            decorator_name=decorator_name
         )
 
     return decorator
@@ -65,12 +67,17 @@ class FunModule(Module):
         wrap_output: bool = True,
         unpack_input: bool = True,
         trainable=False,
+        decorator_name='@trace_op'
     ):
         assert callable(fun), "fun must be a callable."
         assert (
             isinstance(node_dict, dict) or (node_dict is None) or (node_dict == "auto")
         ), "node_dict must be a dictionary or None or 'auto."
-        match = re.search(r"\s*@trace_op\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
+        # match = re.search(r"\s*@trace_op\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
+        if decorator_name != "":
+            match = re.search(r"\s*"+decorator_name+"\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
+        else:
+            match = re.search(r"(def.*)", inspect.getsource(fun), re.DOTALL)
         source = match.group(1).strip()
         self.info = dict(
             fun_name=fun.__qualname__,
