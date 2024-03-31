@@ -277,7 +277,11 @@ class Node(AbstractNode[T]):
                     description = x.description[:print_limit] + "..."
 
                 text = get_name(x) + "\n" + description + "\n"
-                content = str(x.data["content"] if isinstance(x.data, dict) else x.data)
+                content = str(x.data)
+                if isinstance(x.data, dict):
+                    if "content" in x.data:
+                        content = str(x.data["content"])
+                # content = str(x.data["content"] if isinstance(x.data, dict) else x.data)
                 if len(content) > print_limit:
                     content = content[:print_limit] + "..."
                 return text + content
@@ -517,6 +521,14 @@ class Node(AbstractNode[T]):
         import autogen.trace.operators as ops
 
         return ops.xor(self, node(other))
+
+    def __iter__(self):
+        import autogen.trace.containers as ct
+        return ct.iterate(self)
+
+    def items(self):
+        import autogen.trace.containers as ct
+        return ct.items(self)
 
     # def __lt__(self, other):
     #     import autogen.trace.operators as ops
