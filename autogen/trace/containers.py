@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Any
 from autogen.trace.trace_ops import trace_op
 import autogen.trace.operators as ops
 
-
 # List and Tuple share an Iterable
 class SeqIterable:
     def __init__(self, wrapped_list):

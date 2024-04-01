@@ -526,6 +526,10 @@ class Node(AbstractNode[T]):
         import autogen.trace.containers as ct
         return ct.iterate(self)
 
+    def __len__(self):
+        import autogen.trace.operators as ops
+        return ops.len_(self)
+
     def items(self):
         import autogen.trace.containers as ct
         return ct.items(self)

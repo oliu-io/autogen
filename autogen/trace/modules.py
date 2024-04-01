@@ -98,9 +98,15 @@ def test_container_over_container_over_node():
     a = ({node(1): node('1')},)
     copy_a = to_data(a)
 
+def test_node_over_container_over_container_over_node():
+    # currently fails
+    a = node(({node(1): node('1')},))
+    copy_a = to_data(a)
+
 if __name__ == '__main__':
     ...
     # test_container_over_container_over_node()
-    simple_test_unnested()
-    simple_test_node_over_container()
-    simple_test_container_over_node()
+    test_node_over_container_over_container_over_node()
+    # simple_test_unnested()
+    # simple_test_node_over_container()
+    # simple_test_container_over_node()
