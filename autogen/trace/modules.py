@@ -1,4 +1,4 @@
-from autogen.trace.nodes import Node, ParameterNode
+from autogen.trace.nodes import Node, ParameterNode, node
 import copy
 
 
@@ -29,6 +29,7 @@ def apply_op(op, output, *args, **kwargs):
     containers = [x for x in inputs if not isinstance(x, Node)]
     if len(containers) == 0:  # all inputs are Nodes, we just apply op
         return op(*args, **kwargs)
+
     # # there is at least one container
     # output = copy.deepcopy(containers[0])  # this would be used as the template of the output
 
@@ -67,3 +68,39 @@ def apply_op(op, output, *args, **kwargs):
 def to_data(obj):
     """Extract the data from a node or a container of nodes."""
     return apply_op(lambda x: x.data, copy.deepcopy(obj), obj)
+
+
+# TODO: add unit tests here
+
+
+def simple_test_unnested():
+    a = node(1)
+    copy_a = to_data(a)
+
+    a = node({'2': 2})
+    copy_a = to_data(a)
+
+    a = node([1, 2, 3])
+    copy_a = to_data(a)
+
+
+def simple_test_node_over_container():
+    a = node([node(1), node(2), node(3)])
+    copy_a = to_data(a)
+
+
+def simple_test_container_over_node():
+    a = [node(1), node(2), node(3)]
+    copy_a = to_data(a)
+
+def test_container_over_container_over_node():
+    # currently fails
+    a = ({node(1): node('1')},)
+    copy_a = to_data(a)
+
+if __name__ == '__main__':
+    ...
+    # test_container_over_container_over_node()
+    simple_test_unnested()
+    simple_test_node_over_container()
+    simple_test_container_over_node()

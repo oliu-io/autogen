@@ -299,7 +299,8 @@ def apply_fn_dict_key(fn_dict_generator, key, args_list):
 
 
 @random_trace(
-    description="[standard_env] An environment with some Scheme standard procedures. Start with an environment and update it with standard functions.")
+    description="[standard_env] An environment with some Scheme standard procedures. Start with an environment and update it with standard functions.",
+    node_dict=None)
 def standard_env(includes=['math', 'ops', 'simple_math']):
     env = {'_outer': None}
     if 'math' in includes:
