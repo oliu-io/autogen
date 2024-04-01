@@ -34,12 +34,14 @@ def to_list_implicit(x: Any):
 
 # List[Nodes], Node[List]
 def iterate(x: Any):
-    if type(x) == Node:
+    if issubclass(type(x), Node):
         if type(x.data) == list or type(x.data) == tuple:
             return SeqIterable(x)
         elif type(x.data) == set:
             converted_list = to_list_implicit(x)
             return SeqIterable(converted_list)
+        elif type(x.data) == dict:
+            return DictIterable(x)
         else:
             raise Exception("Cannot iterate on an object of type {}".format(type(x.data)))
     elif type(x) == list or type(x) == tuple:
@@ -47,12 +49,15 @@ def iterate(x: Any):
     elif type(x) == set:
         converted_list = to_list_implicit(x)
         return SeqIterable(converted_list)
+    elif type(x) == dict:
+        return DictIterable(node(x))
     else:
         raise Exception("Cannot iterate on an object of type {}".format(type(x)))
 
 
 class DictIterable:
     def __init__(self, wrapped_dict):
+        self._index = 0
         self.wrapped_dict = wrapped_dict
         self.keys = list(wrapped_dict.data.keys())
 

@@ -444,6 +444,9 @@ def parse_and_update(expression, env):
 
 # Initialize a standard environment. Parse and evaluate a list of expressions, returning the final result.
 def evaluate_program(program):
+    """
+    ['(define square (lambda (r) (* r r)))', '(square 3)'] -> 9
+    """
     env = standard_env()
     last = None
     for expression in program:
