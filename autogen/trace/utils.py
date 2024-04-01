@@ -63,6 +63,7 @@ class MinHeap:
     def _siftup(self, idx):
         while idx > 0:
             parent_idx = (idx - 1) // 2
+            # >
             if self.heap[parent_idx].gt(self.heap[idx]):
                 self.heap[parent_idx], self.heap[idx] = self.heap[idx], self.heap[parent_idx]
                 idx = parent_idx

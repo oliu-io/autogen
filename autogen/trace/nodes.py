@@ -74,7 +74,6 @@ GRAPH = Graph()  # This is a global registry of all the nodes.
 
 USED_NODES = list()  # A stack of sets. This is a global registry to track which nodes are read.
 
-
 T = TypeVar("T")
 
 
@@ -157,17 +156,17 @@ class AbstractNode(Generic[T]):
                 setattr(result, k, copy.deepcopy(v, memo))
         return result
 
-    def __lt__(self, other):  # for heapq (since it is a min heap)
+    # def __lt__(self, other):  # for heapq (since it is a min heap)
+    #     return -self._level < -other._level
+
+    def lt(self, other):
         return -self._level < -other._level
 
-    # def lt(self, other):
-    #     return -self._level < -other._level
-    #
-    # def gt(self, other):
-    #     return -self._level > -other._level
+    def gt(self, other):
+        return -self._level > -other._level
 
-    # def __hash__(self):
-    #     return super().__hash__()
+    def __hash__(self):
+        return super().__hash__()
 
 
 # These are operators that do not change the data type and can be viewed as identity operators.
@@ -193,13 +192,13 @@ class Node(AbstractNode[T]):
     """Node for Autogen messages and prompts. Node behaves like a dict."""
 
     def __init__(
-        self,
-        value,
-        *,
-        name=None,
-        trainable=False,
-        description="[Node] This is a node in a computational graph.",
-        info=None,
+            self,
+            value,
+            *,
+            name=None,
+            trainable=False,
+            description="[Node] This is a node in a computational graph.",
+            info=None,
     ) -> None:
         # TODO only take in a dict with a certain structure
         # if isinstance(value, str):
@@ -234,14 +233,14 @@ class Node(AbstractNode[T]):
         self.feedback[child].append(feedback)
 
     def backward(
-        self,
-        feedback: str = "",
-        propagator=None,
-        retain_graph=False,
-        visualize=False,
-        simple_visualization=True,
-        reverse_plot=False,
-        print_limit=100,
+            self,
+            feedback: str = "",
+            propagator=None,
+            retain_graph=False,
+            visualize=False,
+            simple_visualization=True,
+            reverse_plot=False,
+            print_limit=100,
     ):
         """Backward pass.
 
@@ -300,12 +299,12 @@ class Node(AbstractNode[T]):
 
         # TODO optimize for efficiency
         # TODO check memory leak
-        queue = [self]  # priority queue
-        # queue = MinHeap([self])
+        # queue = [self]  # priority queue
+        queue = MinHeap([self])
         while True:
             try:
-                node = heapq.heappop(queue)
-                # node = queue.pop()
+                # node = heapq.heappop(queue)
+                node = queue.pop()
                 # Each node is a MessageNode, which has at least one parent.
                 assert len(node.parents) > 0 and isinstance(node, MessageNode)
                 if node._backwarded:
@@ -327,8 +326,8 @@ class Node(AbstractNode[T]):
 
                     # Put parent in the queue if it has not been visited and it's not a root
                     if len(parent.parents) > 0 and parent not in queue:  # and parent not in queue:
-                        heapq.heappush(queue, parent)  # put parent in the priority queue
-                        # queue.push(parent)  # put parent in the priority queue
+                        # heapq.heappush(queue, parent)  # put parent in the priority queue
+                        queue.push(parent)  # put parent in the priority queue
 
                     if visualize:
                         # Plot the edge from parent to node
@@ -392,7 +391,7 @@ class Node(AbstractNode[T]):
             output = MessageNode(
                 data,
                 inputs=inputs,
-                description=f"[call] This is a call operator of {fun} of {self._data}.",
+                description=f"[call] This is a call operator of {fun} on {self._data}.",
                 name="call",
             )
         return output
@@ -527,33 +526,51 @@ class Node(AbstractNode[T]):
         return ct.iterate(self)
 
     def __len__(self):
-        import autogen.trace.operators as ops
-        return ops.len_(self)
+        # __len__ restricts return type to be integer
+        # therefore, we only return integer here
+        # if users want a Node, they need to call node.len() instead
+        return len(self._data)
 
-    def items(self):
-        import autogen.trace.containers as ct
-        return ct.items(self)
+    # for logic operators
+    # case 1: used in if-statement, then we should return a bool
+    # case 2: used else-where, then we should return Node(bool)
+    # we can't quite distinguish myopically, so...in here, we prioritize case 1
+    def __lt__(self, other):
+        if isinstance(other, Node):
+            other = other.data
+        return self._data < other
 
-    # def __lt__(self, other):
-    #     import autogen.trace.operators as ops
-    #
-    #     return ops.lt(self, node(other))
-    #
-    # def __le__(self, other):
-    #     import autogen.trace.operators as ops
-    #
-    #     return ops.le(self, node(other))
-    #
-    # def __gt__(self, other):
-    #     import autogen.trace.operators as ops
-    #
-    #     return ops.gt(self, node(other))
-    #
-    # def __ge__(self, other):
-    #     import autogen.trace.operators as ops
-    #
-    #     return ops.ge(self, node(other))
-    #
+    def __le__(self, other):
+        # import autogen.trace.operators as ops
+        # return ops.le(self, node(other))
+        if isinstance(other, Node):
+            other = other.data
+        return self._data <= other
+
+    def __gt__(self, other):
+        # import autogen.trace.operators as ops
+        # return ops.gt(self, node(other))
+        if isinstance(other, Node):
+            other = other.data
+        return self._data > other
+
+    def __ge__(self, other):
+        # import autogen.trace.operators as ops
+        # return ops.ge(self, node(other))
+        if isinstance(other, Node):
+            other = other.data
+        return self._data >= other
+
+    def __eq__(self, other):
+        # import autogen.trace.operators as ops
+        # return ops.eq(self, node(other))
+        if isinstance(other, Node):
+            other = other.data
+        return self._data == other
+
+    def __hash__(self):
+        return super().__hash__()
+
     # def __bool__(self):
     #     # not tracing this conversion
     #     return bool(self._data)
@@ -615,17 +632,25 @@ class Node(AbstractNode[T]):
 
         return ops.replace(self, node(old), node(new), count)
 
+    # container specific methods
+    def items(self):
+        import autogen.trace.containers as ct
+        return ct.items(self)
+
+    def pop(self, *args, **kwargs):
+        return self.call('pop', *args, **kwargs)
+
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
     def __init__(
-        self,
-        value,
-        *,
-        name=None,
-        trainable=True,
-        description="[ParameterNode]This is a ParameterNode in a computational graph.",
-        info=None,
+            self,
+            value,
+            *,
+            name=None,
+            trainable=True,
+            description="[ParameterNode]This is a ParameterNode in a computational graph.",
+            info=None,
     ) -> None:
         super().__init__(value, name=name, trainable=trainable, description=description, info=info)
 
@@ -648,7 +673,7 @@ class MessageNode(Node[T]):
     """
 
     def __init__(
-        self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None, info=None
+            self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None, info=None
     ) -> None:
         super().__init__(value, name=name, description=description, info=info)
         # If not tracing, MessageNode would just behave like a Node.
