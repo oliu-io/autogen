@@ -126,7 +126,12 @@ class FunModule(Module):
             if self.unpack_input:  # extract data from container of nodes
                 _args = to_data(args)
                 _kwargs = to_data(kwargs)
+            # add an except here
             outputs = self.fun(*_args, **_kwargs)
+            # if that catches, construct a different output node
+            # output node is an exception node
+            # how to stop...
+            # ExceptionNode, all operations
 
         # Construct the inputs of the MessageNode from the set used_nodes
         # TODO simplify this

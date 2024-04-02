@@ -365,8 +365,8 @@ class Node(AbstractNode[T]):
         return copy.deepcopy(self)
 
     # We do not allow Node to be used bool. The user should access node.data directly.
-    def __bool__(self):
-        raise AttributeError(f"Cannot convert {self} to bool.")
+    # def __bool__(self):
+    #     raise AttributeError(f"Cannot convert {self} to bool.")
 
     # Get attribute and call operators
     def getattr(self, key):
@@ -536,31 +536,35 @@ class Node(AbstractNode[T]):
     # case 2: used else-where, then we should return Node(bool)
     # we can't quite distinguish myopically, so...in here, we prioritize case 1
     def __lt__(self, other):
-        if isinstance(other, Node):
-            other = other.data
-        return self._data < other
+        import autogen.trace.operators as ops
+        return ops.lt(self, node(other))
+        # if isinstance(other, Node):
+        #     other = other.data
+        # return self._data < other
 
     def __le__(self, other):
-        # import autogen.trace.operators as ops
-        # return ops.le(self, node(other))
-        if isinstance(other, Node):
-            other = other.data
-        return self._data <= other
+        import autogen.trace.operators as ops
+        return ops.le(self, node(other))
+        # if isinstance(other, Node):
+        #     other = other.data
+        # return self._data <= other
 
     def __gt__(self, other):
-        # import autogen.trace.operators as ops
-        # return ops.gt(self, node(other))
-        if isinstance(other, Node):
-            other = other.data
-        return self._data > other
+        import autogen.trace.operators as ops
+        return ops.gt(self, node(other))
+        # if isinstance(other, Node):
+        #     other = other.data
+        # return self._data > other
 
     def __ge__(self, other):
-        # import autogen.trace.operators as ops
-        # return ops.ge(self, node(other))
-        if isinstance(other, Node):
-            other = other.data
-        return self._data >= other
+        import autogen.trace.operators as ops
+        return ops.ge(self, node(other))
+        # if isinstance(other, Node):
+        #     other = other.data
+        # return self._data >= other
 
+    # this creates a lot of issues if we return Node
+    # instead of bool (for example "in" operator will not work)
     def __eq__(self, other):
         # import autogen.trace.operators as ops
         # return ops.eq(self, node(other))
@@ -568,12 +572,12 @@ class Node(AbstractNode[T]):
             other = other.data
         return self._data == other
 
+    def __bool__(self):
+        # not tracing this conversion
+        return bool(self._data)
+
     def __hash__(self):
         return super().__hash__()
-
-    # def __bool__(self):
-    #     # not tracing this conversion
-    #     return bool(self._data)
 
     # string operators
     def capitalize(self):
