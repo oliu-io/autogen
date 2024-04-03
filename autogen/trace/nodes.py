@@ -201,6 +201,7 @@ def auto_except(n_output=1):
                 return func(self, *args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
@@ -701,25 +702,6 @@ class Node(AbstractNode[T]):
         return self.call('pop', *args, **kwargs)
 
 
-class ExceptionNode(Node[T]):
-    """
-    We automatically handle method as much as we can, but for some methods we implement them.
-    """
-    is_exception = True
-
-    def __iter__(self):
-        import autogen.trace.containers as ct
-        return ct.ExceptionIterator(self)
-
-    def __bool__(self):
-        # not tracing this conversion
-        return True
-
-    def __eq__(self, other):
-        # True because again, in auto_trace we do "checks" to see if a node is in a set
-        # if this is by default false, our internal logic will fail
-        return True
-
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
     def __init__(
@@ -779,6 +761,26 @@ class MessageNode(Node[T]):
         """Add feedback from a child."""
         super()._add_feedback(child, feedback)
         assert len(self.feedback[child]) == 1, "MessageNode should have only one feedback from each child."
+
+
+class ExceptionNode(MessageNode[T]):
+    """
+    We automatically handle method as much as we can, but for some methods we implement them.
+    """
+    is_exception = True
+
+    def __iter__(self):
+        import autogen.trace.containers as ct
+        return ct.ExceptionIterator(self)
+
+    def __bool__(self):
+        # not tracing this conversion
+        return True
+
+    def __eq__(self, other):
+        # True because again, in auto_trace we do "checks" to see if a node is in a set
+        # if this is by default false, our internal logic will fail
+        return True
 
 
 if __name__ == "__main__":

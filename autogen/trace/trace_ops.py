@@ -1,7 +1,7 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.modules import apply_op, to_data, Module
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name, ExceptionNode
 import inspect
 import functools
 import re
@@ -121,6 +121,7 @@ class FunModule(Module):
         MessageNode, whose inputs are nodes in used_nodes.
         """
         # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
+        has_exception = False
         with trace_nodes() as used_nodes:
             _args, _kwargs = args, kwargs
             if self.unpack_input:  # extract data from container of nodes
@@ -130,7 +131,8 @@ class FunModule(Module):
             try:
                 outputs = self.fun(*_args, **_kwargs)
             except:
-                pass
+                has_exception = True
+
             # if that catches, construct a different output node
             # output node is an exception node
             # how to stop...
@@ -174,6 +176,17 @@ class FunModule(Module):
                     inputs[k] = v
 
             assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
+
+        # handle exception and return
+        if has_exception:
+            description = "[error] This operator failed to execute."
+            if self.n_outputs > 1:
+                outputs = []
+                for _ in range(self.n_outputs):
+                    outputs.append(ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info))
+                return tuple(outputs)
+            else:
+                return ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info)
 
         # Wrap the output as a MessageNode
         if self.n_outputs == 1:
