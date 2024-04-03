@@ -131,6 +131,7 @@ class FunModule(Module):
             try:
                 outputs = self.fun(*_args, **_kwargs)
             except:
+                # TODO: catch exception, store in the node
                 has_exception = True
 
             # if that catches, construct a different output node
@@ -178,15 +179,15 @@ class FunModule(Module):
             assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
 
         # handle exception and return
-        if has_exception:
-            description = "[error] This operator failed to execute."
-            if self.n_outputs > 1:
-                outputs = []
-                for _ in range(self.n_outputs):
-                    outputs.append(ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info))
-                return tuple(outputs)
-            else:
-                return ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info)
+        # if has_exception:
+        #     description = "[error] This operator failed to execute."
+        #     if self.n_outputs > 1:
+        #         outputs = []
+        #         for _ in range(self.n_outputs):
+        #             outputs.append(ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info))
+        #         return tuple(outputs)
+        #     else:
+        #         return ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info)
 
         # Wrap the output as a MessageNode
         if self.n_outputs == 1:
