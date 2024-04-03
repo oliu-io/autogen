@@ -127,7 +127,10 @@ class FunModule(Module):
                 _args = to_data(args)
                 _kwargs = to_data(kwargs)
             # add an except here
-            outputs = self.fun(*_args, **_kwargs)
+            try:
+                outputs = self.fun(*_args, **_kwargs)
+            except:
+                pass
             # if that catches, construct a different output node
             # output node is an exception node
             # how to stop...
