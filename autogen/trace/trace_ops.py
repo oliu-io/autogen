@@ -1,7 +1,7 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.modules import apply_op, to_data, Module
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name, ExceptionNode
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name
 import inspect
 import functools
 import re
@@ -18,6 +18,14 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
+class TraceExecutionError(Exception):
+    """Base class for execution error in code tracing."""
+    def __init__(self, message="An error occurred in the application"):
+        self.message = message
+        super().__init__(self.message)
+
+    def __str__(self):
+        return f'TraceExecutionError: {self.message}'
 
 def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, trainable=False,
              decorator_name='trace_op'):
@@ -39,7 +47,6 @@ def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, 
         )
 
     return decorator
-
 
 class FunModule(Module):
     """This is a decorator to trace a function. The wrapped function returns a MessageNode.
@@ -121,7 +128,7 @@ class FunModule(Module):
         MessageNode, whose inputs are nodes in used_nodes.
         """
         # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
-        has_exception = False
+        # has_exception = False
         with trace_nodes() as used_nodes:
             _args, _kwargs = args, kwargs
             if self.unpack_input:  # extract data from container of nodes
@@ -130,14 +137,10 @@ class FunModule(Module):
             # add an except here
             try:
                 outputs = self.fun(*_args, **_kwargs)
-            except:
-                # TODO: catch exception, store in the node
-                has_exception = True
-
-            # if that catches, construct a different output node
-            # output node is an exception node
-            # how to stop...
-            # ExceptionNode, all operations
+            except Exception as e:
+                # has_exception = True
+                # for users to catch
+                raise TraceExecutionError(message=str(e))
 
         # Construct the inputs of the MessageNode from the set used_nodes
         # TODO simplify this

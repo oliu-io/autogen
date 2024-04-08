@@ -83,12 +83,12 @@ def items(x: Any):
         return AttributeError("Cannot get items from an object of type {}".format(type(x.data)))
     return DictIterable(x)
 
-class ExceptionIterator:
-    def __init__(self, exception):
-        self.exception = exception
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        raise StopIteration
+# class ExceptionIterator:
+#     def __init__(self, exception):
+#         self.exception = exception
+#
+#     def __iter__(self):
+#         return self
+#
+#     def __next__(self):
+#         raise StopIteration
