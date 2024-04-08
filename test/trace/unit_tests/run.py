@@ -23,5 +23,11 @@ for file in py_files:
     filename = os.path.basename(file)
     if filename.startswith("test_"):
         print_colored(f"Running {filename} ...", GREEN)
+
         result = subprocess.run(["python", file], capture_output=True, text=True)
-        print(result.stdout)
+        if result.returncode == 0:
+            print_colored("PASSED", GREEN)
+            print(result.stdout)
+        else:
+            print_colored("FAILED", RED)
+            print(result.stderr)
