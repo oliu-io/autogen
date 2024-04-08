@@ -96,7 +96,7 @@ z = foo.add(x, y)
 
 
 # Test functions with *args and *kwargs
-@trace_op()
+@trace_op(node_dict=None)
 def fun(a, *args, **kwargs):
     # print(a)
     # print(args)
