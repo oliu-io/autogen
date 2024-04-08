@@ -1,6 +1,7 @@
 import copy
 from autogen.trace import node
 from autogen.trace import operators as ops
+from autogen.trace.utils import contain
 
 
 # Sum of str
@@ -41,6 +42,9 @@ for k, v in z._inputs.items():
 index = node(0)
 x = node([node(1), node(2), node(3)])
 z = ops.getitem(x, index)
+assert z == x[index]  # Test __getitem__ magic function
+assert z is not x[index]  # different calls creates different nodes
+assert z is not x[index]  # different calls creates different nodes
 assert z.data == x.data[index.data].data
 assert x in z.parents and index in z.parents
 assert z in x.children and z in index.children
@@ -51,23 +55,32 @@ for k, v in z._inputs.items():
 index = node(0)
 x = node([1, 2, 3])
 z = ops.getitem(x, index)
+assert z == x[index]  # Test __getitem__ magic function
 assert z.data == x.data[index.data]
 assert x in z.parents and index in z.parents
 assert z in x.children and z in index.children
 for k, v in z._inputs.items():
     assert locals()[k] == v
 
+# Test iterables
+x = node([1, 2, 3])
+for k, v in enumerate(x):
+    assert v.data == x.data[k]
+
+x = node(dict(a=1, b=2, c=3))
+for k, v in x.items():
+    assert v.data == x.data[k.data]
+
 # Test copy
 z_new = ops.identity(z)
 z_clone = z.clone()
 z_copy = copy.deepcopy(z)
-
 assert z_new.data == z.data
 assert z_clone.data == z.data
 assert z_copy.data == z.data
-assert z in z_new.parents and len(z_new.parents) == 1 and z_new in z.children
-assert z in z_clone.parents and len(z_clone.parents) == 1 and z_clone in z.children
-assert z not in z_copy.parents and len(z_copy.parents) == 0 and z_copy not in z.children
+assert contain(z_new.parents, z) and len(z_new.parents) == 1 and contain(z.children, z_new)
+assert contain(z_clone.parents, z) and len(z_clone.parents) == 1 and contain(z.children, z_clone)
+assert not contain(z_copy.parents, z) and len(z_copy.parents) == 0 and not contain(z.children, z_copy)
 
 
 # Test magic function
@@ -82,3 +95,12 @@ assert x in z.parents and y in z.parents
 assert z in x.children and z in y.children
 for k, v in z._inputs.items():
     assert locals()[k] == v
+
+# Test boolean operators
+x = node(1)
+y = node(2)
+z = x < y
+assert z.data == x.data < y.data
+
+if z:
+    print(f"z {z} is True")

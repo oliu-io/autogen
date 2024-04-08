@@ -2,6 +2,11 @@ from graphviz import Digraph
 import re
 
 
+def contain(container_of_nodes, node):
+    # check for identity instead of value
+    return any([node is n for n in container_of_nodes])
+
+
 def parse_eqs_to_dict(text):
     """
     Parse the text of equations into a didctionary
@@ -92,6 +97,7 @@ class MinHeap:
 
     def heapify(self, arr):
         import copy
+
         self.heap = copy.copy(arr)
         for i in range((len(self.heap) - 2) // 2, -1, -1):
             self._siftdown(i)
@@ -272,7 +278,7 @@ def simple_shrink(dot_str, shrink=True):
         child = sorted_blocks[i][0].strip().split(" -> ")[1]
         found = False
         # condition 1: look-ahead (if the child has multiple parents, we delay till the last parent)
-        for block in sorted_blocks[i + 1:]:
+        for block in sorted_blocks[i + 1 :]:
             if child in block[0]:
                 # see if it's "-> child" or "child ->"
                 left, right = block[0].strip().split(" -> ")
