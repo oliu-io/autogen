@@ -94,7 +94,7 @@ class AbstractNode(Generic[T]):
 
     @property
     def data(self):
-        if len(USED_NODES) > 0:  # We're within trace_nodes context.
+        if len(USED_NODES) > 0 and GRAPH.TRACE:  # We're within trace_nodes context.
             USED_NODES[-1].add(self)
         return self.__getattribute__("_data")
 
@@ -750,17 +750,21 @@ class MessageNode(Node[T]):
         self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None, info=None
     ) -> None:
         super().__init__(value, name=name, description=description, info=info)
+
+        assert isinstance(inputs, list) or isinstance(inputs, dict)
+        # If inputs is not a dict, we create a dict with the names of the nodes as keys
+        if isinstance(inputs, list):
+            inputs = {v.name: v for v in inputs}
+        self._inputs = inputs
+
         # If not tracing, MessageNode would just behave like a Node.
-        if GRAPH.TRACE:
-            assert isinstance(inputs, list) or isinstance(inputs, dict)
-            # If inputs is not a dict, we create a dict with the names of the nodes as keys
-            if isinstance(inputs, list):
-                inputs = {v.name: v for v in inputs}
-            self._inputs = inputs
-            # Add parents if we are tracing
-            for k, v in self._inputs.items():
-                assert isinstance(v, Node), f"Input {k} is not a Node."
-                self.add_parent(v)
+        if not GRAPH.TRACE:
+            assert len(self._inputs) == 0, "MessageNode should have no inputs when not tracing."
+
+        # Add parents if we are tracing
+        for k, v in self._inputs.items():
+            assert isinstance(v, Node), f"Input {k} is not a Node."
+            self.add_parent(v)
 
     @property
     def inputs(self):

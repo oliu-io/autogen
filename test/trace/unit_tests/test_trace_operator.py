@@ -1,3 +1,4 @@
+from autogen import trace
 from autogen.trace.trace_ops import trace_op
 from autogen.trace.nodes import Node, node
 from autogen.trace.utils import for_all_methods
@@ -129,3 +130,12 @@ x = fun(
     node(1), node("args"), node("kwargs"), node("_args_1"), node("_args_2"), b=node("_kwargs_b"), c=node("_kwargs_c")
 )
 print(x, x.inputs)
+
+
+# Test stop_tracing
+x = node(1)
+y = node(2)
+with trace.stop_tracing():
+    z = x + y
+assert z.inputs == {}
+assert z == 3
