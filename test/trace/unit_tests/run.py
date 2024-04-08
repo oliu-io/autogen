@@ -31,3 +31,4 @@ for file in py_files:
         else:
             print_colored("FAILED", RED)
             print(result.stderr)
+            break
