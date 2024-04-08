@@ -104,3 +104,10 @@ assert z.data == x.data < y.data
 
 if z:
     print(f"z {z} is True")
+
+# Test hash
+x = node(1)
+y = node(1)
+assert y in [x]
+assert y not in {x}
+assert hash(x) != hash(y)

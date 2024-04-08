@@ -165,8 +165,8 @@ class AbstractNode(Generic[T]):
     def gt(self, other):
         return -self._level > -other._level
 
-    def __hash__(self):
-        return super().__hash__()
+    # def __hash__(self):
+    #     return super().__hash__()
 
 
 # These are operators that do not change the data type and can be viewed as identity operators.
@@ -207,16 +207,17 @@ def supported_data_type(value):
 
 class Node(AbstractNode[T]):
     """Node for Autogen messages and prompts. Node behaves like a dict."""
-    is_exception = False
+
+    # is_exception = False
 
     def __init__(
-            self,
-            value,
-            *,
-            name=None,
-            trainable=False,
-            description="[Node] This is a node in a computational graph.",
-            info=None,
+        self,
+        value,
+        *,
+        name=None,
+        trainable=False,
+        description="[Node] This is a node in a computational graph.",
+        info=None,
     ) -> None:
         # TODO only take in a dict with a certain structure
         # if isinstance(value, str):
@@ -251,14 +252,14 @@ class Node(AbstractNode[T]):
         self.feedback[child].append(feedback)
 
     def backward(
-            self,
-            feedback: str = "",
-            propagator=None,
-            retain_graph=False,
-            visualize=False,
-            simple_visualization=True,
-            reverse_plot=False,
-            print_limit=100,
+        self,
+        feedback: str = "",
+        propagator=None,
+        retain_graph=False,
+        visualize=False,
+        simple_visualization=True,
+        reverse_plot=False,
+        print_limit=100,
     ):
         """Backward pass.
 
@@ -382,7 +383,7 @@ class Node(AbstractNode[T]):
     def detach(self):
         return copy.deepcopy(self)
 
-    # We do not allow Node to be used bool. The user should access node.data directly.
+    # # We do not allow Node to be used bool. The user should access node.data directly.
     # def __bool__(self):
     #     raise AttributeError(f"Cannot convert {self} to bool.")
 
@@ -565,6 +566,7 @@ class Node(AbstractNode[T]):
 
     def __iter__(self):
         import autogen.trace.containers as ct
+
         return ct.iterate(self)
 
     # @auto_except
@@ -581,6 +583,7 @@ class Node(AbstractNode[T]):
     # @auto_except
     def __lt__(self, other):
         import autogen.trace.operators as ops
+
         return ops.lt(self, node(other))
         # if isinstance(other, Node):
         #     other = other.data
@@ -589,6 +592,7 @@ class Node(AbstractNode[T]):
     # @auto_except
     def __le__(self, other):
         import autogen.trace.operators as ops
+
         return ops.le(self, node(other))
         # if isinstance(other, Node):
         #     other = other.data
@@ -597,6 +601,7 @@ class Node(AbstractNode[T]):
     # @auto_except
     def __gt__(self, other):
         import autogen.trace.operators as ops
+
         return ops.gt(self, node(other))
         # if isinstance(other, Node):
         #     other = other.data
@@ -605,6 +610,7 @@ class Node(AbstractNode[T]):
     # @auto_except
     def __ge__(self, other):
         import autogen.trace.operators as ops
+
         return ops.ge(self, node(other))
         # if isinstance(other, Node):
         #     other = other.data
@@ -619,12 +625,12 @@ class Node(AbstractNode[T]):
             other = other.data
         return self._data == other
 
+    def __hash__(self):
+        return super().__hash__()
+
     def __bool__(self):
         # not tracing this conversion
         return bool(self._data)
-
-    def __hash__(self):
-        return super().__hash__()
 
     # string operators
     # @auto_except
@@ -695,23 +701,24 @@ class Node(AbstractNode[T]):
     # @auto_except
     def items(self):
         import autogen.trace.containers as ct
+
         return ct.items(self)
 
     # @auto_except
     def pop(self, *args, **kwargs):
-        return self.call('pop', *args, **kwargs)
+        return self.call("pop", *args, **kwargs)
 
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
     def __init__(
-            self,
-            value,
-            *,
-            name=None,
-            trainable=True,
-            description="[ParameterNode]This is a ParameterNode in a computational graph.",
-            info=None,
+        self,
+        value,
+        *,
+        name=None,
+        trainable=True,
+        description="[ParameterNode]This is a ParameterNode in a computational graph.",
+        info=None,
     ) -> None:
         super().__init__(value, name=name, trainable=trainable, description=description, info=info)
 
@@ -734,7 +741,7 @@ class MessageNode(Node[T]):
     """
 
     def __init__(
-            self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None, info=None
+        self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None, info=None
     ) -> None:
         super().__init__(value, name=name, description=description, info=info)
         # If not tracing, MessageNode would just behave like a Node.
