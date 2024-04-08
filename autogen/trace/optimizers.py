@@ -7,7 +7,6 @@ from textwrap import dedent, indent
 from copy import copy
 from autogen.trace.propagators import Propagator, FunctionPropagator, FunctionDistributivePropagate
 from dataclasses import dataclass
-from autogen.trace.utils import SimplePromptParser, get_name, parse_eqs_to_dict
 import autogen
 import warnings
 import json
@@ -212,9 +211,9 @@ class FunctionOptimizer(Optimizer):
         summary = sum(feedbacks[1:], feedbacks[0])
 
         # Construct variables and update others
-        others = {get_name(p): p.data for p in self.parameters if not p.trainable}
+        others = {p.py_name: p.data for p in self.parameters if not p.trainable}
         others.update(summary.others)
-        variables = {get_name(p): p.data for p in self.parameters if p.trainable}
+        variables = {p.py_name: p.data for p in self.parameters if p.trainable}
         non_variable_roots = {k: v for k, v in summary.roots.items() if k not in variables}
         others.update(non_variable_roots)
 
@@ -256,8 +255,8 @@ class FunctionOptimizer(Optimizer):
         # Convert the suggestion in text into the right data type
         update_dict = {}
         for node in nodes:
-            if node.trainable and get_name(node) in suggestion:
-                update_dict[node] = type(node.data)(suggestion[get_name(node)])
+            if node.trainable and node.py_name in suggestion:
+                update_dict[node] = type(node.data)(suggestion[node.py_name])
         return update_dict
 
     def call_llm(self, prompt, verbose=False):  # TODO Get this from utils?

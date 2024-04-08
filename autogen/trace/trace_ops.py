@@ -1,7 +1,7 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.modules import apply_op, to_data, Module
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, node, get_operator_name
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_operator_name
 import inspect
 import functools
 import re
@@ -18,17 +18,27 @@ class trace_nodes:
     def __exit__(self, type, value, traceback):
         USED_NODES.pop()
 
+
 class TraceExecutionError(Exception):
     """Base class for execution error in code tracing."""
-    def __init__(self, message="An error occurred in the application"):
-        self.message = message
-        super().__init__(self.message)
+
+    def __init__(self, exception_node: ExceptionNode):
+        self.exception_node = exception_node
+        super().__init__(self.exception_node.data)
 
     def __str__(self):
-        return f'TraceExecutionError: {self.message}'
+        return f"TraceExecutionError: {self.exception_node.data}"
 
-def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, trainable=False,
-             decorator_name='trace_op'):
+
+def trace_op(
+    description=None,
+    n_outputs=1,
+    node_dict="auto",
+    wrap_output=True,
+    unpack_input=True,
+    trainable=False,
+    decorator_name="trace_op",
+):
     """
     Wrap a function as a FunModule, which returns node objects.
     The input signature to the wrapped function stays the same.
@@ -43,10 +53,11 @@ def trace_op(description=None, n_outputs=1, node_dict="auto", wrap_output=True, 
             wrap_output=wrap_output,
             unpack_input=unpack_input,
             trainable=trainable,
-            decorator_name=decorator_name
+            decorator_name=decorator_name,
         )
 
     return decorator
+
 
 class FunModule(Module):
     """This is a decorator to trace a function. The wrapped function returns a MessageNode.
@@ -74,7 +85,7 @@ class FunModule(Module):
         wrap_output: bool = True,
         unpack_input: bool = True,
         trainable=False,
-        decorator_name='@trace_op'
+        decorator_name="@trace_op",
     ):
         assert callable(fun), "fun must be a callable."
         assert (
@@ -82,7 +93,7 @@ class FunModule(Module):
         ), "node_dict must be a dictionary or None or 'auto."
         # match = re.search(r"\s*@trace_op\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
         if decorator_name != "":
-            match = re.search(r"\s*"+decorator_name+"\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
+            match = re.search(r"\s*" + decorator_name + "\\(.*\\)\n\\s*(def.*)", inspect.getsource(fun), re.DOTALL)
         else:
             match = re.search(r"(def.*)", inspect.getsource(fun), re.DOTALL)
         source = match.group(1).strip()
@@ -128,7 +139,6 @@ class FunModule(Module):
         MessageNode, whose inputs are nodes in used_nodes.
         """
         # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
-        # has_exception = False
         with trace_nodes() as used_nodes:
             _args, _kwargs = args, kwargs
             if self.unpack_input:  # extract data from container of nodes
@@ -138,9 +148,7 @@ class FunModule(Module):
             try:
                 outputs = self.fun(*_args, **_kwargs)
             except Exception as e:
-                # has_exception = True
-                # for users to catch
-                raise TraceExecutionError(message=str(e))
+                outputs = e
 
         # Construct the inputs of the MessageNode from the set used_nodes
         # TODO simplify this
@@ -149,7 +157,6 @@ class FunModule(Module):
         else:  # Otherwise we represent inputs as dict
             assert self.node_dict == "auto" or isinstance(self.node_dict, dict)
             spec = inspect.getcallargs(self.fun, *args, **kwargs)  # Read it from the input signature
-
             if isinstance(self.node_dict, dict):
                 spec.update(self.node_dict)
             assert isinstance(spec, dict)
@@ -158,41 +165,26 @@ class FunModule(Module):
             # Construct the inputs of the MessageNode from the set used_nodes
             spec_values = []
             inputs = {}
-
-            # the issue is: if there is a default positional variable called `args` or `kwargs`, then this won't work
+            # args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann
+            _, varargs, varkw, _, _, _, _ = inspect.getfullargspec(self.fun)
             for k, v in spec.items():
-                # if k == "args":
-                #     spec_values.extend(v)
-                #     for i, n in enumerate(v):
-                #         if isinstance(n, Node) and (n in used_nodes):
-                #             inputs[f"args{i}"] = n
-                # elif k == "kwargs":
-                #     spec_values.extend(v.values())
-                #     for k, n in v.items():
-                #         if isinstance(n, Node) and (n in used_nodes):
-                #             inputs[k] = n
-                # else:
-                #     spec_values.append(v)
-                #     if isinstance(v, Node) and (v in used_nodes):
-                #         inputs[k] = v
-                spec_values.append(v)
-                if isinstance(v, Node) and (v in used_nodes):
-                    inputs[k] = v
-
+                if k == varargs:  # unpack varargs
+                    spec_values.extend(v)
+                    for i, n in enumerate(v):
+                        if isinstance(n, Node) and (n in used_nodes):
+                            inputs[f"args_{n.py_name}"] = n
+                elif k == varkw:  # unpack varkw
+                    spec_values.extend(v.values())
+                    for k, n in v.items():
+                        if isinstance(n, Node) and (n in used_nodes):
+                            inputs[k] = n
+                else:
+                    spec_values.append(v)
+                    if isinstance(v, Node) and (v in used_nodes):
+                        inputs[k] = v
             assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
 
-        # handle exception and return
-        # if has_exception:
-        #     description = "[error] This operator failed to execute."
-        #     if self.n_outputs > 1:
-        #         outputs = []
-        #         for _ in range(self.n_outputs):
-        #             outputs.append(ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info))
-        #         return tuple(outputs)
-        #     else:
-        #         return ExceptionNode("Error", description=description, inputs=inputs, name=self.name, info=self.info)
-
-        # Wrap the output as a MessageNode
+        # Wrap the output as a MessageNode or an ExceptionNode
         if self.n_outputs == 1:
             nodes = self.wrap(outputs, inputs)
             parents = set(nodes.parents) if isinstance(nodes, Node) else set()
@@ -203,7 +195,7 @@ class FunModule(Module):
         # Make sure all nodes in used_nodes are in the parents of the returned node.
         if nodes is not None and not all([node in parents for node in used_nodes]):
             raise ValueError(
-                f"Not all nodes used in the operator {self.fun} are specified as inputs of the returned node."
+                f"Not all nodes used in the operator {self.fun} are specified as inputs of the returned node. Missing {[node.name for node in used_nodes if node not in parents]} "
             )
         return nodes
 
@@ -225,7 +217,18 @@ class FunModule(Module):
         else:
             description = self.description
             name = self.name
-        return MessageNode(output, description=description, inputs=inputs, name=name, info=self.info)
+
+        if isinstance(output, Exception):
+            e_node = ExceptionNode(
+                str(output),
+                inputs=inputs,
+                description=f'[exception] The operator {self.info["fun_name"]} raises an exception.',
+                name=name,
+                info=self.info,
+            )
+            raise TraceExecutionError(e_node)
+        else:
+            return MessageNode(output, description=description, inputs=inputs, name=name, info=self.info)
 
     def __get__(self, obj, objtype):
         # Support instance methods.

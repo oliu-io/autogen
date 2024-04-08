@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any, List, Dict, Tuple
 from autogen.trace.nodes import Node, MessageNode, get_operator_name
 from collections import defaultdict
-from autogen.trace.utils import SimplePromptParser, get_name
 from textwrap import dedent
 import autogen
 
@@ -169,7 +168,7 @@ class FunctionPropagator(Propagator):
         graph = [(child.level, function_call)]
         documentation = {child.info["fun_name"]: child.description}  # TODO which description to use/ how to format it?
 
-        roots = {get_name(parent): parent.data for parent in child.parents if parent.is_root}
+        roots = {parent.py_name: parent.data for parent in child.parents if parent.is_root}
         if "user" in child.feedback:  # This is the leaf node where the feedback is given.
             assert len(child.feedback) == 1, "user feedback should be the only feedback"
             assert len(child.feedback["user"]) == 1
@@ -180,7 +179,7 @@ class FunctionPropagator(Propagator):
                 others={},  # there's no other intermediate nodes
                 roots=roots,
                 user_feedback=user_feedback,
-                output={get_name(child): child.data},  # This node is the output, not intermediate nodes
+                output={child.py_name: child.data},  # This node is the output, not intermediate nodes
             )
 
         else:  # This is an intermediate node
@@ -188,7 +187,7 @@ class FunctionPropagator(Propagator):
             feedback = aggregated_feedback + FunctionFeedback(
                 graph=graph,
                 documentation=documentation,
-                others={get_name(child): child.data},  # record the data of the child,
+                others={child.py_name: child.data},  # record the data of the child,
                 roots=roots,
                 # since there should be only one
                 user_feedback=aggregated_feedback.user_feedback,
@@ -201,9 +200,9 @@ class FunctionPropagator(Propagator):
 
     @staticmethod
     def repr_function_call(child: MessageNode):
-        function_call = f"{get_name(child)} = {child.info['fun_name']}("
+        function_call = f"{child.py_name} = {child.info['fun_name']}("
         for parent in child.parents:
-            function_call += f"{get_name(parent)}, "
+            function_call += f"{parent.py_name}, "
         function_call = function_call[:-2] + ")"
         return function_call
 

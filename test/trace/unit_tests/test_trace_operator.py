@@ -95,14 +95,37 @@ foo = Foo()
 z = foo.add(x, y)
 
 
-# Test functions with *args and *kwargs
-@trace_op(node_dict=None)
-def fun(a, *args, **kwargs):
-    # print(a)
-    # print(args)
-    # print(kwargs)
+# Test functions with *args and *kwargs and node_dict=None
+@trace_op(node_dict=None, unpack_input=False)
+def fun(a, args, kwargs, *_args, **_kwargs):
+    print(a.data)
+    print(args.data)
+    print(kwargs.data)
     return a
 
 
-x = fun(node(1), node(2), 3, 4, 5, 6, 7, 8, 9, 10, b=2, c=3, d=4, e=5, f=6, g=7, h=8, i=9, j=10)
+x = fun(
+    node(1), node("args"), node("kwargs"), node("_args_1"), node("_args_2"), b=node("_kwargs_b"), c=node("_kwargs_c")
+)
+print(x, x.inputs)
+assert len(x.inputs) == 3
+
+
+# Test functions with *args and *kwargs and node_dict='auto'
+# This is the default behavior
+@trace_op(node_dict="auto")
+def fun(a, args, kwargs, *_args, **_kwargs):
+    print(a)
+    print(args)
+    print(kwargs)
+    for v in _args:
+        print(v)
+    for k, v in _kwargs.items():
+        print(v)
+    return a
+
+
+x = fun(
+    node(1), node("args"), node("kwargs"), node("_args_1"), node("_args_2"), b=node("_kwargs_b"), c=node("_kwargs_c")
+)
 print(x, x.inputs)

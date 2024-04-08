@@ -27,7 +27,7 @@ for file in py_files:
         result = subprocess.run(["python", file], capture_output=True, text=True)
         if result.returncode == 0:
             print_colored("PASSED", GREEN)
-            print(result.stdout)
+            # print(result.stdout)
         else:
             print_colored("FAILED", RED)
             print(result.stderr)

@@ -5,7 +5,7 @@ from collections import defaultdict
 import heapq
 from typing import TypeVar, Generic
 import re
-from autogen.trace.utils import get_name, MinHeap
+from autogen.trace.utils import MinHeap
 
 
 def node(message, name=None, trainable=False):
@@ -109,6 +109,14 @@ class AbstractNode(Generic[T]):
     @property
     def name(self):
         return self._name
+
+    @property
+    def py_name(self):
+        return self.name.replace(":", "")
+
+    @property
+    def id(self):
+        return self.name.split(":")[1]
 
     @property
     def level(self):
@@ -294,7 +302,7 @@ class Node(AbstractNode[T]):
                 if len(x.description) > print_limit:
                     description = x.description[:print_limit] + "..."
 
-                text = get_name(x) + "\n" + description + "\n"
+                text = x.py_name + "\n" + description + "\n"
                 content = str(x.data)
                 if isinstance(x.data, dict):
                     if "content" in x.data:
@@ -312,7 +320,7 @@ class Node(AbstractNode[T]):
         self._add_feedback("user", feedback)
         if len(self.parents) == 0:  # This is a root. Nothing to propagate
             if visualize:
-                digraph.node(get_name(self), label=get_label(self))
+                digraph.node(self.py_name, label=get_label(self))
             self._backwarded = not retain_graph
             return digraph
 
@@ -353,20 +361,18 @@ class Node(AbstractNode[T]):
                         # Bypass chain of identity operators (for better visualization)
                         while (get_operator_name(parent.description) in IDENTITY_OPERATORS) and simple_visualization:
                             assert len(parent.parents) == 1  # identity operators should have only one parent
-                            visited.add(get_name(parent))  # skip this node in visualization
+                            visited.add(parent.py_name)  # skip this node in visualization
                             parent = parent.parents[0]
 
-                        edge = (
-                            (get_name(node), get_name(parent)) if reverse_plot else (get_name(parent), get_name(node))
-                        )
+                        edge = (node.py_name, parent.py_name) if reverse_plot else (parent.py_name, node.py_name)
                         # Just plot the edge once, since the same node can be
                         # visited multiple times (e.g., when that node has
                         # multiple children).
-                        if edge not in visited and get_name(node) not in visited:
+                        if edge not in visited and node.py_name not in visited:
                             digraph.edge(*edge)
                             visited.add(edge)
-                            digraph.node(get_name(node), label=get_label(node))
-                            digraph.node(get_name(parent), label=get_label(parent))
+                            digraph.node(node.py_name, label=get_label(node))
+                            digraph.node(parent.py_name, label=get_label(parent))
 
                 node._backwarded = not retain_graph  # set backwarded to True
 
@@ -717,7 +723,7 @@ class ParameterNode(Node[T]):
         *,
         name=None,
         trainable=True,
-        description="[ParameterNode]This is a ParameterNode in a computational graph.",
+        description="[ParameterNode] This is a ParameterNode in a computational graph.",
         info=None,
     ) -> None:
         super().__init__(value, name=name, trainable=trainable, description=description, info=info)
@@ -770,30 +776,19 @@ class MessageNode(Node[T]):
         assert len(self.feedback[child]) == 1, "MessageNode should have only one feedback from each child."
 
 
-# class ExceptionNode(MessageNode[T]):
-#     """
-#     We automatically handle method as much as we can, but for some methods we implement them.
-#
-#     TODO: how to break out loops/if-statement when an exception node is used
-#
-#     issues:
-#     1. while-loop
-#     2. recursion
-#     """
-#     is_exception = True
-#
-#     def __iter__(self):
-#         import autogen.trace.containers as ct
-#         return ct.ExceptionIterator(self)
-#
-#     def __bool__(self):
-#         # not tracing this conversion
-#         return True
-#
-#     def __eq__(self, other):
-#         # True because again, in auto_trace we do "checks" to see if a node is in a set
-#         # if this is by default false, our internal logic will fail
-#         return True
+class ExceptionNode(MessageNode[T]):
+    """Node containing the exception message."""
+
+    def __init__(
+        self,
+        value,
+        *,
+        inputs: Union[List[Node], Dict[str, Node]],
+        description: str = "[ExceptionNode] This is node containing the error of execution.",
+        name=None,
+        info=None,
+    ) -> None:
+        super().__init__(value, inputs=inputs, description=description, name=name, info=info)
 
 
 if __name__ == "__main__":
