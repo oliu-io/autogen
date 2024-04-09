@@ -145,9 +145,11 @@ class FunModule(Module):
                 _args = to_data(args)
                 _kwargs = to_data(kwargs)
             # add an except here
+            triggered_exception = False
             try:
                 outputs = self.fun(*_args, **_kwargs)
             except Exception as e:
+                triggered_exception = True
                 outputs = e
 
         # Construct the inputs of the MessageNode from the set used_nodes
@@ -182,7 +184,8 @@ class FunModule(Module):
                     spec_values.append(v)
                     if isinstance(v, Node) and (v in used_nodes):
                         inputs[k] = v
-            assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
+            if not triggered_exception:
+                assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
 
         # Wrap the output as a MessageNode or an ExceptionNode
         if self.n_outputs == 1:
