@@ -37,6 +37,7 @@ def trace_op(
     wrap_output=True,
     unpack_input=True,
     trainable=False,
+    catch_execution_error=True,
     decorator_name="trace_op",
 ):
     """
@@ -53,6 +54,7 @@ def trace_op(
             wrap_output=wrap_output,
             unpack_input=unpack_input,
             trainable=trainable,
+            catch_execution_error=catch_execution_error,
             decorator_name=decorator_name,
         )
 
@@ -85,6 +87,7 @@ class FunModule(Module):
         wrap_output: bool = True,
         unpack_input: bool = True,
         trainable=False,
+        catch_execution_error=True,
         decorator_name="@trace_op",
     ):
         assert callable(fun), "fun must be a callable."
@@ -113,6 +116,7 @@ class FunModule(Module):
         self.n_outputs = n_outputs
         self.wrap_output = wrap_output
         self.unpack_input = unpack_input
+        self.catch_execution_error = catch_execution_error
         self.parameter = None
         if trainable:
             self.parameter = ParameterNode(self.info["source"], name="__code")
@@ -121,8 +125,10 @@ class FunModule(Module):
     def fun(self, *args, **kwargs):
         # This is called within trace_nodes context manager.
         if self.parameter is None:
+            # this captured the closure and dependencies around the function
             return self._fun
         else:
+            # exec(code) changes the dependencies to be around here
             code = self.parameter._data  # This is not traced, but we will add this as the parent later.
             exec(code)  # define the function
             fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
@@ -146,11 +152,14 @@ class FunModule(Module):
                 _kwargs = to_data(kwargs)
             # add an except here
             triggered_exception = False
-            try:
+            if self.catch_execution_error:
+                try:
+                    outputs = self.fun(*_args, **_kwargs)
+                except Exception as e:
+                    triggered_exception = True
+                    outputs = e
+            else:
                 outputs = self.fun(*_args, **_kwargs)
-            except Exception as e:
-                triggered_exception = True
-                outputs = e
 
         # Construct the inputs of the MessageNode from the set used_nodes
         # TODO simplify this

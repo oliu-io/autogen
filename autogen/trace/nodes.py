@@ -714,6 +714,13 @@ class Node(AbstractNode[T]):
     def pop(self, *args, **kwargs):
         return self.call("pop", *args, **kwargs)
 
+    def append(self, *args, **kwargs):
+        return self.call("append", *args, **kwargs)
+
+    # why couldn't we overload this before?
+    def __call__(self, *args, **kwargs):
+        return self.call("__call__", *args, **kwargs)
+
 
 class ParameterNode(Node[T]):
     # This is a shorthand of a trainable Node.
