@@ -2,6 +2,7 @@ from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.modules import apply_op, to_data, Module
 from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_operator_name
+from autogen.trace.utils import global_functions_list
 import inspect
 import functools
 import re
@@ -100,6 +101,15 @@ class FunModule(Module):
         else:
             match = re.search(r"(def.*)", inspect.getsource(fun), re.DOTALL)
         source = match.group(1).strip()
+
+        # Check if it's a recursive function, throws exception if it is
+        # Trace does not support recursive functions right now
+        pattern = r"def [a-zA-Z_][a-zA-Z0-9_]*\(.*\):\n(.*\n)+"
+        match = re.search(pattern, inspect.getsource(fun))
+        body = match.group(0).split("\n", 1)[1].rstrip()
+        if ' ' + fun.__qualname__ + '(' in body and fun.__qualname__ not in global_functions_list:
+            raise ValueError(f"Recursive function {fun.__qualname__} is not supported.")
+
         self.info = dict(
             fun_name=fun.__qualname__,
             doc=fun.__doc__,

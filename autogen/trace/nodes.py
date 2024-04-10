@@ -436,8 +436,12 @@ class Node(AbstractNode[T]):
         return ops.getitem(self, node(key))
 
     # @auto_except
+    # def __contains__(self, item):
+    #     raise AttributeError(f"Cannot use 'in' operator on {self}.")
+
     def __contains__(self, item):
-        raise AttributeError(f"Cannot use 'in' operator on {self}.")
+        import autogen.trace.operators as ops
+        return ops.in_(node(item), self)
 
     # Unary operators and functions
     # @auto_except

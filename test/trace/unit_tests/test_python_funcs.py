@@ -101,3 +101,48 @@ def test_standard_env():
 
 # this throws an error
 test_standard_env()
+
+# tracing recursive functions
+@trace_op(description="Simple recursion", trainable=True, catch_execution_error=False, unpack_input=False)
+def recurse(dic, var):
+    if var in dic:
+        return dic[var]
+    else:
+        return recurse(dic['_outer'], var)
+
+def test_recurse():
+    dic = {
+        '_outer': {
+            '_outer': {
+                '_outer': None,
+                'a': 1
+            },
+            'b': 2
+        },
+        'c': 3
+    }
+    result = recurse(node(dic), node("a"))
+    assert result.data == 1
+
+test_recurse()
+
+@trace_op(description="[find] Find the value of var in the innermost env where var appears.", trainable=True, catch_execution_error=False,
+          unpack_input=False)
+def find(env, var):
+    if var in env:
+        return env[var]
+    else:
+        return find(env['_outer'], var)
+
+def test_find():
+    env = get_env(node(["a", "b"]), node([1, 2]))
+    result = find(env, node("a"))
+    assert result.data == 1
+
+    result = find(env, node("b"))
+    assert result.data == 2
+
+    result = find(env, node("c"))
+    assert result.data == 2
+
+# test_find()

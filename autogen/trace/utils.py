@@ -1,6 +1,11 @@
 from graphviz import Digraph
+import builtins
 import re
 
+# Get a list of all names in the builtins module
+builtins_list = dir(builtins)
+# Filter for function names; this includes exceptions, so you might want to refine this
+global_functions_list = [name for name in builtins_list if callable(getattr(builtins, name))]
 
 def contain(container_of_nodes, node):
     # check for identity instead of value
@@ -295,6 +300,8 @@ def simple_shrink(dot_str, shrink=True):
     blocks = ["\n".join(b) for b in blocks]
 
     return begin_str + "\n".join(blocks) + "\n" + end_str
+
+
 
 
 # Currently do not support nested if-statement or for-loop
