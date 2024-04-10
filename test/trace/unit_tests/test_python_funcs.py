@@ -73,9 +73,9 @@ def test_apply_fn_dict_key():
 
     result.backward(visualize=True)
 
-test_get_env()
-test_empty_inputs()
-test_apply_fn_dict_key()
+# test_get_env()
+# test_empty_inputs()
+# test_apply_fn_dict_key()
 
 @trace_op(
     description="[get_simple_math] Get a dictionary mapping 'abs', 'min', 'max', 'not', 'round' to their functions.",
@@ -101,4 +101,4 @@ def test_standard_env():
     assert isinstance(env, Node)
 
 # this throws an error
-# test_standard_env()
+test_standard_env()

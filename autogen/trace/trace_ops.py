@@ -121,6 +121,18 @@ class FunModule(Module):
         if trainable:
             self.parameter = ParameterNode(self.info["source"], name="__code")
 
+    def filter_global_namespaces(self, keys):
+        """
+        We don't import methods that already exist in our current global namespace
+        """
+        filtered_keys = []
+        for k in keys:
+            if k in globals().keys():
+                continue
+            else:
+                filtered_keys.append(k)
+        return filtered_keys
+
     @property
     def fun(self, *args, **kwargs):
         # This is called within trace_nodes context manager.
@@ -128,8 +140,14 @@ class FunModule(Module):
             # this captured the closure and dependencies around the function
             return self._fun
         else:
-            # exec(code) changes the dependencies to be around here
+            # exec(code) does not allow function to call other functions
             code = self.parameter._data  # This is not traced, but we will add this as the parent later.
+            # before we execute,  we should try to import all the global name spaces from the original function
+            need_keys = self.filter_global_namespaces(self._fun.__globals__.keys())
+            methods = globals()
+            for k in need_keys:
+                methods.update({k: self._fun.__globals__[k]})
+
             exec(code)  # define the function
             fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
             return locals()[fun_name]
