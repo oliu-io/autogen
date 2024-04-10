@@ -5,7 +5,7 @@ To make sure things work
 from autogen.trace.nodes import node, Node
 from autogen.trace import operators as ops
 from autogen.trace.trace_ops import trace_op
-
+import math
 
 @trace_op(
     description="[get_env] Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env.",
@@ -26,7 +26,6 @@ def test_get_env():
 # import must be local, otherwise we can't lazy execute
 @trace_op(description="[get_math] Get a dictionary mapping math library function names to their functions.", trainable=True)
 def get_math():
-    import math
     d = {}
     for name in dir(math):
         if name[:2] != '__':
@@ -73,9 +72,9 @@ def test_apply_fn_dict_key():
 
     result.backward(visualize=True)
 
-# test_get_env()
-# test_empty_inputs()
-# test_apply_fn_dict_key()
+test_get_env()
+test_empty_inputs()
+test_apply_fn_dict_key()
 
 @trace_op(
     description="[get_simple_math] Get a dictionary mapping 'abs', 'min', 'max', 'not', 'round' to their functions.",
