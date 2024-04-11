@@ -246,8 +246,8 @@ class FunModule(Module):
 
     def wrap(self, output, inputs: Union[List[Node], Dict[str, Node]]):
         """Wrap the output as a MessageNode of inputs as the parents."""
-        if output is None:  # We keep None as None.
-            return output
+        if output is None:
+            return MessageNode(None, description=self.description, inputs=inputs, name=self.name, info=self.info)
         # Some nodes are used in the operator fun, we need to wrap the output as a MessageNode.
         if not self.wrap_output:  # TODO do we ever use this?
             # If the output is already a Node, we don't need to wrap it.
