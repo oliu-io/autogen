@@ -2,7 +2,6 @@ import warnings
 from typing import Optional, List, Dict, Callable, Union, Type, Any
 import copy
 from collections import defaultdict
-import heapq
 from typing import TypeVar, Generic
 import re
 from autogen.trace.utils import MinHeap
@@ -164,79 +163,48 @@ class AbstractNode(Generic[T]):
                 setattr(result, k, copy.deepcopy(v, memo))
         return result
 
-    # def __lt__(self, other):  # for heapq (since it is a min heap)
-    #     return -self._level < -other._level
-
     def lt(self, other):
         return -self._level < -other._level
 
     def gt(self, other):
         return -self._level > -other._level
 
-    # def __hash__(self):
-    #     return super().__hash__()
 
-
+# TODO Update these
 # These are operators that do not change the data type and can be viewed as identity operators.
 IDENTITY_OPERATORS = ("identity", "clone", "message_to_dict", "oai_message")
 
 
 def get_operator_name(description):
     """Extract the operator type from the description."""
-    match = re.search(r"\[([^[\]]+)\]", description)  # TODO. right pattern?
+    match = re.search(r"^\[([^\[\]]+)\]", description)
     if match:
         operator_type = match.group(1)
-        # TODO check admissible types
         return operator_type
     else:
         raise ValueError(f"The description '{description}' must contain the operator type in square brackets.")
 
 
-def supported_data_type(value):
-    return isinstance(value, bool) or isinstance(value, str) or isinstance(value, dict) or isinstance(value, Node)
-
-
-# def auto_except(n_output=1):
-#     def decorator(func):
-#         # each node now marks if it's an exception node or not
-#         def wrapper(self, *args, **kwargs):
-#
-#             if self.is_exception:
-#                 # This is where the function returns None for instances
-#                 # of classes other than the base_class.
-#                 return None
-#             else:
-#                 return func(self, *args, **kwargs)
-#
-#         return wrapper
-#
-#     return decorator
-
-
 class Node(AbstractNode[T]):
     """Node for Autogen messages and prompts. Node behaves like a dict."""
 
-    # is_exception = False
-
     def __init__(
         self,
-        value,
+        value: Any,
         *,
-        name=None,
-        trainable=False,
-        description="[Node] This is a node in a computational graph.",
-        info=None,
+        name: str = None,
+        trainable: bool = False,
+        description: str = "[Node] This is a node in a computational graph.",
+        constraint: Union[None, str] = None,
+        info: Union[None, Dict] = None,
     ) -> None:
-        # TODO only take in a dict with a certain structure
-        # if isinstance(value, str):
-        #     warnings.warn("Initializing a Node with str is deprecated. Use dict instead.")
-        # assert supported_data_type(value), f"Value {value} must be a bool, a string, a dict, or a Node."
         super().__init__(value, name=name)
         self.trainable = trainable
         self._feedback = defaultdict(
             list
         )  # (analogous to gradient) this is the feedback from the user. Each key is a child and the value is a list of feedbacks from the child.
         self._description = description  # Information to describe of the node
+        self._constraint = constraint  # A constraint on the node
         self._backwarded = False  # True if backward has been called
         self._info = info  # Additional information about the node
 
@@ -389,10 +357,6 @@ class Node(AbstractNode[T]):
     def detach(self):
         return copy.deepcopy(self)
 
-    # # We do not allow Node to be used bool. The user should access node.data directly.
-    # def __bool__(self):
-    #     raise AttributeError(f"Cannot convert {self} to bool.")
-
     # Get attribute and call operators
     def getattr(self, key):
         attr = self._data[key] if isinstance(self._data, dict) else getattr(self._data, key)
@@ -421,79 +385,68 @@ class Node(AbstractNode[T]):
             )
         return output
 
+    def __call__(self, *args, **kwargs):
+        return self.call("__call__", *args, **kwargs)
+
     # We overload magic methods that return a value. These methods return a MessageNode.
     # container magic methods
-    # @auto_except
     def len(self):
         import autogen.trace.operators as ops
 
         return ops.len_(self)
 
-    # @auto_except
     def __getitem__(self, key):
         import autogen.trace.operators as ops
 
         return ops.getitem(self, node(key))
 
-    # @auto_except
-    # def __contains__(self, item):
-    #     raise AttributeError(f"Cannot use 'in' operator on {self}.")
-
     def __contains__(self, item):
         import autogen.trace.operators as ops
+
         return ops.in_(node(item), self)
 
     # Unary operators and functions
-    # @auto_except
     def __pos__(self):
         import autogen.trace.operators as ops
 
         return ops.pos(self)
 
-    # @auto_except
     def __neg__(self):
         import autogen.trace.operators as ops
 
         return ops.neg(self)
 
-    # @auto_except
     def __abs__(self):
         import autogen.trace.operators as ops
 
         return ops.abs(self)
 
-    # @auto_except
     def __invert__(self):
         import autogen.trace.operators as ops
 
         return ops.invert(self)
 
-    # @auto_except
     def __round__(self, n=None):
         import autogen.trace.operators as ops
 
         return ops.round(self, node(n) if n is not None else None)
 
-    # @auto_except
     def __floor__(self):
         import autogen.trace.operators as ops
 
         return ops.floor(self)
 
-    # @auto_except
     def __ceil__(self):
         import autogen.trace.operators as ops
 
         return ops.ceil(self)
 
-    # @auto_except
     def __trunc__(self):
         import autogen.trace.operators as ops
 
         return ops.trunc(self)
 
     ## Normal arithmetic operators
-    # @auto_except
     def __add__(self, other):
         import autogen.trace.operators as ops
 
@@ -502,73 +455,61 @@ class Node(AbstractNode[T]):
         else:
             return ops.add(self, node(other))
 
-    # @auto_except
     def __sub__(self, other):
         import autogen.trace.operators as ops
 
         return ops.subtract(self, node(other))
 
-    # @auto_except
     def __mul__(self, other):
         import autogen.trace.operators as ops
 
         return ops.multiply(self, node(other))
 
-    # @auto_except
     def __floordiv__(self, other):
         import autogen.trace.operators as ops
 
         return ops.floor_divide(self, node(other))
 
-    # @auto_except
     def __truediv__(self, other):
         import autogen.trace.operators as ops
 
         return ops.divide(self, node(other))
 
-    # @auto_except
     def __mod__(self, other):
         import autogen.trace.operators as ops
 
         return ops.mod(self, node(other))
 
-    # @auto_except
     def __divmod__(self, other):
         import autogen.trace.operators as ops
 
         return ops.divmod(self, node(other))
 
-    # @auto_except
     def __pow__(self, other):
         import autogen.trace.operators as ops
 
         return ops.power(self, node(other))
 
-    # @auto_except
     def __lshift__(self, other):
         import autogen.trace.operators as ops
 
         return ops.lshift(self, node(other))
 
-    # @auto_except
     def __rshift__(self, other):
         import autogen.trace.operators as ops
 
         return ops.rshift(self, node(other))
 
-    # @auto_except
     def __and__(self, other):
         import autogen.trace.operators as ops
 
         return ops.and_(self, node(other))
 
-    # @auto_except
     def __or__(self, other):
         import autogen.trace.operators as ops
 
         return ops.or_(self, node(other))
 
-    # @auto_except
     def __xor__(self, other):
         import autogen.trace.operators as ops
 
@@ -579,7 +520,6 @@ class Node(AbstractNode[T]):
 
         return ct.iterate(self)
 
-    # @auto_except
     def __len__(self):
         # __len__ restricts return type to be integer
         # therefore, we only return integer here
@@ -590,7 +530,6 @@ class Node(AbstractNode[T]):
     # case 1: used in if-statement, then we should return a bool
     # case 2: used else-where, then we should return Node(bool)
     # we can't quite distinguish myopically, so...in here, we prioritize case 1
-    # @auto_except
     def __lt__(self, other):
         import autogen.trace.operators as ops
 
@@ -599,7 +538,6 @@ class Node(AbstractNode[T]):
         #     other = other.data
         # return self._data < other
 
-    # @auto_except
     def __le__(self, other):
         import autogen.trace.operators as ops
 
@@ -608,7 +546,6 @@ class Node(AbstractNode[T]):
         #     other = other.data
         # return self._data <= other
 
-    # @auto_except
     def __gt__(self, other):
         import autogen.trace.operators as ops
 
@@ -617,7 +554,6 @@ class Node(AbstractNode[T]):
         #     other = other.data
         # return self._data > other
 
-    # @auto_except
     def __ge__(self, other):
         import autogen.trace.operators as ops
 
@@ -643,7 +579,6 @@ class Node(AbstractNode[T]):
         return bool(self._data)
 
     # string operators
-    # @auto_except
     def capitalize(self):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'capitalize'.")
@@ -651,7 +586,6 @@ class Node(AbstractNode[T]):
 
         return ops.capitalize(self)
 
-    # @auto_except
     def lower(self):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'lower'.")
@@ -659,7 +593,6 @@ class Node(AbstractNode[T]):
 
         return ops.lower(self)
 
-    # @auto_except
     def upper(self):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'upper'.")
@@ -667,7 +600,6 @@ class Node(AbstractNode[T]):
 
         return ops.upper(self)
 
-    # @auto_except
     def swapcase(self):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'swapcase'.")
@@ -675,7 +607,6 @@ class Node(AbstractNode[T]):
 
         return ops.swapcase(self)
 
-    # @auto_except
     def title(self):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'title'.")
@@ -683,7 +614,6 @@ class Node(AbstractNode[T]):
 
         return ops.title(self)
 
-    # @auto_except(n_output=2)
     def split(self, sep=None, maxsplit=-1):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'split'.")
@@ -691,7 +621,6 @@ class Node(AbstractNode[T]):
 
         return ops.split(self, sep, maxsplit)
 
-    # @auto_except
     def strip(self, chars=None):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'strip'.")
@@ -699,7 +628,6 @@ class Node(AbstractNode[T]):
 
         return ops.strip(self, chars)
 
-    # @auto_except
     def replace(self, old, new, count=-1):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'replace'.")
@@ -708,22 +636,16 @@ class Node(AbstractNode[T]):
         return ops.replace(self, node(old), node(new), count)
 
     # container specific methods
-    # @auto_except
     def items(self):
         import autogen.trace.containers as ct
 
         return ct.items(self)
 
-    # @auto_except
     def pop(self, *args, **kwargs):
         return self.call("pop", *args, **kwargs)
 
     def append(self, *args, **kwargs):
         return self.call("append", *args, **kwargs)
-
-    # why couldn't we overload this before?
-    def __call__(self, *args, **kwargs):
-        return self.call("__call__", *args, **kwargs)
 
 
 class ParameterNode(Node[T]):
@@ -735,9 +657,12 @@ class ParameterNode(Node[T]):
         name=None,
         trainable=True,
         description="[ParameterNode] This is a ParameterNode in a computational graph.",
+        constraint=None,
         info=None,
     ) -> None:
-        super().__init__(value, name=name, trainable=trainable, description=description, info=info)
+        super().__init__(
+            value, name=name, trainable=trainable, description=description, constraint=constraint, info=info
+        )
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily
@@ -758,9 +683,16 @@ class MessageNode(Node[T]):
     """
 
     def __init__(
-        self, value, *, inputs: Union[List[Node], Dict[str, Node]], description: str, name=None, info=None
+        self,
+        value,
+        *,
+        inputs: Union[List[Node], Dict[str, Node]],
+        description: str,
+        constraint=None,
+        name=None,
+        info=None,
     ) -> None:
-        super().__init__(value, name=name, description=description, info=info)
+        super().__init__(value, name=name, description=description, constraint=constraint, info=info)
 
         assert isinstance(inputs, list) or isinstance(inputs, dict)
         # If inputs is not a dict, we create a dict with the names of the nodes as keys
@@ -800,10 +732,11 @@ class ExceptionNode(MessageNode[T]):
         *,
         inputs: Union[List[Node], Dict[str, Node]],
         description: str = "[ExceptionNode] This is node containing the error of execution.",
+        constraint=None,
         name=None,
         info=None,
     ) -> None:
-        super().__init__(value, inputs=inputs, description=description, name=name, info=info)
+        super().__init__(value, inputs=inputs, description=description, constraint=constraint, name=name, info=info)
 
 
 if __name__ == "__main__":
