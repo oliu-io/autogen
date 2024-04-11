@@ -72,6 +72,7 @@ class Foo:
 foo = Foo()
 z = foo.add(x, y)
 
+
 # Test composition of trace_op with for all_all_methods
 @for_all_methods
 def test_cls_decorator(fun):
@@ -111,8 +112,7 @@ assert len(x.inputs) == 3
 
 
 # Test functions with *args and *kwargs and node_dict='auto'
-# This is the default behavior
-@trace_op(node_dict="auto")
+@trace_op(node_dict="auto")  # This is the default behavior
 def fun(a, args, kwargs, *_args, **_kwargs):
     print(a)
     print(args)
@@ -137,3 +137,12 @@ with trace.stop_tracing():
     z = x + y
 assert z.inputs == {}
 assert z == 3
+
+
+# Test trace_op as an inline decorator
+def fun(a, b):
+    return a + b
+
+
+tfun = trace_op()(fun)
+assert tfun(node(1), node(2)) == 3
