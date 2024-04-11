@@ -175,9 +175,11 @@ class FunctionOptimizer(Optimizer):
         *args,
         propagator: Propagator = None,
         objective: Union[None, str] = None,
+        ignore_extraction_error: bool = True,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
+        self.ignore_extraction_error = ignore_extraction_error
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
         self.objective = (
             objective
@@ -258,7 +260,17 @@ class FunctionOptimizer(Optimizer):
         update_dict = {}
         for node in nodes:
             if node.trainable and node.py_name in suggestion:
-                update_dict[node] = type(node.data)(suggestion[node.py_name])
+                try:
+                    update_dict[node] = type(node.data)(suggestion[node.py_name])
+                except (ValueError, KeyError) as e:
+                    # catch error due to suggestion missing the key or wrong data type
+                    if self.ignore_extraction_error:
+                        warnings.warn(
+                            f"Cannot convert the suggestion '{suggestion[node.py_name]}' for {node.py_name} to the right data type"
+                        )
+                    else:
+                        raise e
+
         return update_dict
 
     def call_llm(self, prompt, verbose=False):  # TODO Get this from utils?
