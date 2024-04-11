@@ -95,27 +95,32 @@ class FunModule(Module):
         assert (
             isinstance(node_dict, dict) or (node_dict is None) or (node_dict == "auto")
         ), "node_dict must be a dictionary or None or 'auto."
-        # match = re.search(r"\s*@trace_op\(.*\)\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
-        if decorator_name != "":
-            match = re.search(r"\s*" + decorator_name + "\\(.*\\)\n\\s*(def.*)", inspect.getsource(fun), re.DOTALL)
-        else:
-            match = re.search(r"(def.*)", inspect.getsource(fun), re.DOTALL)
-        source = match.group(1).strip()
 
+        # Get the source code of the function, excluding the decorator line
+        source = inspect.getsource(fun)
+        if decorator_name in source.split("\n")[0]:
+            # The usecase of
+            # @trace_op(...)
+            # def fun(...):
+            #   ...
+            match = re.search(r"\s*" + decorator_name + r"\(.*\).*\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
+            source = match.group(1).strip()
         # Check if it's a recursive function, throws exception if it is
         # Trace does not support recursive functions right now
-        pattern = r"def [a-zA-Z_][a-zA-Z0-9_]*\(.*\):\n(.*\n)+"
-        match = re.search(pattern, inspect.getsource(fun))
-        body = match.group(0).split("\n", 1)[1].rstrip()
-        if ' ' + fun.__qualname__ + '(' in body and fun.__qualname__ not in global_functions_list:
+        pattern = r"def [a-zA-Z0-9_]*\(.*\):\n(.*)"
+        match = re.search(pattern, source)
+        body = match.group(1).rstrip()
+        if " " + fun.__qualname__ + "(" in body and fun.__qualname__ not in global_functions_list:
             raise ValueError(f"Recursive function {fun.__qualname__} is not supported.")
 
+        # Construct the info dictionary
         self.info = dict(
             fun_name=fun.__qualname__,
             doc=fun.__doc__,
             signature=inspect.signature(fun),
             source=source,
         )
+
         if description is None:
             # Generate the description from the function name and docstring.
             description = f"[{self.info['fun_name']}] {self.info['doc']}."
