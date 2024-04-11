@@ -185,6 +185,10 @@ class NumericalProgramSampler:
     def sample_two_vars(self):
         idx = np.random.choice(range(len(self.mixture_dec_space)), p=self.two_var_mixture)
         sample_nums = self.mixture_dec_space[idx]
+        # if we want to sample 2 from input space, but we only start with 1 param
+        # we default to [1, 1] sample.
+        if sample_nums[0] > len(self.input_var_space):
+            sample_nums = self.mixture_dec_space[0]
         sampled_vars = self.sample_vars_from_space(self.input_var_space, sample_nums[0], is_gen=False) + \
                        self.sample_vars_from_space(self.gen_var_space, sample_nums[1], is_gen=True)
         if sample_nums == (1, 1):
@@ -303,12 +307,15 @@ class NumericalProgramSampler:
         # by choosing a seed
         self.set_seed(seed)
 
-        try:
-            for _ in range(self.chain_length):
-                out_var = self.step(verbose=verbose)
-        except Exception as e:
-            self.execution_exception = repr(e)
-            out_var = throws_exception(node(repr(e)), *input_params)
+        for _ in range(self.chain_length):
+            out_var = self.step(verbose=verbose)
+
+        # try:
+        #     for _ in range(self.chain_length):
+        #         out_var = self.step(verbose=verbose)
+        # except Exception as e:
+        #     self.execution_exception = repr(e)
+        #     out_var = throws_exception(node(repr(e)), *input_params)
 
         return out_var
 
