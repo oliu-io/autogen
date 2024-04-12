@@ -1,5 +1,7 @@
 from autogen.trace.nodes import Node, ParameterNode, node
 import copy
+import inspect
+import functools
 
 
 class NodeContainer:
@@ -14,6 +16,21 @@ class Module(NodeContainer):
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
+    def parameters(self):
+        parameters = []
+        for name, method in inspect.getmembers(self, predicate=lambda x: isinstance(x, functools.partial)):
+            method = method.func.__self__
+            if callable(method) and hasattr(method, 'parameter'):
+                parameters.append(method.parameter)
+        return parameters
+
+    def parameters_dict(self):
+        parameters = {}
+        for name, method in inspect.getmembers(self, predicate=lambda x: isinstance(x, functools.partial)):
+            method = method.func.__self__
+            if callable(method) and hasattr(method, 'parameter'):
+                parameters[name] = method.parameter
+        return parameters
 
 def apply_op(op, output, *args, **kwargs):
     """Apply an op to container of Nodes.
