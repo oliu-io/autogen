@@ -6,7 +6,7 @@ from textwrap import dedent
 import autogen
 
 
-class AbtractPropagator:
+class AbstractPropagator:
     def __call__(self, child: MessageNode):
         """Calling this method would propagte the feedback from the child to the parents."""
         assert isinstance(child, MessageNode)
@@ -29,7 +29,7 @@ class AbtractPropagator:
         raise NotImplementedError
 
 
-class Propagator(AbtractPropagator):
+class Propagator(AbstractPropagator):
     def __init__(self):
         self.override = dict()  # key: operator name: data: override propagate function
 

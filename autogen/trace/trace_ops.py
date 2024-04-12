@@ -282,6 +282,29 @@ class FunModule(Module):
         return functools.partial(self.__call__, obj)
 
 
+def trace_class(cls):
+    """
+    Wrap a class with this decorator.
+    For any method that's decorated by @trace_op,
+    we can access their parameter by:
+    instance.parameters()
+    instead of instance.func1.func.__self__.parameter
+
+    This helps collect parameters for the optimizer.
+    """
+    parameters = []
+    parameters_dict = {}
+
+    for name, method in cls.__dict__.items():
+        if callable(method) and isinstance(method, FunModule):
+            parameters.append(method.parameter)
+            parameters_dict[name] = method.parameter
+
+    setattr(cls, "parameters", parameters)
+    setattr(cls, "parameters_dict", parameters_dict)
+
+    return cls
+
 if __name__ == "__main__":
     x = node("hello")
 

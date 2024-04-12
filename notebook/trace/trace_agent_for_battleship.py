@@ -26,6 +26,11 @@ OR relying on conversation history (trajectory) to make decisions
 
 Also, what about all the "cognitive" agents...or game playing agents...
 All of them can be implemented in this way as well
+
+VER 1 of task: no hint of battleship game
+VER 2 of task: know it's the battleship game
+
+If we wrap the function to a class, has access to "self", it can learn to store things too.
 """
 
 # Scenario 0: Produce valid code to generate (x, y)
@@ -73,12 +78,15 @@ def user_fb_for_coords_validity(board, coords):
 # ==== Scenario 2 ==== #
 
 # To make scenario 2 more efficient, we use a smaller board
-@trace_op("[select_coordinate] Given a map, select a coordinate to see if we can earn reward.", trainable=True)
-def select_coordinate(map):
-    """
-    Given a map, select a coordinate to see if we can earn reward.
-    """
-    return map
+
+class Agent:
+    @trace_op("[select_coordinate] Given a map, select a coordinate to see if we can earn reward.", trainable=True)
+    def select_coordinate(self, map):
+        """
+        Given a map, select a coordinate to see if we can earn reward.
+        We can create and store things as self.list_of_coords
+        """
+        return map
 
 def user_fb_for_placing_shot(board, coords):
     # this is already a multi-step cumulative reward problem
@@ -91,6 +99,7 @@ def user_fb_for_placing_shot(board, coords):
     except Exception as e:
         return board.get_shots(), 0, False, str(e)
 
+# ==== Scenario 3 ==== #
 
 """
 failed JSON extraction
@@ -115,7 +124,7 @@ LLM returns invalid format, cannot extract suggestions from JSON
     Given a map, select a valid coordinate. We might earn reward from this coordinate.\n\
     \"\"\"\n\
     return [1, 1]"
-              }
+   }
 }
 """
 
