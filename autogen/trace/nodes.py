@@ -175,7 +175,7 @@ class AbstractNode(Generic[T]):
 IDENTITY_OPERATORS = ("identity", "clone", "message_to_dict", "oai_message")
 
 
-def get_operator_name(description):
+def get_op_name(description):
     """Extract the operator type from the description."""
     match = re.search(r"^\[([^\[\]]+)\]", description)
     if match:
@@ -229,7 +229,7 @@ class Node(AbstractNode[T]):
 
     def backward(
         self,
-        feedback: str = "",
+        feedback: Any = "",
         propagator=None,
         retain_graph=False,
         visualize=False,
@@ -327,7 +327,7 @@ class Node(AbstractNode[T]):
                     if visualize:
                         # Plot the edge from parent to node
                         # Bypass chain of identity operators (for better visualization)
-                        while (get_operator_name(parent.description) in IDENTITY_OPERATORS) and simple_visualization:
+                        while (get_op_name(parent.description) in IDENTITY_OPERATORS) and simple_visualization:
                             assert len(parent.parents) == 1  # identity operators should have only one parent
                             visited.add(parent.py_name)  # skip this node in visualization
                             parent = parent.parents[0]

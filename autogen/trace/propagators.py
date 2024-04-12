@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, List, Dict, Tuple
-from autogen.trace.nodes import Node, MessageNode, get_operator_name
+from autogen.trace.nodes import Node, MessageNode, get_op_name
 from collections import defaultdict
 from textwrap import dedent
 import autogen
@@ -37,7 +37,7 @@ class Propagator(AbtractPropagator):
         self.override[operator_name] = propagate_function
 
     def propagate(self, child: MessageNode) -> Dict[Node, Any]:
-        operator_name = get_operator_name(child.description)
+        operator_name = get_op_name(child.description)
         if operator_name in self.override:
             return self.override[operator_name](child)
         else:
@@ -156,7 +156,7 @@ class FunctionPropagator(Propagator):
 
     def _propagate(self, child: MessageNode):
         # Construct the function_call.
-        # It should read as a function call. e.g. "output = fun_name(x,y,z)"
+        # It should read as a function call. e.g. "child = fun_name(parent_x, parent_y, parent_z)"
         function_call = self.repr_function_call(child)
 
         # TODO remove these. Since they're not declared and propagator is used persistently
@@ -165,7 +165,9 @@ class FunctionPropagator(Propagator):
 
         # Construct the propagated feedback.
         # The feedback from children might share subgraphs. Only add unique ones.
-        graph = [(child.level, function_call)]
+        graph = [
+            (child.level, function_call)
+        ]  # save the level of the topological ordering so we can sort them later on
         documentation = {child.info["fun_name"]: child.description}  # TODO which description to use/ how to format it?
 
         roots = {parent.py_name: parent.data for parent in child.parents if parent.is_root}
@@ -178,11 +180,11 @@ class FunctionPropagator(Propagator):
                 documentation=documentation,
                 others={},  # there's no other intermediate nodes
                 roots=roots,
-                user_feedback=user_feedback,
+                user_feedback=user_feedback,  # This can be any type
                 output={child.py_name: child.data},  # This node is the output, not intermediate nodes
             )
 
-        else:  # This is an intermediate node
+        else:  # This is an intermediate node (i.e. not the leaf node or a root node)
             aggregated_feedback = self.aggregate(child.feedback)
             feedback = aggregated_feedback + FunctionFeedback(
                 graph=graph,
@@ -208,6 +210,7 @@ class FunctionPropagator(Propagator):
 
     def aggregate(self, feedback: Dict[Node, List[FunctionFeedback]]):
         """Aggregate feedback from multiple children"""
+        assert all(isinstance(v, FunctionFeedback) for v in feedback.values())
         values = [v[0] for v in feedback.values()]
         return sum(values[1:], values[0])
 

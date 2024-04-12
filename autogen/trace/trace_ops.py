@@ -1,7 +1,7 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.modules import apply_op, to_data, Module
-from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_operator_name
+from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_op_name
 from autogen.trace.utils import global_functions_list
 import inspect
 import functools
@@ -124,6 +124,8 @@ class FunModule(Module):
         if description is None:
             # Generate the description from the function name and docstring.
             description = f"[{self.info['fun_name']}] {self.info['doc']}."
+        assert len(get_op_name(description)) > 0
+
         self._fun = fun
         self.node_dict = node_dict
         self.info["node_dict"] = node_dict
@@ -169,7 +171,7 @@ class FunModule(Module):
 
     @property
     def name(self):
-        return get_operator_name(self.description)
+        return get_op_name(self.description)
 
     def forward(self, *args, **kwargs):
         """
