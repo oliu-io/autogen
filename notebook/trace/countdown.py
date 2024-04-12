@@ -74,7 +74,7 @@ class CountDown(object):
     def verify_solution(self, nums, target, solution):
         # Verify that the solution is correct
         intermediate_results = []
-        used_nums = []
+        check_nums = nums.copy()
         for step in solution:
             for op in ["+", "-", "*", "/"]:
                 if op in step:
@@ -82,17 +82,17 @@ class CountDown(object):
                     i, j = int(i), int(j)
                     i_is_orig_num = self.check_i_j(i, nums, intermediate_results)
                     j_is_orig_num = self.check_i_j(j, nums, intermediate_results)
-                    if i_is_orig_num and i not in used_nums:
-                        used_nums.append(i)
-                    if j_is_orig_num and j not in used_nums:
-                        used_nums.append(j)
+                    if i_is_orig_num and i in check_nums:
+                        check_nums.remove(i)
+                    if j_is_orig_num and j in check_nums:
+                        check_nums.remove(j)
                     result = eval(step.split("=")[0])
                     output_result = step.split("=")[1]
                     assert result == int(output_result), f"solution's printed result {output_result} is wrong, {i}{op}{j}={result}"
                     intermediate_results.append(result)
                     break
 
-        assert len(used_nums) == len(nums), f"Used numbers {used_nums} are not equal to original numbers {nums}"
+        assert len(check_nums) == 0, f"Not all original numbers {nums} are used, remaining {check_nums}"
         assert result == target, f"Final result {result} is not equal to target {target}"
         return True
 
