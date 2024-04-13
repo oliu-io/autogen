@@ -1,7 +1,7 @@
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json
 from autogen.trace.trace import trace
 import copy
-from autogen.trace.optimizers import DummyOptimizer
+from autogen.trace.optimizers.optimizers import DummyOptimizer
 
 
 # Load LLM inference endpoints from an env variable or a file

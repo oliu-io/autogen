@@ -15,7 +15,6 @@ TODO:
 """
 
 from autogen.trace.nodes import node, Node
-from autogen.trace.propagators import FunctionPropagator
 import string
 import random
 import numpy as np
@@ -56,6 +55,7 @@ variable_name_collide_list = set()
 MAX_VALUE = 2
 MIN_VALUE = -2
 
+
 def create_input_var(input_min=-10, input_max=10):
     # sample and return a random 5 letter name
     retry = 10
@@ -77,11 +77,17 @@ def create_var():
 
 
 class NumericalProgramSampler:
-    def __init__(self, chain_length, param_num=1, include_logic=False,
-                 two_var_mixture=[0.5, 0.5],
-                 logic_prob=0.3,
-                 max_gen_var=10,
-                 seed=1234, verbose=False):
+    def __init__(
+        self,
+        chain_length,
+        param_num=1,
+        include_logic=False,
+        two_var_mixture=[0.5, 0.5],
+        logic_prob=0.3,
+        max_gen_var=10,
+        seed=1234,
+        verbose=False,
+    ):
         """
         Args:
             chain_length:
@@ -142,7 +148,7 @@ class NumericalProgramSampler:
             return "The number needs to be smaller."
 
     def display_computation_graph(self):
-        return self._goal_output.backward(visualize='True', feedback='fine', propagate=FunctionPropagator())
+        return self._goal_output.backward(visualize="True", feedback="fine")
 
     def mixture_assertion_check(self, mixture, num_elements=2):
         assert np.abs(np.sum(mixture) - 1) < 1e-6, "The mixture should sum to 1"
@@ -189,8 +195,9 @@ class NumericalProgramSampler:
         # we default to [1, 1] sample.
         if sample_nums[0] > len(self.input_var_space):
             sample_nums = self.mixture_dec_space[0]
-        sampled_vars = self.sample_vars_from_space(self.input_var_space, sample_nums[0], is_gen=False) + \
-                       self.sample_vars_from_space(self.gen_var_space, sample_nums[1], is_gen=True)
+        sampled_vars = self.sample_vars_from_space(
+            self.input_var_space, sample_nums[0], is_gen=False
+        ) + self.sample_vars_from_space(self.gen_var_space, sample_nums[1], is_gen=True)
         if sample_nums == (1, 1):
             is_gen_var = (False, True)
         elif sample_nums == (2, 0):
@@ -285,7 +292,7 @@ class NumericalProgramSampler:
         return out_var
 
     def get_current_input(self):
-        return self.input_var_space[:self.param_num]
+        return self.input_var_space[: self.param_num]
 
     def __call__(self, input_params: List, seed=1234, verbose=False):
         """
@@ -318,4 +325,3 @@ class NumericalProgramSampler:
         #     out_var = throws_exception(node(repr(e)), *input_params)
 
         return out_var
-

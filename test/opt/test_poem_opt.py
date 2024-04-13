@@ -6,13 +6,13 @@ In this file, we should have:
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatibility, node, trace_class
-from autogen.trace.optimizers import TeacherLLMOptimizer
+from autogen.trace.optimizers.optimizers import TeacherLLMOptimizer
 from autogen.trace.optimizer_autogen import train_with_wrapped_env
 from autogen.trace.utils import backfill_lists, plot_agent_performance
 from textwrap import dedent, indent
 from env_wrapper import LLFBenchUserAgent
 
-from autogen.trace.optimizers import DummyOptimizer
+from autogen.trace.optimizers.optimizers import DummyOptimizer
 
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints

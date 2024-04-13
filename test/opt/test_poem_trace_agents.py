@@ -11,7 +11,7 @@ from poem_agents import PoemAgent, PoemStudentAgent, PoemExtractor, config_list
 from env_wrapper import LLFBenchUserAgent
 
 from autogen.trace.trace import trace
-from autogen.trace.propagators import retain_last_only_propagate
+from autogen.trace.propagators.propagators import retain_last_only_propagate
 
 
 def test_single_agent():

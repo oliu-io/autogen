@@ -55,7 +55,7 @@ class Graph:
 
     def get(self, name):
         name, id = name.split(":")
-        return self._nodes[name][id]
+        return self._nodes[name][int(id)]
 
     @property
     def roots(self):
@@ -251,7 +251,7 @@ class Node(AbstractNode[T]):
 
         """
         if propagator is None:
-            from autogen.trace.propagators import SumPropagator  # this avoids circular import
+            from autogen.trace.propagators.propagators import SumPropagator  # this avoids circular import
 
             propagator = SumPropagator()
 

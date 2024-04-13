@@ -16,7 +16,6 @@ We are making this task harder
 """
 
 from autogen.trace.nodes import node, GRAPH
-from autogen.trace.propagators import FunctionPropagator
 import string
 import random
 import numpy as np
@@ -45,11 +44,27 @@ import random
 import heapq
 
 distinct_functions = {
-    "evaluate_program", "get_env", "standard_env", "get_math", "get_ops",
-    "get_simple_math", "apply_fn_dict_key", "parse_and_update", "eval_exp",
-    "find", "string_case", "list_case", "get_procedure", "eval_procedure",
-    "otherwise_case", "not_list_case", "parse", "tokenize", "read_from_tokens",
-    "atom", "nested_list_to_str"
+    "evaluate_program",
+    "get_env",
+    "standard_env",
+    "get_math",
+    "get_ops",
+    "get_simple_math",
+    "apply_fn_dict_key",
+    "parse_and_update",
+    "eval_exp",
+    "find",
+    "string_case",
+    "list_case",
+    "get_procedure",
+    "eval_procedure",
+    "otherwise_case",
+    "not_list_case",
+    "parse",
+    "tokenize",
+    "read_from_tokens",
+    "atom",
+    "nested_list_to_str",
 }
 
 
@@ -57,12 +72,12 @@ distinct_functions = {
 # to offer control of difficulty and complexity
 def get_VERSION():
     # Randomly returns 'full' or 'empty' to simulate dynamic function behavior
-    return 'full' if random.random() > 0.5 else 'empty'
+    return "full" if random.random() > 0.5 else "empty"
 
 
 def random_trace(description=None, n_outputs=1, node_dict="auto", wrap_output=True, unpack_input=True, trainable=False):
     def decorator(fun):
-        if get_VERSION() == 'full':
+        if get_VERSION() == "full":
             return FunModule(
                 fun=fun,
                 description=description,
@@ -71,7 +86,7 @@ def random_trace(description=None, n_outputs=1, node_dict="auto", wrap_output=Tr
                 wrap_output=wrap_output,
                 unpack_input=unpack_input,
                 trainable=trainable,
-                decorator_name="@random_trace"
+                decorator_name="@random_trace",
             )
         else:
             return FunModule(
@@ -82,7 +97,7 @@ def random_trace(description=None, n_outputs=1, node_dict="auto", wrap_output=Tr
                 wrap_output=wrap_output,
                 unpack_input=unpack_input,
                 trainable=True,
-                decorator_name=""
+                decorator_name="",
             )
 
     return decorator
@@ -138,11 +153,11 @@ class EmptyFuncs:
         return 0
 
     @staticmethod
-    def standard_env(includes=['math', 'ops', 'simple_math']):
+    def standard_env(includes=["math", "ops", "simple_math"]):
         """
         [] -> {'_outer': None}
         """
-        env = {'_outer': None}
+        env = {"_outer": None}
         return env
 
     @staticmethod
@@ -211,7 +226,7 @@ class EmptyFuncs:
         "1 + 2" -> ['1', '+', '2']
         "1 + (2 * 3)" -> ['1', '+', '(', '2', '*', '3', ')']
         """
-        return ['1', '+', '(', '2', '*', '3', ')']
+        return ["1", "+", "(", "2", "*", "3", ")"]
 
     @staticmethod
     def atom(token):
@@ -227,14 +242,14 @@ class EmptyFuncs:
         """
         ['(', '1', '+', '(', '2', '*', '3', ')', ')'] -> [1, '+', [2, '*', 3]]
         """
-        return [1, '+', [2, '*', 3]]
+        return [1, "+", [2, "*", 3]]
 
     @staticmethod
     def parse(program):
         """
         '(1 + (2 * 3))' -> [1, '+', [2, '*', 3]]
         """
-        return [1, '+', [2, '*', 3]]
+        return [1, "+", [2, "*", 3]]
 
     @staticmethod
     def nested_list_to_str(exp):
@@ -253,10 +268,11 @@ class EmptyFuncs:
 
 
 @random_trace(
-    description="[get_env] Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env.")
+    description="[get_env] Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env."
+)
 def get_env(parms, args, env=None):
-    new_env = {'_outer': env}
-    for (parm, arg) in zip(parms, args):
+    new_env = {"_outer": env}
+    for parm, arg in zip(parms, args):
         new_env[parm] = arg
     return new_env
 
@@ -265,7 +281,7 @@ def get_env(parms, args, env=None):
 def get_math():
     d = {}
     for name in dir(math):
-        if name[:2] != '__':
+        if name[:2] != "__":
             d[name] = getattr(math, name)
     return d
 
@@ -281,18 +297,20 @@ def get_ops():
         "<": (lambda x, y: x < y),
         ">=": (lambda x, y: x >= y),
         "<=": (lambda x, y: x <= y),
-        "=": (lambda x, y: x == y)
+        "=": (lambda x, y: x == y),
     }
 
 
 @random_trace(
-    description="[get_simple_math] Get a dictionary mapping 'abs', 'min', 'max', 'not', 'round' to their functions.")
+    description="[get_simple_math] Get a dictionary mapping 'abs', 'min', 'max', 'not', 'round' to their functions."
+)
 def get_simple_math():
-    return {'abs': abs, 'min': min, 'max': max, 'not': lambda x: not x, 'round': round}
+    return {"abs": abs, "min": min, "max": max, "not": lambda x: not x, "round": round}
 
 
 @random_trace(
-    description="[apply_fn_dict_key] Return the value of fn_dict_generator()[key](*args_list) in standard_env.")
+    description="[apply_fn_dict_key] Return the value of fn_dict_generator()[key](*args_list) in standard_env."
+)
 def apply_fn_dict_key(fn_dict_generator, key, args_list):
     fn_dict = fn_dict_generator()
     return fn_dict[key](*args_list)
@@ -300,14 +318,15 @@ def apply_fn_dict_key(fn_dict_generator, key, args_list):
 
 @random_trace(
     description="[standard_env] An environment with some Scheme standard procedures. Start with an environment and update it with standard functions.",
-    node_dict=None)
-def standard_env(includes=['math', 'ops', 'simple_math']):
-    env = {'_outer': None}
-    if 'math' in includes:
+    node_dict=None,
+)
+def standard_env(includes=["math", "ops", "simple_math"]):
+    env = {"_outer": None}
+    if "math" in includes:
         env.update(get_math())
-    if 'ops' in includes:
+    if "ops" in includes:
         env.update(get_ops())
-    if 'simple_math' in includes:
+    if "simple_math" in includes:
         env.update(get_simple_math())
     return env
 
@@ -317,7 +336,7 @@ def find(env, var):
     if var in env:
         return env[var]
     else:
-        return find(env['_outer'], var)
+        return find(env["_outer"], var)
 
 
 @random_trace(description="[string_case] Return find(env, x).")
@@ -326,21 +345,24 @@ def string_case(x, env):
 
 
 @random_trace(
-    description="[eval_procedure] Gets a procedure and returns the result of evaluating proc(*args) in env. Should not be called directly.")
+    description="[eval_procedure] Gets a procedure and returns the result of evaluating proc(*args) in env. Should not be called directly."
+)
 def eval_procedure(parms, body, env, args):
-    proc = get_procedure(parms, body, env)
+    get_procedure(parms, body, env)
     new_env = get_env(parms, args, env)
     return eval_exp(body, new_env)
 
 
 @random_trace(
-    description="[get_procedure] Return a procedure which evaluates body in a new environment with parms bound to the args passed to the procedure (in the same order as parms).")
+    description="[get_procedure] Return a procedure which evaluates body in a new environment with parms bound to the args passed to the procedure (in the same order as parms)."
+)
 def get_procedure(parms, body, env):
     return lambda *args: eval_procedure(parms, body, env, args)
 
 
 @random_trace(
-    description="[otherwise_case] Get the procedure by evaluating the first value of x. Then, evaluate the arguments and apply the procedure to them. Return the result.")
+    description="[otherwise_case] Get the procedure by evaluating the first value of x. Then, evaluate the arguments and apply the procedure to them. Return the result."
+)
 def otherwise_case(x, env):
     p = eval_exp(x[0], env)
     args = [eval_exp(arg, env) for arg in x[1:]]
@@ -348,20 +370,21 @@ def otherwise_case(x, env):
 
 
 @random_trace(
-    description="[list_case] Handle the function specified by the first value of x. Handle the first value of x being quote, if, define, set!, lambda, or otherwise. Return the result.")
+    description="[list_case] Handle the function specified by the first value of x. Handle the first value of x being quote, if, define, set!, lambda, or otherwise. Return the result."
+)
 def list_case(x, env):
-    if x[0] == 'quote':
+    if x[0] == "quote":
         return x[1]
-    elif x[0] == 'if':
+    elif x[0] == "if":
         if eval_exp(x[1], env):
             return eval_exp(x[2], env)
         elif len(x) == 4:
             return eval_exp(x[3], env)
-    elif x[0] == 'define':
+    elif x[0] == "define":
         env[x[1]] = eval_exp(x[2], env)
-    elif x[0] == 'set!':
+    elif x[0] == "set!":
         env.find(x[1])[x[1]] = eval_exp(x[2], env)
-    elif x[0] == 'lambda':
+    elif x[0] == "lambda":
         return get_procedure(x[1], x[2], env)
     else:
         proc = eval_exp(x[0], env)
@@ -377,7 +400,8 @@ def not_list_case(x, env):
 
 
 @random_trace(
-    description="[eval_exp] Evaluate an expression in an environment and return the result. Check if x is a list, a string, or neither, and call the corresponding function.")
+    description="[eval_exp] Evaluate an expression in an environment and return the result. Check if x is a list, a string, or neither, and call the corresponding function."
+)
 def eval_exp(x, env):
     if isinstance(x, list):
         return list_case(x, env)
@@ -390,7 +414,7 @@ def eval_exp(x, env):
 @random_trace(description="[tokenize] Convert a string into a list of tokens, including parens.")
 def tokenize(s):
     "Convert a string into a list of tokens, including parens."
-    return s.replace('(', ' ( ').replace(')', ' ) ').split()
+    return s.replace("(", " ( ").replace(")", " ) ").split()
 
 
 @random_trace(description="[atom] Numbers become numbers; every other token is a string.")
@@ -405,19 +429,20 @@ def atom(token):
 
 
 @random_trace(
-    description="[read_from_tokens] Translate tokens to their corresponding atoms, using parentheses for nesting lists.")
+    description="[read_from_tokens] Translate tokens to their corresponding atoms, using parentheses for nesting lists."
+)
 def read_from_tokens(tokens):
     if len(tokens) == 0:
-        raise SyntaxError('unexpected EOF while reading')
+        raise SyntaxError("unexpected EOF while reading")
     token = tokens.pop(0)
-    if token == '(':
+    if token == "(":
         L = []
-        while tokens[0] != ')':
+        while tokens[0] != ")":
             L.append(read_from_tokens(tokens))
         tokens.pop(0)  # pop off ')'
         return L
-    elif token == ')':
-        raise SyntaxError('unexpected )')
+    elif token == ")":
+        raise SyntaxError("unexpected )")
     else:
         return atom(token)
 
@@ -428,10 +453,11 @@ def parse(program):
 
 
 @random_trace(
-    description="[nested_list_to_str] Convert a nested list into a string with nesting represented by parentheses.")
+    description="[nested_list_to_str] Convert a nested list into a string with nesting represented by parentheses."
+)
 def nested_list_to_str(exp):
     if isinstance(exp, list):
-        return '(' + ' '.join(map(nested_list_to_str, exp)) + ')'
+        return "(" + " ".join(map(nested_list_to_str, exp)) + ")"
     else:
         return str(exp)
 

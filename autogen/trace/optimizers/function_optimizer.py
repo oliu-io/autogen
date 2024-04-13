@@ -1,91 +1,78 @@
-from typing import Any, List, Dict, Union
-from autogen.trace.nodes import ParameterNode, Node
-from collections import defaultdict
-from autogen import AssistantAgent
-from autogen.oai.completion import Completion
-from textwrap import dedent, indent
-from copy import copy
-from autogen.trace.propagators import Propagator, FunctionPropagator, FunctionDistributivePropagate
+from typing import Any, List, Dict, Union, Tuple
 from dataclasses import dataclass
+from autogen.trace.nodes import ParameterNode, Node, MessageNode
+from autogen.trace.optimizers.optimizers import Optimizer
+
+from autogen.trace.propagators import NodeFeedback, NodePropagator
+from textwrap import dedent, indent
+from autogen.trace.propagators.propagators import Propagator
 import autogen
 import warnings
 import json
 
-"""
-We follow the same design principle as trace
-This file is not dependent of AutoGen library and can be used independently with trace
-"""
+
+def repr_function_call(child: MessageNode):
+    function_call = f"{child.py_name} = {child.info['fun_name']}("
+    for parent in child.parents:
+        function_call += f"{parent.py_name}, "
+    function_call = function_call[:-2] + ")"
+    return function_call
 
 
-class AbstractOptimizer:
-    """An optimizer is responsible for updating the parameters based on the feedback."""
+def node_to_function_feedback(node_feedback: NodeFeedback):
+    """Convert a NodeFeedback to a FunctionFeedback"""
+    depth = node_feedback.graph[-1][0]
+    graph = []
+    others = {}
+    roots = {}
+    output = {}
+    documentation = {}
 
-    def __init__(self, parameters: List[ParameterNode], *args, **kwargs):
-        assert type(parameters) is list
-        assert all([isinstance(p, ParameterNode) for p in parameters])
-        self.parameters = parameters
+    visited = set()
+    for level, node in node_feedback.graph:
+        # the graph is already sorted
+        visited.add(node)
 
-    def step(self):
-        """Update the parameters based on the feedback."""
-        raise NotImplementedError
+        if node.is_root:  # Need an or condition here
+            roots.update({node.py_name: node.data})
+        else:
+            # Some might be root (i.e. blanket nodes) and some might be intermediate nodes
+            # Blanket nodes belong to roots
+            if all([p in visited for p in node.parents]):
+                # this is an intermediate node
+                assert isinstance(node, MessageNode)
+                documentation.update({node.info["fun_name"]: node.description})
+                graph.append((level, repr_function_call(node)))
+                if level == depth:
+                    output.update({node.py_name: node.data})
+                else:
+                    others.update({node.py_name: node.data})
+            else:
+                # this is a blanket node (classified into roots)
+                roots.update({node.py_name: node.data})
 
-    def zero_feedback(self):
-        """Reset the feedback."""
-        raise NotImplementedError
-
-    @property
-    def propagator(self):
-        """Return a Propagator object that can be used to propagate feedback in backward."""
-        raise NotImplementedError
-
-
-class Optimizer(AbstractOptimizer):
-    def __init__(self, parameters: List[ParameterNode], *args, propagator: Propagator = None, **kwargs):
-        super().__init__(parameters)
-        propagator = propagator if propagator is not None else self.default_propagator()
-        assert isinstance(propagator, Propagator)
-        self._propagator = propagator
-
-    @property
-    def propagator(self):
-        return self._propagator
-
-    def step(self, *args, **kwargs):
-        update_dict = self._step(self.parameters, *args, **kwargs)
-        for p, d in update_dict.items():
-            if p.trainable:
-                p._data = d
-
-    def zero_feedback(self):
-        for p in self.parameters:
-            p.zero_feedback()
-
-    # Subclass should implement the methods below.
-    def _step(self, nodes: List[ParameterNode], *args, **kwargs) -> Dict[ParameterNode, Any]:
-        """Return the new data of parameter nodes based on the feedback."""
-        raise NotImplementedError
-
-    def default_propagator(self):
-        """Return the default Propagator object of the optimizer."""
-        raise NotImplementedError
-
-    def backward(self, node: Node, *args, **kwargs):
-        """Propagate the feedback backward."""
-        return node.backward(*args, propagator=self.propagator, **kwargs)
+    return FunctionFeedback(
+        graph=graph,
+        others=others,
+        roots=roots,
+        output=output,
+        user_feedback=node_feedback.user_feedback,
+        documentation=documentation,
+    )
 
 
-# class DummyOptimizer(Optimizer):
-#     # FOR TESTING PURPOSES ONLY
-#     def _step(self, node: ParameterNode):
-#         value, feedback = node.data, node.feedback
-#         if isinstance(value, dict):
-#             base = value["content"]
-#         elif isinstance(value, str):
-#             base = value
-#         else:
-#             raise NotImplementedError
-#         new = base + " ".join([" ".join(v) for v in feedback.values()])
-#         return new
+@dataclass
+class FunctionFeedback:
+    """Feedback container used by FunctionPropagator."""
+
+    graph: List[
+        Tuple[int, str]
+    ]  # Each item is is a representation of function call. The items are topologically sorted.
+    documentation: Dict[str, str]  # Function name and its documentationstring
+    others: Dict[str, Any]  # Intermediate variable names and their data
+    roots: Dict[str, Any]  # Root variable name and its data
+    output: Dict[str, Any]  # Leaf variable name and its data
+    user_feedback: str  # User feedback at the leaf of the graph
 
 
 class FunctionOptimizer(Optimizer):
@@ -100,11 +87,14 @@ class FunctionOptimizer(Optimizer):
         #Variables
         {variables}
 
-        #Outputs
-        {outputs}
+        #Inputs
+        {inputs}
 
         #Others
         {others}
+
+        #Outputs
+        {outputs}
 
         #Feedback:
         {feedback}
@@ -119,8 +109,9 @@ class FunctionOptimizer(Optimizer):
         - #Code: the code whose results you need to improve.
         - #Documentation: the documentation of each function used in the code.
         - #Variables: the values of the variables that you need to change.
+        - #Inputs: the values of other inputs to the code
+        - #Others: the intermediate values created through the code execution.
         - #Outputs: the result of the code.
-        - #Others: the values of other inputs to the code, or intermediate values created through the code.
         - #Feedback: the feedback about the code's execution result.
 
         In #Variables, #Outputs, and #Others, the format is:
@@ -190,7 +181,8 @@ class FunctionOptimizer(Optimizer):
             documentation="add: add two numbers\nsubtract: subtract two numbers",
             variables="(int) a = 5",
             outputs="(int) z = 1",
-            others="(int) b = 1\n(int) c = 5",
+            others="(int) y = 6",
+            inputs="(int) b = 1\n(int) c = 5",
             feedback="The result of the code is not as expected. The result should be 10, but the code returns 1",
         )
         self.example_response = dedent(
@@ -203,21 +195,30 @@ class FunctionOptimizer(Optimizer):
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
-        return FunctionPropagator()
+        return NodePropagator()
 
-    def _step(self, nodes: List[ParameterNode], verbose=False, *args, **kwargs) -> Dict[ParameterNode, Any]:
-        assert isinstance(self.propagator, FunctionPropagator)
-
-        # Aggregate feedback from all the nodes
-        feedbacks = [self.propagator.aggregate(node.feedback) for node in nodes]
-        summary = sum(feedbacks[1:], feedbacks[0])
-
+    def summarize(self):
+        # Aggregate feedback from all the parameters
+        feedbacks = [self.propagator.aggregate(node.feedback) for node in self.parameters if node.trainable]
+        summary = sum(feedbacks[1:], feedbacks[0])  # NodeFeedback
         # Construct variables and update others
-        others = {p.py_name: p.data for p in self.parameters if not p.trainable}
-        others.update(summary.others)
-        variables = {p.py_name: p.data for p in self.parameters if p.trainable}
-        non_variable_roots = {k: v for k, v in summary.roots.items() if k not in variables}
-        others.update(non_variable_roots)
+        # Some trainable nodes might not receive feedback, because they might not be connected to the output
+        summary = node_to_function_feedback(summary)
+        # Classify the root nodes into variables and others
+        # summary.variables = {p.py_name: p.data for p in self.parameters if p.trainable and p.py_name in summary.roots}
+
+        trainable_param_dict = {p.py_name: p for p in self.parameters if p.trainable}
+        summary.variables = {
+            py_name: data for py_name, data in summary.roots.items() if py_name in trainable_param_dict
+        }
+        summary.inputs = {
+            py_name: data for py_name, data in summary.roots.items() if py_name not in trainable_param_dict
+        }  # non-variable roots
+        return summary
+
+    def _step(self, verbose=False, *args, **kwargs) -> Dict[ParameterNode, Any]:
+        assert isinstance(self.propagator, NodePropagator)
+        summary = self.summarize()
 
         def repr_node_value(node_dict):
             return "\n".join(
@@ -231,9 +232,10 @@ class FunctionOptimizer(Optimizer):
         problem_instance = self.problem_template.format(
             code="\n".join([v for k, v in sorted(summary.graph)]),
             documentation="\n".join([v for v in summary.documentation.values()]),
-            variables=repr_node_value(variables),
+            variables=repr_node_value(summary.variables),
+            inputs=repr_node_value(summary.inputs),
             outputs=repr_node_value(summary.output),
-            others=repr_node_value(others),
+            others=repr_node_value(summary.others),
             feedback=summary.user_feedback,
         )
 
@@ -258,7 +260,7 @@ class FunctionOptimizer(Optimizer):
 
         # Convert the suggestion in text into the right data type
         update_dict = {}
-        for node in nodes:
+        for node in self.parameters:
             if node.trainable and node.py_name in suggestion:
                 try:
                     update_dict[node] = type(node.data)(suggestion[node.py_name])
@@ -304,12 +306,7 @@ class FunctionOptimizer(Optimizer):
         return response
 
 
-class FunctionDistributiveOptimizer(FunctionOptimizer):
-    def default_propagator(self):
-        """Return the default Propagator object of the optimizer."""
-        return FunctionDistributivePropagate()
-
-
-if __name__ == "__main__":
-    # add a few unit tests here
-    pass
+# class FunctionDistributiveOptimizer(FunctionOptimizer):
+#     def default_propagator(self):
+#         """Return the default Propagator object of the optimizer."""
+#         return FunctionDistributivePropagate()

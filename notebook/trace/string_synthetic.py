@@ -21,7 +21,6 @@ use output as target.
 """
 
 from autogen.trace.nodes import node
-from autogen.trace.propagators import FunctionPropagator
 import string
 import random
 import numpy as np
@@ -71,7 +70,7 @@ def create_input_var(length=5):
         cnt += 1
         name = "node_" + "".join(random.choices(string.ascii_lowercase, k=5))
 
-    value = ''.join(random.choice(characters) for _ in range(length))
+    value = "".join(random.choice(characters) for _ in range(length))
     return node(value, name)
 
 
@@ -81,13 +80,18 @@ def create_var():
 
 
 class StringProgramSampler:
-    def __init__(self, chain_length, param_num=1,
-                 # one_var_mixture=[0.8, 0.2],
-                 two_var_mixture=[0.8, 0.2],
-                 three_var_mixture=[0.5, 0.4, 0.1],
-                 op_mixture=[0.7, 0.3],
-                 max_gen_var=10,
-                 seed=1234, verbose=False):
+    def __init__(
+        self,
+        chain_length,
+        param_num=1,
+        # one_var_mixture=[0.8, 0.2],
+        two_var_mixture=[0.8, 0.2],
+        three_var_mixture=[0.5, 0.4, 0.1],
+        op_mixture=[0.7, 0.3],
+        max_gen_var=10,
+        seed=1234,
+        verbose=False,
+    ):
         """
         Args:
             op_mixture: [0.7, 0.3]: probability to sample from case-switch operations, and sample from mutation operations
@@ -134,7 +138,7 @@ class StringProgramSampler:
         return self._goal_output.data
 
     def display_computation_graph(self):
-        return self._goal_output.backward(visualize='True', feedback='fine', propagate=FunctionPropagator())
+        return self._goal_output.backward(visualize="True", feedback="fine")
 
     def feedback(self, y_hat):
         if self.execution_exception is not None:
@@ -159,7 +163,7 @@ class StringProgramSampler:
             np.random.seed(seed)
 
     def get_current_input(self):
-        return self.input_var_space[:self.param_num]
+        return self.input_var_space[: self.param_num]
 
     def sample_vars_from_space(self, var_space, num_sample, is_gen=False):
         is_gen_vars = [is_gen] * num_sample
@@ -205,7 +209,7 @@ class StringProgramSampler:
             filtered_mixture_dec_space.append(tup)
             fitlered_var_mixture.append(var_mixture[i])
 
-        fitlered_var_mixture = [i/sum(fitlered_var_mixture) for i in fitlered_var_mixture]
+        fitlered_var_mixture = [i / sum(fitlered_var_mixture) for i in fitlered_var_mixture]
 
         idx = np.random.choice(range(len(filtered_mixture_dec_space)), p=fitlered_var_mixture)
         sample_nums = filtered_mixture_dec_space[idx]
@@ -219,7 +223,7 @@ class StringProgramSampler:
         # because split and replace are class methods
         # if it's a raw string "a".split(node_str), then it's a bit weird
         # so we do an additional check and conversion
-        if len(sampled_vars) > 1 and is_gen_vars[0] == True:
+        if len(sampled_vars) > 1 and is_gen_vars[0] is True:
             sampled_vars = [node(sampled_vars[0])] + sampled_vars[1:]
 
         return sampled_vars, is_gen_vars
@@ -239,11 +243,11 @@ class StringProgramSampler:
         op_name = np.random.choice(eval(str(op_type)))
         op = eval(str(op_type) + "_programs")[op_name]
 
-        if op_type == 'unary_string_ops':
+        if op_type == "unary_string_ops":
             sampled_vars, is_gen_vars = self.sample_vars(self.one_input_dec_space, self.one_var_mixture)
-        elif op_name in ['split', 'concat']:
+        elif op_name in ["split", "concat"]:
             sampled_vars, is_gen_vars = self.sample_vars(self.two_input_dec_space, self.two_var_mixture)
-        elif op_name == 'replace':
+        elif op_name == "replace":
             sampled_vars, is_gen_vars = self.sample_vars(self.three_input_dec_space, self.three_var_mixture)
         else:
             raise ValueError("Invalid op_type")
@@ -272,11 +276,11 @@ class StringProgramSampler:
 
     def __call__(self, input_params: List[str], seed=1234, verbose=False):
         """
-                Args:
-                    input_params: a list of input parameters
+        Args:
+            input_params: a list of input parameters
 
-                Returns: the final value of the program
-                """
+        Returns: the final value of the program
+        """
         self.reset()
 
         if type(input_params) != list:

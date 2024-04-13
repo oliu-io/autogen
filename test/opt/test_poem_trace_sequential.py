@@ -15,7 +15,7 @@ import llfbench
 from autogen.trace.utils import verbalize
 
 
-from autogen.trace.optimizers import DummyOptimizer
+from autogen.trace.optimizers.optimizers import DummyOptimizer
 
 # Load LLM inference endpoints from an env variable or a file
 # See https://microsoft.github.io/autogen/docs/FAQ#set-your-api-endpoints

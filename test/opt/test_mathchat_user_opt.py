@@ -12,8 +12,8 @@ from autogen.agentchat.contrib.math_user_proxy_agent import MathUserProxyAgent
 
 from autogen import AssistantAgent, UserProxyAgent, config_list_from_json, Agent
 from autogen.trace.trace import trace, compatibility
-from autogen.trace.optimizers import TeacherLLMOptimizer
-from autogen.trace.propagators import retain_last_only_propagate
+from autogen.trace.optimizers.optimizers import TeacherLLMOptimizer
+from autogen.trace.propagators.propagators import retain_last_only_propagate
 from textwrap import dedent, indent
 from autogen.trace.optimizer_autogen import train_with_datasets, DatasetProcessor
 
