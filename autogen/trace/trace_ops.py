@@ -300,8 +300,17 @@ def trace_class(cls):
             parameters.append(method.parameter)
             parameters_dict[name] = method.parameter
 
-    setattr(cls, "parameters", parameters)
-    setattr(cls, "parameters_dict", parameters_dict)
+    setattr(cls, "parameters_", parameters)
+    setattr(cls, "parameters_dict_", parameters_dict)
+
+    def parameters(self):
+        return self.parameters_
+
+    def parameters_dict(self):
+        return self.parameters_dict_
+
+    cls.parameters = parameters
+    cls.parameters_dict = parameters_dict
 
     return cls
 
