@@ -1,3 +1,4 @@
+from typing import List, Union, Dict
 from autogen.trace.nodes import Node, ParameterNode, node
 import copy
 import inspect
@@ -16,21 +17,34 @@ class Module(NodeContainer):
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
-    def parameters(self):
+    def parameters(self) -> List[Node]:
         parameters = []
-        for name, method in inspect.getmembers(self, predicate=lambda x: isinstance(x, functools.partial)):
-            method = method.func.__self__
-            if callable(method) and hasattr(method, 'parameter'):
-                parameters.append(method.parameter)
+        for name, attr in inspect.getmembers(self):
+            if isinstance(attr, functools.partial):  # this is a method
+                method = attr.func.__self__
+                if callable(method) and hasattr(method, "parameter"):
+                    parameters.append(method.parameter)
+            elif isinstance(attr, Node):
+                if attr.trainable:
+                    parameters.append(attr)
+            elif isinstance(attr, NodeContainer):
+                parameters.extend(attr.parameters())
         return parameters
 
-    def parameters_dict(self):
+    def parameters_dict(self) -> Dict[str, Union[Node, Dict]]:
         parameters = {}
-        for name, method in inspect.getmembers(self, predicate=lambda x: isinstance(x, functools.partial)):
-            method = method.func.__self__
-            if callable(method) and hasattr(method, 'parameter'):
-                parameters[name] = method.parameter
+        for name, attr in inspect.getmembers(self):
+            if isinstance(attr, functools.partial):  # this is a method
+                method = attr.func.__self__
+                if callable(method) and hasattr(method, "parameter"):
+                    parameters[name] = method.parameter
+            elif isinstance(attr, Node):
+                if attr.trainable:
+                    parameters[name] = attr
+            elif isinstance(attr, NodeContainer):
+                parameters[name] = attr.parameters_dict()
         return parameters
+
 
 def apply_op(op, output, *args, **kwargs):
     """Apply an op to container of Nodes.
