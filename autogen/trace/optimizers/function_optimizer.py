@@ -162,7 +162,7 @@ class FunctionOptimizer(Optimizer):
     def __init__(
         self,
         parameters: List[ParameterNode],
-        config_list: List,
+        config_list: List = None,
         *args,
         propagator: Propagator = None,
         objective: Union[None, str] = None,
@@ -171,6 +171,8 @@ class FunctionOptimizer(Optimizer):
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
         self.ignore_extraction_error = ignore_extraction_error
+        if config_list is None:
+            config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
         self.objective = (
             objective
