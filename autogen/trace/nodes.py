@@ -35,23 +35,25 @@ class Graph:
 
     def __init__(self):
         self._nodes = defaultdict(list)  # a lookup table to find nodes by name
-        self._levels = defaultdict(list)  # a lookup table to find nodes at a certain level # TODO do we need this?
+        # self._levels = defaultdict(list)  # a lookup table to find nodes at a certain level # TODO do we need this?
 
     def clear(self):
         for node in self._nodes.values():
             del node
         self._nodes = defaultdict(list)
-        self._levels = defaultdict(list)
+        # self._levels = defaultdict(list)
 
     def register(self, node):
         assert isinstance(node, Node)
         assert len(node.name.split(":")) == 2
-        name, id = node.name.split(":")
+        name, _ = node.name.split(":")
         if len(NAME_SCOPES) > 0:
             name = NAME_SCOPES[-1] + "/" + name
         self._nodes[name].append(node)
-        node._name = name + ":" + str(len(self._nodes[name]) - 1)
-        self._levels[node._level].append(node)
+        node._name = (
+            name + ":" + str(len(self._nodes[name]) - 1)
+        )  # NOTE assume elements in self._nodes never get removed.
+        # self._levels[node._level].append(node)
 
     def get(self, name):
         name, id = name.split(":")
@@ -59,7 +61,7 @@ class Graph:
 
     @property
     def roots(self):
-        return self._levels[0]
+        return [v for vv in self._nodes.values() for v in vv if v.is_root]
 
     def __str__(self):
         return str(self._nodes)
@@ -142,10 +144,10 @@ class AbstractNode(Generic[T]):
         self._update_level(max(self._level, parent._level + 1))  # Update the level, because the parent is added
 
     def _update_level(self, new_level):
-        GRAPH._levels[self._level].remove(self)
+        # GRAPH._levels[self._level].remove(self)  # this uses the == operator which compares values. We need to compare references.
         self._level = new_level
-        GRAPH._levels[new_level].append(self)
-        assert all([len(GRAPH._levels[i]) > 0 for i in range(len(GRAPH._levels))]), "Some levels are empty."
+        # GRAPH._levels[new_level].append(self)
+        # assert all([len(GRAPH._levels[i]) > 0 for i in range(len(GRAPH._levels))]), "Some levels are empty."
 
     def __str__(self) -> str:
         # str(node) allows us to look up in the feedback dictionary easily

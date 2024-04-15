@@ -146,3 +146,25 @@ def fun(a, b):
 
 tfun = trace_op()(fun)
 assert tfun(node(1), node(2)) == 3
+
+
+# Test multi-output function
+@trace_op(n_outputs=2)
+def fun(a, b):
+    return a + b, a - b
+
+
+x, y = fun(node(1), node(2))
+
+
+@trace_op()  # single output
+def fun(a, b):
+    return a + b, a - b
+
+
+x_y = fun(node(1), node(2))
+assert isinstance(x_y, Node) and len(x_y) == 2
+assert isinstance(x, Node)
+assert isinstance(y, Node)
+
+assert x == x_y[0] and y == x_y[1]
