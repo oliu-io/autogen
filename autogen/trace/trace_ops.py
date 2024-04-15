@@ -164,8 +164,19 @@ class FunModule(Module):
             methods = globals()
             for k in need_keys:
                 methods.update({k: self._fun.__globals__[k]})
+            try:
+                exec(code)  # define the function
+            except SyntaxError as e:
+                # Temporary fix for the issue of the code block not being able to be executed
+                e_node = ExceptionNode(
+                    str(e),
+                    inputs=self.parameter,
+                    description=f"[exception] The code parameter {self.parameter.py_name} has a syntax error.",
+                    name="exception_" + self.parameter.name,
+                    info=self.info,
+                )
+                raise TraceExecutionError(e_node)
 
-            exec(code)  # define the function
             fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
             return locals()[fun_name]
 
@@ -270,7 +281,7 @@ class FunModule(Module):
                 str(output),
                 inputs=inputs,
                 description=f'[exception] The operator {self.info["fun_name"]} raises an exception.',
-                name=name,
+                name="exception_" + name,
                 info=self.info,
             )
             raise TraceExecutionError(e_node)
@@ -313,6 +324,7 @@ def trace_class(cls):
     cls.parameters_dict = parameters_dict
 
     return cls
+
 
 if __name__ == "__main__":
     x = node("hello")
