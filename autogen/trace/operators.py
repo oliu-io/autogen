@@ -107,7 +107,7 @@ def divmod(x: Any, y: Any):
 
 @trace_op("[power] This is a power operator of x and y.", node_dict="auto")
 def power(x: Any, y: Any):
-    return x ** y
+    return x**y
 
 
 @trace_op("[lshift] This is a lshift operator of x and y.", node_dict="auto")
@@ -244,8 +244,9 @@ def title(x: Any):
     return x.title()
 
 
-@trace_op("[swapcase] Swaps the case of all characters: uppercase character to lowercase and viceversa.",
-          node_dict="auto")
+@trace_op(
+    "[swapcase] Swaps the case of all characters: uppercase character to lowercase and vice-versa.", node_dict="auto"
+)
 def swapcase(x: Any):
     return x.swapcase()
 
@@ -257,7 +258,8 @@ def capitalize(x: Any):
 
 @trace_op(
     "[split] Splits the string by finding a substring y in string x, return the first part and second part of string x without y.",
-    node_dict="auto")
+    node_dict="auto",
+)
 def split(x: Any, y: Any, maxsplit: Any = -1):
     return x.split(y, maxsplit)
 
@@ -276,3 +278,16 @@ def replace(x: Any, old: Any, new: Any, count: Any = -1):
 @trace_op("[error] x triggers an error during execution. The error message is e.", node_dict="auto")
 def throws_exception(e: Any, input_params: Any):
     return e
+
+
+@trace_op("[getattr] This operator gets attr of node.", node_dict="auto")
+def node_getattr(obj: Node, attr: str):
+    return obj[attr] if isinstance(obj, dict) else getattr(obj, attr)
+
+
+@trace_op("[call] This operator call fun of node with args and kwargs.", node_dict="auto")
+def call(fun: Node, *args, **kwargs):
+    # Call the node with the input arguments
+    assert callable(fun)
+    output = fun(*args, **kwargs)
+    return output

@@ -85,12 +85,13 @@ class AbstractNode(Generic[T]):
         self._parents = []
         self._children = []
         self._level = 0  # roots are at level 0
-        self._name = str(type(value).__name__) + ":0" if name is None else name + ":0"  # name:version
+        default_name = str(type(value).__name__) + ":0" if name is None else name + ":0"  # name:version
         if isinstance(value, Node):  # just a reference
             self._data = value._data
-            self._name = value._name
+            self._name = value._name if name is None else default_name
         else:
             self._data = value
+            self._name = default_name
         GRAPH.register(self)  # When created, register the node to the graph.
 
     @property
@@ -131,12 +132,12 @@ class AbstractNode(Generic[T]):
     def is_leaf(self):
         return len(self.children) == 0
 
-    def add_child(self, child):
+    def _add_child(self, child):
         assert child is not self, "Cannot add self as a child."
         assert isinstance(child, Node), f"{child} is not a Node."
-        child.add_parent(self)
+        child._add_parent(self)
 
-    def add_parent(self, parent):
+    def _add_parent(self, parent):
         assert parent is not self, "Cannot add self as a parent."
         assert isinstance(parent, Node), f"{parent} is {type(parent)}, which is not a Node."
         parent._children.append(self)
@@ -361,34 +362,21 @@ class Node(AbstractNode[T]):
 
     # Get attribute and call operators
     def getattr(self, key):
-        attr = self._data[key] if isinstance(self._data, dict) else getattr(self._data, key)
-        return MessageNode(
-            attr,
-            inputs={"container": self},
-            description=f"[getattr] This is a get attribute operator of {key}.",
-            name="getattr",
-        )
+        import autogen.trace.operators as ops
+
+        return ops.node_getattr(self, node(key))
 
     def call(self, fun: str, *args, **kwargs):
-        """fun (str): a callable attribute of the data."""
-        output = getattr(self._data, fun)(*args, **kwargs)
-        if output is not None:
-            if isinstance(output, Node):
-                data = output.data
-                inputs = {"container": self, "output": output}
-            else:
-                data = output
-                inputs = {"container": self}
-            output = MessageNode(
-                data,
-                inputs=inputs,
-                description=f"[call] This is a call operator of {fun} on {self._data}.",
-                name="call",
-            )
-        return output
+        args = (node(arg) for arg in args)  # convert args to nodes
+        kwargs = {k: node(v) for k, v in kwargs.items()}
+        return self.getattr(fun)(*args, **kwargs)
 
     def __call__(self, *args, **kwargs):
-        return self.call("__call__", *args, **kwargs)
+        import autogen.trace.operators as ops
+
+        # TODO
+        output = ops.call(self, *args, **kwargs)
+        return output
 
     # We overload magic methods that return a value. These methods return a MessageNode.
     # container magic methods
@@ -688,7 +676,7 @@ class MessageNode(Node[T]):
         self,
         value,
         *,
-        inputs: Union[List[Node], Dict[str, Node]],
+        inputs: Union[List[Node], Dict[str, Node]],  # extra
         description: str,
         constraint=None,
         name=None,
@@ -709,7 +697,7 @@ class MessageNode(Node[T]):
         # Add parents if we are tracing
         for k, v in self._inputs.items():
             assert isinstance(v, Node), f"Input {k} is not a Node."
-            self.add_parent(v)
+            self._add_parent(v)
 
     @property
     def inputs(self):

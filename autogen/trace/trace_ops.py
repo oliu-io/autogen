@@ -1,8 +1,8 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
-from autogen.trace.modules import apply_op, to_data, Module
+from autogen.trace.modules import apply_op, to_data, Module, NodeContainer
 from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_op_name
-from autogen.trace.utils import global_functions_list
+from autogen.trace.utils import global_functions_list, contain
 import inspect
 import functools
 import re
@@ -215,7 +215,7 @@ class FunModule(Module):
             assert self.node_dict == "auto" or isinstance(self.node_dict, dict)
             spec = inspect.getcallargs(self.fun, *args, **kwargs)  # Read it from the input signature
             if isinstance(self.node_dict, dict):
-                spec.update(self.node_dict)
+                spec.update(self.node_dict)  # include additional nodes passed in by the user
             assert isinstance(spec, dict)
 
             # Make sure all nodes in used_nodes are in spec
@@ -240,7 +240,7 @@ class FunModule(Module):
                     if isinstance(v, Node) and (v in used_nodes):
                         inputs[k] = v
             if not triggered_exception:
-                assert all([node in spec_values for node in used_nodes]), "All used_nodes must be in the spec."
+                assert all([contain(spec_values, node) for node in used_nodes]), "All used_nodes must be in the spec."
 
         # Wrap the output as a MessageNode or an ExceptionNode
         if self.n_outputs == 1:
@@ -251,7 +251,7 @@ class FunModule(Module):
             parents = set.union(*[set(node.parents) if isinstance(node, Node) else set() for node in nodes])
 
         # Make sure all nodes in used_nodes are in the parents of the returned node.
-        if nodes is not None and not all([node in parents for node in used_nodes]):
+        if nodes is not None and not all([contain(parents, node) for node in used_nodes]):
             raise ValueError(
                 f"Not all nodes used in the operator {self.fun} are specified as inputs of the returned node. Missing {[node.name for node in used_nodes if node not in parents]} "
             )
@@ -275,7 +275,6 @@ class FunModule(Module):
         else:
             description = self.description
             name = self.name
-
         if isinstance(output, Exception):
             e_node = ExceptionNode(
                 str(output),

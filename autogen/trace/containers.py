@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any
 from autogen.trace.trace_ops import trace_op
 import autogen.trace.operators as ops
 
+
 # List and Tuple share an Iterable
 class SeqIterable:
     def __init__(self, wrapped_list):
@@ -20,7 +21,7 @@ class SeqIterable:
             result_node = node(result)
             # I'm not sure why this is necessary
             if self.wrapped_list not in result_node.parents:
-                result_node.add_parent(self.wrapped_list)
+                result_node._add_parent(self.wrapped_list)
             return result_node
         else:
             raise StopIteration
@@ -70,8 +71,8 @@ class DictIterable:
             result = (node(key), self.wrapped_dict[key])
             self._index += 1
 
-            result[0].add_parent(self.wrapped_dict)
-            result[1].add_parent(self.wrapped_dict)
+            result[0]._add_parent(self.wrapped_dict)
+            result[1]._add_parent(self.wrapped_dict)
 
             return result
         else:
@@ -82,6 +83,7 @@ def items(x: Any):
     if type(x.data) != dict:
         return AttributeError("Cannot get items from an object of type {}".format(type(x.data)))
     return DictIterable(x)
+
 
 # class ExceptionIterator:
 #     def __init__(self, exception):

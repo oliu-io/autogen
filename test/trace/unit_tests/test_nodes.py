@@ -111,3 +111,16 @@ y = node(1)
 assert y in [x]
 assert y not in {x}
 assert hash(x) != hash(y)
+
+
+# Test callable node
+
+
+def fun(x):
+    return x + 1
+
+
+fun_node = node(fun)
+output = fun_node(node(2))
+assert output == 3
+assert len(output.parents) == 2
