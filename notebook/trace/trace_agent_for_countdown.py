@@ -8,13 +8,14 @@ This means, learning, optimizer, might need to go well beyond.
 """
 
 from countdown import CountDown
-from autogen.trace.trace_ops import trace_op
+from autogen.trace.trace_ops import trace_op, trace_class
 from autogen.trace.nodes import node
 
 countdown = CountDown(50, 4)
 target = 32
 nums, solution = countdown.generate(target)
 
+@trace_class
 class DeepAgent:
     @trace_op("[solve_countdown] Given 4 numbers, apply + - * / to them to get target.", trainable=True)
     def solve_countdown(self, numbers, target: int):
