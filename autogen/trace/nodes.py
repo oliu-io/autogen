@@ -374,7 +374,6 @@ class Node(AbstractNode[T]):
     def __call__(self, *args, **kwargs):
         import autogen.trace.operators as ops
 
-        # TODO
         output = ops.call(self, *args, **kwargs)
         return output
 

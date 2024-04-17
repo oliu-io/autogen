@@ -285,9 +285,16 @@ def node_getattr(obj: Node, attr: str):
     return obj[attr] if isinstance(obj, dict) else getattr(obj, attr)
 
 
-@trace_op("[call] This operator call fun of node with args and kwargs.", node_dict="auto")
+@trace_op(
+    "[call] This operator call fun of node with args and kwargs.",
+    node_dict="auto",
+    unpack_input=False,
+    allow_external_dependencies=True,
+)
 def call(fun: Node, *args, **kwargs):
+    # Run the function as it is
+    fun = fun._data
     # Call the node with the input arguments
-    assert callable(fun)
+    assert callable(fun), "The function must be callable."
     output = fun(*args, **kwargs)
     return output

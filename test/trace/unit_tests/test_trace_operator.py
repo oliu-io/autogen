@@ -1,7 +1,7 @@
 from autogen import trace
-from autogen.trace.trace_ops import trace_op
+from autogen.trace.trace_ops import trace_op, TraceMissingInputsError
 from autogen.trace.nodes import Node, node
-from autogen.trace.utils import for_all_methods
+from autogen.trace.utils import for_all_methods, contain
 
 x = Node(1, name="node_x")
 y = Node(2, name="node_y")
@@ -168,3 +168,144 @@ assert isinstance(x, Node)
 assert isinstance(y, Node)
 
 assert x == x_y[0] and y == x_y[1]
+
+
+# Test trace codes using nodes
+
+
+@trace_op(traceable_code=True)  # set unpack_input=False to run node-based codes
+def test(a: Node, b: Node):
+    """Complex function."""
+    return a + b + 10
+
+
+x = node(1)
+y = node(2)
+z = test(x, y)
+assert z == (x + y + 10)
+assert contain(z.parents, x) and contain(z.parents, y)
+assert "test" in z.name
+
+z0 = z.info["output"]  # This is the original output
+assert z == z0
+assert not contain(z0.parents, x) and not contain(z0.parents, y)
+assert "add" in z0.name
+
+
+# Test external dependencies
+
+external_var = node(0)
+
+
+@trace_op()  # set unpack_input=False to run node-based codes
+def test(a: Node, b: Node):
+    """Complex function."""
+    return a + b + 10 + external_var.data
+
+
+x = node(1)
+y = node(2)
+try:
+    z = test(x, y)
+except TraceMissingInputsError:
+    print("This usage throws an error because external_var is not provided as part of the inputs")
+
+
+@trace_op(node_dict={"x": external_var})
+def test(a: Node, b: Node):
+    """Complex function."""
+    return a + b + 10 + external_var.data
+
+
+z = test(x, y)
+assert z == (x + y + 10 + external_var.data)
+assert contain(z.parents, x) and contain(z.parents, y) and contain(z.parents, external_var)
+assert "a" in z.inputs and "b" in z.inputs and "x" in z.inputs
+
+
+@trace_op(allow_external_dependencies=True)
+def test(a: Node, b: Node):
+    """Complex function."""
+    return a + b + 10 + external_var.data
+
+
+z = test(x, y)
+assert z == (x + y + 10 + external_var.data)
+assert contain(z.parents, x) and contain(z.parents, y)
+assert contain(z.info["external_dependencies"], external_var)
+assert "a" in z.inputs and "b" in z.inputs
+
+# Test get attribute and call
+
+
+class Foo:
+    def __init__(self):
+        self.node = node(1)
+        self.non_node = 2
+
+    def trace_fun(self, x: Node):
+        print(x.data)
+        return self.node * 2
+
+    def non_trace_fun(self):
+        return self.non_node * 2
+
+
+foo = node(Foo())
+x = node("x")
+try:
+    foo.node
+    foo.trace_fun()
+except AttributeError:
+    print("The attribute of the wrapped object cannot be directly accessed. Instead use getattr() or call()")
+
+
+attr = foo.getattr("node")
+print(f"foo_node: {attr}\nparents {[(p.name, p.data) for p in attr.parents]}")
+
+
+attr = foo.getattr("non_node")
+print(f"non_node: {attr}\nparents {[(p.name, p.data) for p in attr.parents]}")
+
+
+fun = foo.getattr("non_trace_fun")
+y = fun()
+print(f"output: {y}\nparents {[(p.name, p.data) for p in y.parents]}")
+
+fun = foo.getattr("trace_fun")
+y = fun(x)
+
+y = foo.call("non_trace_fun")
+print(f"output: {y}\nparents {[(p.name, p.data) for p in y.parents]}")
+
+y = foo.call("trace_fun", x)
+print(f"output: {y}\nparents {[(p.name, p.data) for p in y.parents]}")
+
+
+class Foo:
+    def __init__(self):
+        self.x = node(1)
+
+    def add(self, y):
+        return y + 1 + self.x  # node
+
+
+node_F = node(Foo())
+y = node_F.getattr("x")
+assert len(y.parents) == 2
+assert "getattr" in y.name
+assert y == node_F.data.x  # value
+
+add = node_F.getattr("add")
+z = add(node(2))
+assert len(z.parents) == 2
+assert contain(z.parents, add)
+assert contain(z.parents[0].parents, node_F)
+
+z2 = node_F.call("add", 2)
+assert z2 == z
+assert contain(z2.parents[0].parents, node_F)
+
+z2 = node_F.call("add", node(2))
+assert z2 == z
+assert contain(z2.parents[0].parents, node_F)

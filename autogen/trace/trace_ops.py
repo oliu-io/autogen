@@ -1,11 +1,13 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
+from autogen.trace.nodes import GRAPH
 from autogen.trace.modules import apply_op, to_data, Module, NodeContainer
 from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_op_name
 from autogen.trace.utils import global_functions_list, contain
 import inspect
 import functools
 import re
+import warnings
 
 
 class trace_nodes:
@@ -31,14 +33,27 @@ class TraceExecutionError(Exception):
         return f"TraceExecutionError: {self.exception_node.data}"
 
 
+class TraceMissingInputsError(Exception):
+    """Base class for execution error in code tracing."""
+
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)
+
+    def __str__(self):
+        return self.message  # f"TraceMissingInputsError: {self.message}"
+
+
 def trace_op(
     description=None,
     n_outputs=1,
     node_dict="auto",
+    traceable_code=False,
     wrap_output=True,
     unpack_input=True,
     trainable=False,
     catch_execution_error=True,
+    allow_external_dependencies=False,
     decorator_name="trace_op",
 ):
     """
@@ -52,10 +67,12 @@ def trace_op(
             description=description,
             n_outputs=n_outputs,
             node_dict=node_dict,
+            traceable_code=traceable_code,
             wrap_output=wrap_output,
             unpack_input=unpack_input,
             trainable=trainable,
             catch_execution_error=catch_execution_error,
+            allow_external_dependencies=allow_external_dependencies,
             decorator_name=decorator_name,
         )
 
@@ -70,12 +87,16 @@ class FunModule(Module):
         description (str): a description of the operator; see the MessageNode for syntax.
         n_outputs (int); the number of outputs of the operator; default is 1.
         node_dict (dict|str):
-            None : the inputs are represented as a list of nodes.
+            None : (deprecated) the inputs are represented as a list of nodes.
             'auto': the inputs are represented as a dictionary, where the keys are the parameter names and the values are the nodes.
             dict : a dictionary to describe the inputs, where the key is a node used in this operator and the value is the node's name as described in description ; when node_dict is provided, all the used_nodes need to be in node_dict. Providing node_dict can give a correspondence between the inputs and the description of the operator.
+        traceable_code (bool): if True, the code block is already traceable; if False, the code block is not traceable.
         wrap_output (bool): if True, the output of the operator is wrapped as a MessageNode; if False, the output is returned as is if the output is a Node.
         unpack_input (bool): if True, the input is extracted from the container of nodes; if False, the inputs are passed directly to the underlying function.
-        variable (bool): if True, the block of code is treated as a variable in the optimization
+        trainable (bool): if True, the block of code is treated as a variable in the optimization
+        catch_execution_error (bool): if True, the operator catches the exception raised during the execution of the operator and return TraceExecutionError.
+        allow_external_dependencies (bool): if True, the operator allows external dependencies to be used in the operator. Namely, not all nodes used to create the output are in the inputs. In this case, the extra dependencies are stored in the info dictionary with key 'extra_dependencies'.
+        decorator_name (str): the name of the decorator used to wrap the function with FunModule.
 
     """
 
@@ -85,12 +106,19 @@ class FunModule(Module):
         description: str = None,
         n_outputs: int = 1,
         node_dict: Union[dict, None, str] = "auto",
+        traceable_code: bool = False,
         wrap_output: bool = True,
         unpack_input: bool = True,
         trainable=False,
         catch_execution_error=True,
+        allow_external_dependencies=False,
         decorator_name="@trace_op",
     ):
+        if traceable_code:
+            # if the code is traceable, we don't need to unpack the input and there may be new nodes created in the code block.
+            unpack_input = False
+            allow_external_dependencies = True
+
         assert callable(fun), "fun must be a callable."
         assert (
             isinstance(node_dict, dict) or (node_dict is None) or (node_dict == "auto")
@@ -119,6 +147,9 @@ class FunModule(Module):
             doc=fun.__doc__,
             signature=inspect.signature(fun),
             source=source,
+            output=None,
+            external_dependencies=None,
+            node_dict=node_dict,
         )
 
         if description is None:
@@ -128,12 +159,12 @@ class FunModule(Module):
 
         self._fun = fun
         self.node_dict = node_dict
-        self.info["node_dict"] = node_dict
         self.description = description
         self.n_outputs = n_outputs
         self.wrap_output = wrap_output
         self.unpack_input = unpack_input
         self.catch_execution_error = catch_execution_error
+        self.allow_external_dependencies = allow_external_dependencies
         self.parameter = None
         if trainable:
             self.parameter = ParameterNode(self.info["source"], name="__code")
@@ -190,74 +221,76 @@ class FunModule(Module):
         the execution. If the output is not a Node, we wrap it as a
         MessageNode, whose inputs are nodes in used_nodes.
         """
-        # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
+
+        ## Execute self.fun
         with trace_nodes() as used_nodes:
+            # After exit, used_nodes contains the nodes whose data attribute is read in the operator fun.
             _args, _kwargs = args, kwargs
             if self.unpack_input:  # extract data from container of nodes
                 _args = to_data(args)
                 _kwargs = to_data(kwargs)
             # add an except here
-            triggered_exception = False
             if self.catch_execution_error:
                 try:
                     outputs = self.fun(*_args, **_kwargs)
                 except Exception as e:
-                    triggered_exception = True
                     outputs = e
             else:
                 outputs = self.fun(*_args, **_kwargs)
 
-        # Construct the inputs of the MessageNode from the set used_nodes
+        ## Construct the inputs of the MessageNode from function inputs or the set used_nodes
         # TODO simplify this
         if self.node_dict is None:
+            warnings.warn("Setting node_dict as None will be deprecated.")
             inputs = {n.name: n for n in used_nodes}
+
         else:  # Otherwise we represent inputs as dict
             assert self.node_dict == "auto" or isinstance(self.node_dict, dict)
-            spec = inspect.getcallargs(self.fun, *args, **kwargs)  # Read it from the input signature
+            # Get the input signature of the operator fun
+            spec = inspect.getcallargs(self.fun, *args, **kwargs)  # Read the input values from the input signature
             if isinstance(self.node_dict, dict):
                 spec.update(self.node_dict)  # include additional nodes passed in by the user
             assert isinstance(spec, dict)
 
-            # Make sure all nodes in used_nodes are in spec
             # Construct the inputs of the MessageNode from the set used_nodes
-            spec_values = []
             inputs = {}
             # args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann
             _, varargs, varkw, _, _, _, _ = inspect.getfullargspec(self.fun)
             for k, v in spec.items():
                 if k == varargs:  # unpack varargs
-                    spec_values.extend(v)
                     for i, n in enumerate(v):
-                        if isinstance(n, Node) and (n in used_nodes):
-                            inputs[f"args_{n.py_name}"] = n
+                        if isinstance(n, Node):
+                            inputs[f"args_{i}"] = n
                 elif k == varkw:  # unpack varkw
-                    spec_values.extend(v.values())
-                    for k, n in v.items():
-                        if isinstance(n, Node) and (n in used_nodes):
-                            inputs[k] = n
+                    for kk, n in v.items():
+                        if isinstance(n, Node):
+                            inputs[kk] = n
                 else:
-                    spec_values.append(v)
-                    if isinstance(v, Node) and (v in used_nodes):
+                    if isinstance(v, Node):
                         inputs[k] = v
-            if not triggered_exception:
-                assert all([contain(spec_values, node) for node in used_nodes]), "All used_nodes must be in the spec."
+
+        # Nodes used to create the outputs but not in the inputs are external dependencies.
+        external_dependencies = [node for node in used_nodes if node not in inputs.values()]
+        self.info["external_dependencies"] = external_dependencies
+
+        # Make sure all nodes in used_nodes are in the parents of the returned node.
+        if len(external_dependencies) > 0 and not self.allow_external_dependencies:
+            raise TraceMissingInputsError(
+                f"Not all nodes used in the operator {self.fun} are specified as inputs of the returned node. Missing {[node.name for node in external_dependencies]} "
+            )
+
+        if not GRAPH.TRACE:
+            inputs = {}  # We don't need to keep track of the inputs if we are not tracing.
 
         # Wrap the output as a MessageNode or an ExceptionNode
         if self.n_outputs == 1:
-            nodes = self.wrap(outputs, inputs)
-            parents = set(nodes.parents) if isinstance(nodes, Node) else set()
+            nodes = self.wrap(outputs, inputs, external_dependencies)
         else:
-            nodes = tuple(self.wrap(outputs[i], inputs) for i in range(self.n_outputs))
-            parents = set.union(*[set(node.parents) if isinstance(node, Node) else set() for node in nodes])
+            nodes = tuple(self.wrap(outputs[i], inputs, external_dependencies) for i in range(self.n_outputs))
 
-        # Make sure all nodes in used_nodes are in the parents of the returned node.
-        if nodes is not None and not all([contain(parents, node) for node in used_nodes]):
-            raise ValueError(
-                f"Not all nodes used in the operator {self.fun} are specified as inputs of the returned node. Missing {[node.name for node in used_nodes if node not in parents]} "
-            )
         return nodes
 
-    def wrap(self, output, inputs: Union[List[Node], Dict[str, Node]]):
+    def wrap(self, output: Any, inputs: Union[List[Node], Dict[str, Node]], external_dependencies: List[Node]):
         """Wrap the output as a MessageNode of inputs as the parents."""
         if output is None:
             return MessageNode(None, description=self.description, inputs=inputs, name=self.name, info=self.info)
@@ -265,9 +298,10 @@ class FunModule(Module):
         if not self.wrap_output:  # TODO do we ever use this?
             # If the output is already a Node, we don't need to wrap it.
             # NOTE User who implements fun is responsible for the graph structure.
-            if isinstance(output, Node):
-                return output
+            assert isinstance(output, Node)
+            return output
         if self.parameter is not None:
+            # This is a trainiable op. Create a new op eval.
             inputs.update({"__code": self.parameter})
             description = "[eval] This operator eval(__code, *args, **kwargs) evaluates the code block, where __code is the code (str) and *args and **kwargs are the arguments of the function. The output is the result of the evaluation, i.e., __code(*args, **kwargs)."
             name = "eval"
@@ -285,7 +319,13 @@ class FunModule(Module):
             )
             raise TraceExecutionError(e_node)
         else:
-            return MessageNode(output, description=description, inputs=inputs, name=name, info=self.info)
+            info = self.info.copy()
+            info["output"] = output  # We keep the original output node in case one needs to access the subgraph.
+            return MessageNode(output, description=description, inputs=inputs, name=name, info=info)
+
+    @staticmethod
+    def is_valid_output(output):
+        return isinstance(output, Node) or (isinstance(output, tuple) and all([isinstance(o, Node) for o in output]))
 
     def __get__(self, obj, objtype):
         # Support instance methods.
