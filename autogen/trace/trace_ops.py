@@ -364,6 +364,12 @@ def trace_class(cls):
 
     return cls
 
+# def trace_class(cls):
+#     class TracedModule(cls, Module):
+#         def __init__(self, *args, **kwargs):
+#             super().__init__(*args, **kwargs)
+#
+#     return TracedModule
 
 if __name__ == "__main__":
     x = node("hello")

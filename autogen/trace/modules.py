@@ -14,6 +14,31 @@ class Module(NodeContainer):
     def forward(self, *args, **kwargs):
         pass
 
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self._attributes = {}
+    #     existing_attrs = [item for item in self.__dict__.items()]
+    #     for attr, value in existing_attrs:
+    #         if not (attr.startswith('_') and attr.endswith('_')) and isinstance(value, Node):
+    #             self._attributes[attr] = value
+    #             delattr(self, attr)
+    #
+    #     def _create_property(attr):
+    #         storage_name = f'_{attr}'
+    #
+    #         def getter(self):
+    #             # return getattr(self, storage_name)
+    #             return self.getattr(storage_name)
+    #
+    #         def setter(self, value):
+    #             setattr(self, storage_name, value)
+    #
+    #         setattr(self.__class__, attr, property(getter, setter))
+    #         setattr(self, storage_name, self._attributes[attr])
+    #
+    #     for attr in self._attributes:
+    #         _create_property(attr)
+
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
