@@ -278,6 +278,10 @@ class FunctionOptimizer(Optimizer):
                 print("LLM returns invalid format, cannot extract suggestions from JSON")
                 print(response)
                 attempt_n += 1
+            except KeyError:
+                print("LLM returns invalid format, cannot extract suggestions from JSON")
+                print(response.strip())
+                attempt_n += 1
 
         # the final attempt is to just get ANYTHING and leave to the outer control to fix it
         if attempt_n == 2:

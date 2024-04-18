@@ -84,8 +84,13 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
 
         if feedback.lower() == "Success.".lower():
             break
-        output = program(x, seed=program_id)
-        feedback = program.feedback(output)
+
+        try:
+            output = program(x, seed=program_id)
+            feedback = program.feedback(output)
+        except Exception as e:
+            output = "NaN"
+            feedback = str(e)
 
         # issue: I think the timestep here is wrong
         observation = f"{output}"
