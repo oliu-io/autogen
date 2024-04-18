@@ -253,12 +253,16 @@ class FunctionOptimizer(Optimizer):
             return {}
 
         # Extract the suggestion from the response
-        try:
-            suggestion = json.loads(response)["suggestion"]
-        except json.JSONDecodeError:  # TODO try to fix it
-            response = response.replace("'", '"')
-            print("LLM returns invalid format, cannot extract suggestions from JSON")
-            print(response)
+        attempt_n = 0
+        while attempt_n < 2:
+            try:
+                suggestion = json.loads(response.strip())["suggestion"]
+                break
+            except json.JSONDecodeError:  # TODO try to fix it
+                print("LLM returns invalid format, cannot extract suggestions from JSON")
+                print(response)
+                response = response.replace("'", '"')
+                attempt_n += 1
 
         # Convert the suggestion in text into the right data type
         update_dict = {}
