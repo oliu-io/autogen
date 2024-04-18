@@ -50,7 +50,9 @@ class NodePropagator(Propagator):
         assert all(len(v) == 1 for v in feedback.values())
         assert all(isinstance(v[0], NodeFeedback) for v in feedback.values())
         values = [v[0] for v in feedback.values()]
-        if len(values) <= 1:
+        if len(values) == 0:
+            return NodeFeedback(graph=[], user_feedback=None)
+        elif len(values) == 1:
             return values[0]
         else:  # sum the feedbacks
             return sum(values[1:], values[0])

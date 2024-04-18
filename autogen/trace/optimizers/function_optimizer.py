@@ -21,7 +21,7 @@ def repr_function_call(child: MessageNode):
 
 def node_to_function_feedback(node_feedback: NodeFeedback):
     """Convert a NodeFeedback to a FunctionFeedback"""
-    depth = node_feedback.graph[-1][0]
+    depth = 0 if len(node_feedback.graph) == 0 else node_feedback.graph[-1][0]
     graph = []
     others = {}
     roots = {}
@@ -203,7 +203,7 @@ class FunctionOptimizer(Optimizer):
     def summarize(self):
         # Aggregate feedback from all the parameters
         feedbacks = [self.propagator.aggregate(node.feedback) for node in self.parameters if node.trainable]
-        summary = sum(feedbacks[1:], feedbacks[0])  # NodeFeedback
+        summary = sum(feedbacks[1:], feedbacks[0]) if len(feedbacks) > 1 else feedbacks[0]  # NodeFeedback
         # Construct variables and update others
         # Some trainable nodes might not receive feedback, because they might not be connected to the output
         summary = node_to_function_feedback(summary)
