@@ -1,5 +1,6 @@
 import autogen
 from autogen.trace import trace_op, node
+from autogen.trace.trace_ops import TraceExecutionError
 from autogen.trace.optimizers import FunctionOptimizer
 from autogen.trace.nodes import GRAPH
 
@@ -26,6 +27,8 @@ def get_dataset(n=100, init_seed=1111):
     return seeds
 
 def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
+    GRAPH.clear()
+
     history = []
     feedback = ""
     for i in range(n_steps):
@@ -34,8 +37,13 @@ def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
 
         if feedback.lower() == "Success.".lower():
             break
-        output = program(x, seed=program_id)
-        feedback = program.feedback(output.data)
+
+        try:
+            output = program(x, seed=program_id)
+            feedback = program.feedback(output.data)
+        except TraceExecutionError as e:
+            output = e.exception_node
+            feedback = output.data
 
         history.append((x.data, output.data, program.goal_output, program.goal_input, feedback))  # logging
 

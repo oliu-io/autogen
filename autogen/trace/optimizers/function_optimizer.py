@@ -298,6 +298,8 @@ class FunctionOptimizer(Optimizer):
                 pairs = re.findall(pair_pattern, suggestion_content)
                 for key, value in pairs:
                     suggestion[key] = value
+            else:
+                suggestion = {}
 
         # Convert the suggestion in text into the right data type
         # TODO: might need some automatic type conversion

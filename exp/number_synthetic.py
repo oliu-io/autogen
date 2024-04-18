@@ -52,9 +52,9 @@ math_ops_programs = {
 }
 
 variable_name_collide_list = set()
-MAX_VALUE = 2
-MIN_VALUE = -2
-
+MAX_VALUE = 3
+MIN_VALUE = -3
+possible_input_values = [i for i in range(MIN_VALUE, MAX_VALUE + 1) if i != 0]
 
 def create_input_var(input_min=-10, input_max=10):
     # sample and return a random 5 letter name
@@ -72,7 +72,9 @@ def create_input_var(input_min=-10, input_max=10):
 
 
 def create_var():
-    value = random.randint(MIN_VALUE, MAX_VALUE)
+    # value = random.randint(MIN_VALUE, MAX_VALUE)
+    idx = random.randint(0, len(possible_input_values) - 1)
+    value = possible_input_values[idx]
     return value
 
 
