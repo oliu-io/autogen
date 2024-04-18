@@ -45,7 +45,7 @@ def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
             output = e.exception_node
             feedback = output.data
 
-        history.append((x.data, output.data, program.goal_output, program.goal_input, feedback))  # logging
+        history.append((x.data, output.data, program.goal_input, program.goal_output, feedback))  # logging
 
         optimizer.zero_feedback()
         optimizer.backward(output, feedback)
@@ -95,7 +95,12 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
         # issue: I think the timestep here is wrong
         observation = f"{output}"
 
-        action = agent.act(observation, feedback)
+        try:
+            # to handle context length issue
+            action = agent.act(observation, feedback)
+        except Exception as e:
+            pass
+
         try:
             pattern = r'\d+(?:\.\d+)?'
             match = re.search(pattern, action.strip())
@@ -109,6 +114,8 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
             print(f"variable={x}, output={output}, feedback={feedback}")  # logging
 
         history.append((x, output, program.goal_input, program.goal_output, feedback))
+
+    history.append((x, output, program.goal_input, program.goal_output, feedback))
 
     return history
 
