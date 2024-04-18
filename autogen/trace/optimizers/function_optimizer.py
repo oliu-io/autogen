@@ -260,6 +260,7 @@ class FunctionOptimizer(Optimizer):
             response = response.replace("'", '"')
             print("LLM returns invalid format, cannot extract suggestions from JSON")
             print(response)
+            suggestion = {}
 
         # Convert the suggestion in text into the right data type
         update_dict = {}
