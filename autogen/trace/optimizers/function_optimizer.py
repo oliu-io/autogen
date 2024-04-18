@@ -159,6 +159,10 @@ class FunctionOptimizer(Optimizer):
         """
     )
 
+    default_objective = (
+        "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
+    )
+
     def __init__(
         self,
         parameters: List[ParameterNode],
@@ -174,10 +178,7 @@ class FunctionOptimizer(Optimizer):
         if config_list is None:
             config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
-        self.objective = (
-            objective
-            or "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
-        )
+        self.objective = objective or self.default_objective
         self.example_problem = self.problem_template.format(
             code="y = add(a,b)\nz = subtract(y, c)",
             documentation="add: add two numbers\nsubtract: subtract two numbers",
