@@ -33,15 +33,12 @@ class NodeFeedback(AbstractFeedback):
 class NodePropagator(Propagator):
     """A propagator that collects all the nodes seen in the path."""
 
+    def init_feedback(self, feedback: Any):
+        return NodeFeedback(graph=[], user_feedback=feedback)
+
     def _propagate(self, child: MessageNode):
         graph = [(p.level, p) for p in child.parents] + [(child.level, child)]
-        if "user" in child.feedback:  # This is the leaf node where the feedback is given.
-            assert len(child.feedback) == 1, "user feedback should be the only feedback"
-            assert len(child.feedback["user"]) == 1
-            user_feedback = child.feedback["user"][0]
-            feedback = NodeFeedback(graph=graph, user_feedback=user_feedback)
-        else:  # This is an intermediate node (i.e. not the leaf node or a root node)
-            feedback = self.aggregate(child.feedback) + NodeFeedback(graph=graph, user_feedback=None)
+        feedback = self.aggregate(child.feedback) + NodeFeedback(graph=graph, user_feedback=None)
         assert isinstance(feedback, NodeFeedback)
         return {parent: feedback for parent in child.parents}
 

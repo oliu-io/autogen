@@ -3,7 +3,7 @@ from autogen.trace import trace_op, node, GRAPH
 from autogen.trace.optimizers import FunctionOptimizer
 
 
-## Test the optimizer with an example of number
+# Test the optimizer with an example of number
 
 GRAPH.clear()
 
@@ -159,4 +159,14 @@ optimizer.backward(output, feedback)
 print(f"output={output.data}, feedback={feedback}, variables=\n")  # logging
 for p in optimizer.parameters:
     print(p.name, p.data)
+optimizer.step(verbose=True)
+
+
+# Test directly providing feedback to parameters
+GRAPH.clear()
+x = node(-1, trainable=True)
+optimizer = FunctionOptimizer([x])
+feedback = "test"
+optimizer.zero_feedback()
+optimizer.backward(x, feedback)
 optimizer.step(verbose=True)

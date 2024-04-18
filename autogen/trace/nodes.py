@@ -288,7 +288,7 @@ class Node(AbstractNode[T]):
         # Check for root node with no parents
         if self._backwarded:
             raise AttributeError(f"{self} has been backwarded.")
-        self._add_feedback("user", feedback)
+        self._add_feedback(Node("FEEDBACK_ORACLE"), propagator.init_feedback(feedback))
         if len(self.parents) == 0:  # This is a root. Nothing to propagate
             if visualize:
                 digraph.node(self.py_name, label=get_label(self))

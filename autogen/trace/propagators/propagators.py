@@ -39,6 +39,13 @@ class Propagator(AbstractPropagator):
         else:
             return self._propagate(child)
 
+    def init_feedback(self, feedback: Any):
+        """
+        Given raw feedback, create the feedback object that will be propagated recursively.
+
+        """
+        raise NotImplementedError
+
     def _propagate(self, child: MessageNode) -> Dict[Node, Any]:
         """Compute propagated feedback to node.parents based on
         node.description, node.data, and node.feedback. Return a dict where
@@ -54,6 +61,9 @@ class Propagator(AbstractPropagator):
 
 
 class SumPropagator(Propagator):
+    def init_feedback(self, feedback: Any):
+        return feedback
+
     def _propagate(self, child: MessageNode):
         if "user" in child.feedback:
             assert len(child.feedback) == 1, "user feedback should be the only feedback"
