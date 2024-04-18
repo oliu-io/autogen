@@ -10,6 +10,8 @@ import autogen
 import warnings
 import json
 
+import re
+
 
 def repr_function_call(child: MessageNode):
     function_call = f"{child.py_name} = {child.info['fun_name']}("
@@ -263,12 +265,42 @@ class FunctionOptimizer(Optimizer):
                 suggestion = json.loads(response.strip())["suggestion"]
                 break
             except json.JSONDecodeError:  # TODO try to fix it
+                # First defense: we try to fix it
                 response = response.replace("'", '"')
+                # then we try to fix the double quotes inside the string
+                pattern = r'"reasoning": "(.*?)",\s*"suggestion"'
+                match = re.search(pattern, response)
+                if match:
+                    reasoning_text = match.group(1)
+                    correct_text = reasoning_text.replace('"', "'")
+                    response = response.replace(reasoning_text, correct_text)
+
                 print("LLM returns invalid format, cannot extract suggestions from JSON")
                 print(response)
                 attempt_n += 1
 
+        # the final attempt is to just get ANYTHING and leave to the outer control to fix it
+        if attempt_n == 2:
+            # we try to extract key/value separately and return it as a dictionary
+
+            pattern = r'"suggestion":\s*\{(.*?)\}'
+            suggestion_match = re.search(pattern, response.strip(), re.DOTALL)
+            if suggestion_match:
+                suggestion = {}
+
+                # Extract the entire content of the suggestion dictionary
+                suggestion_content = suggestion_match.group(1)
+
+                # Regex to extract each key-value pair
+                pair_pattern = r'"([^"]+)":\s*"?(.*?)"?(?:,|$)'
+
+                # Find all matches of key-value pairs
+                pairs = re.findall(pair_pattern, suggestion_content)
+                for key, value in pairs:
+                    suggestion[key] = value
+
         # Convert the suggestion in text into the right data type
+        # TODO: might need some automatic type conversion
         update_dict = {}
         for node in self.parameters:
             if node.trainable and node.py_name in suggestion:

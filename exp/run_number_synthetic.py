@@ -10,11 +10,13 @@ from verbal_gym.agents.llm import Autgen
 # Multi-round optimization
 # run 3, 10, 30 steps
 
+import re
 import os
 import random
 import pickle
 import json
 
+from tqdm import tqdm
 
 def get_dataset(n=100, init_seed=1111):
     random.seed(init_seed)
@@ -43,7 +45,7 @@ def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
             print(f"variable={x.data}, output={output.data}, feedback={feedback}")  # logging
         optimizer.step()
 
-    history.append((x.data, output.data, program.goal_output, program.goal_input, feedback))  # logging
+    history.append((x.data, output.data, program.goal_input, program.goal_output, feedback))  # logging
     return history
 
 def run_exp():
@@ -51,7 +53,7 @@ def run_exp():
     n_steps = args.steps  # we allow 10 optimization steps
 
     traj_for_all_problems = []
-    for i in range(len(problem_ids)):
+    for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
         program = NumericalProgramSampler(chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g, seed=problem_ids[i])
         x = node(-1.0, "input_x", trainable=True)
@@ -75,21 +77,27 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
         if feedback.lower() == "Success.".lower():
             break
         output = program(x, seed=program_id)
-        feedback = program.feedback(output.data)
+        feedback = program.feedback(output)
 
-        action = agent.act(output, feedback)
+        # issue: I think the timestep here is wrong
+        observation = f"{output}"
+
+        action = agent.act(observation, feedback)
         try:
-            x = int(action.strip())
+            pattern = r'\d+(?:\.\d+)?'
+            match = re.search(pattern, action.strip())
+            first_number = match.group()
+            x = float(first_number)
         except:
             # we keep the original x if there's an error
-            pass
+            print(f"error in parsing:\n {action.strip()}\n")
 
         if verbose:
-            print(f"variable={x}, output={output.data}, feedback={feedback}")  # logging
+            print(f"variable={x}, output={output}, feedback={feedback}")  # logging
 
-        history.append((x, output.data, program.goal_output, program.goal_input, feedback))
+        history.append((x, output, program.goal_input, program.goal_output, feedback))
 
-    return feedback
+    return history
 
 def run_basic_agent_exp(agent_type='basic'):
     llm = Autgen()
@@ -101,8 +109,13 @@ def run_basic_agent_exp(agent_type='basic'):
     problem_ids = get_dataset(n=args.n)
     n_steps = args.steps  # we allow 10 optimization steps
 
+    instruction = ("You are choosing an input that after some operations will result in an output. You will observe some feedback telling you whether"
+                   "your output is too large or too small to hit a hidden goal value. You need to choose your input in order to hit that goal output value.")
+
+    agent.reset(docstring=instruction)
+
     traj_for_all_problems = []
-    for i in range(len(problem_ids)):
+    for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
         program = NumericalProgramSampler(chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g, seed=problem_ids[i])
         x = -1.0
@@ -110,11 +123,12 @@ def run_basic_agent_exp(agent_type='basic'):
         history = rollout(program, problem_ids[i], agent, x, n_steps, verbose=args.verbose)
         traj_for_all_problems.append(history)
 
-        agent.reset()
+        agent.reset(instruction)
 
     os.makedirs("results", exist_ok=True)
     with open(f"results/{agent_type}_agent_number_synth_traj_{args.n}_c_{args.c}_g_{args.g}_p_{args.p}.pkl", "wb") as f:
         pickle.dump(traj_for_all_problems, f)
+
 def run_torch_exp():
     pass
 

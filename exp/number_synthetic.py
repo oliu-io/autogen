@@ -40,14 +40,14 @@ logic_ops_programs = {
 }
 
 # Not suppoprting unary ops for now
-math_ops = ["+", "-", "*", "/", "%", "//"]  # , "**"
+math_ops = ["+", "-", "*", "/", "//"]  # , "**", "%"
 math_ops_programs = {
     "+": reformat("""lambda a, b: a + b"""),
     "-": reformat("""lambda a, b: a - b"""),
     "*": reformat("""lambda a, b: a * b"""),
     "/": reformat("""lambda a, b: a / b"""),
-    "%": reformat("""lambda a, b: a % b"""),
     "//": reformat("""lambda a, b: a // b"""),
+    # "%": reformat("""lambda a, b: a % b"""),
     # "**": reformat("""lambda a, b: a ** b""")
 }
 
@@ -143,9 +143,9 @@ class NumericalProgramSampler:
         if y_hat == self._goal_output.data:
             return "Success."
         elif y_hat < self._goal_output.data:
-            return "The number needs to be larger."
+            return f"The output {y_hat} needs to be larger."
         elif y_hat > self._goal_output.data:
-            return "The number needs to be smaller."
+            return f"The output {y_hat} needs to be smaller."
 
     def display_computation_graph(self):
         return self._goal_output.backward(visualize="True", feedback="fine")
