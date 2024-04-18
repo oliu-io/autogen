@@ -48,7 +48,7 @@ def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
 
 def run_exp():
     problem_ids = get_dataset(n=args.n)
-    n_steps = 10  # we allow 10 optimization steps
+    n_steps = args.steps  # we allow 10 optimization steps
 
     traj_for_all_problems = []
     for i in range(len(problem_ids)):
@@ -99,7 +99,7 @@ def run_basic_agent_exp(agent_type='basic'):
         raise Exception("Agent type not implemented")
 
     problem_ids = get_dataset(n=args.n)
-    n_steps = 10  # we allow 10 optimization steps
+    n_steps = args.steps  # we allow 10 optimization steps
 
     traj_for_all_problems = []
     for i in range(len(problem_ids)):
@@ -128,6 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--c', type=int, default=5)
     parser.add_argument('--g', type=int, default=4)
     parser.add_argument('--p', type=int, default=1)
+    parser.add_argument('--steps', type=int, default=5)
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--setup', type=str, default='trace', help='trace, agent, torch')
     parser.add_argument('--agent_type', type=str, default='basic', help='basic, others...')

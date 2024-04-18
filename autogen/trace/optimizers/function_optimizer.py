@@ -124,7 +124,11 @@ class FunctionOptimizer(Optimizer):
         Output format:
 
         You should write down your thought process and finally make a suggestion of the desired values of #Variables. You cannot change the lines of code in #Code but only the values in #Variables. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
-        Your output should be in the following json format, satisfying the json syntax (json does support single quotes):
+        Your output should be in the following json format, satisfying the json syntax:
+        JSON, keys and values require double-quotes
+        JSON keys: ["response", "topic grade level", "too_hard"]
+        JSON value type: [escaped string, int, truth value]
+        
         {{
         "reasoning": <Your reasoning>,
         "suggestion": {{
@@ -259,9 +263,9 @@ class FunctionOptimizer(Optimizer):
                 suggestion = json.loads(response.strip())["suggestion"]
                 break
             except json.JSONDecodeError:  # TODO try to fix it
+                response = response.replace("'", '"')
                 print("LLM returns invalid format, cannot extract suggestions from JSON")
                 print(response)
-                response = response.replace("'", '"')
                 attempt_n += 1
 
         # Convert the suggestion in text into the right data type
