@@ -34,8 +34,6 @@ class TraceExecutionError(Exception):
 
 
 class TraceMissingInputsError(Exception):
-    """Base class for execution error in code tracing."""
-
     def __init__(self, message: str):
         self.message = message
         super().__init__(self.message)
@@ -200,14 +198,13 @@ class FunModule(Module):
             except SyntaxError as e:
                 # Temporary fix for the issue of the code block not being able to be executed
                 e_node = ExceptionNode(
-                    str(e),
-                    inputs=self.parameter,
+                    e,
+                    inputs=[self.parameter],
                     description=f"[exception] The code parameter {self.parameter.py_name} has a syntax error.",
-                    name="exception_" + self.parameter.name,
+                    name="exception_" + self.parameter.py_name,
                     info=self.info,
                 )
                 raise TraceExecutionError(e_node)
-
             fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
             return locals()[fun_name]
 
@@ -283,7 +280,7 @@ class FunModule(Module):
             inputs = {}  # We don't need to keep track of the inputs if we are not tracing.
 
         # Wrap the output as a MessageNode or an ExceptionNode
-        if self.n_outputs == 1:
+        if self.n_outputs == 1 or isinstance(outputs, Exception):
             nodes = self.wrap(outputs, inputs, external_dependencies)
         else:
             nodes = tuple(self.wrap(outputs[i], inputs, external_dependencies) for i in range(self.n_outputs))
@@ -311,7 +308,7 @@ class FunModule(Module):
             name = self.name
         if isinstance(output, Exception):
             e_node = ExceptionNode(
-                str(output),
+                output,
                 inputs=inputs,
                 description=f'[exception] The operator {self.info["fun_name"]} raises an exception.',
                 name="exception_" + name,
@@ -363,6 +360,7 @@ def trace_class(cls):
     cls.parameters_dict = parameters_dict
 
     return cls
+
 
 # def trace_class(cls):
 #     class TracedModule(cls, Module):
