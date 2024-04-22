@@ -34,7 +34,7 @@ def node_to_function_feedback(node_feedback: NodeFeedback):
         visited.add(node)
 
         if node.is_root:  # Need an or condition here
-            roots.update({node.py_name: node.data})
+            roots.update({node.py_name: (node.data, node._constraint)})
         else:
             # Some might be root (i.e. blanket nodes) and some might be intermediate nodes
             # Blanket nodes belong to roots
@@ -44,12 +44,12 @@ def node_to_function_feedback(node_feedback: NodeFeedback):
                 documentation.update({node.info["fun_name"]: node.description})
                 graph.append((level, repr_function_call(node)))
                 if level == depth:
-                    output.update({node.py_name: node.data})
+                    output.update({node.py_name: (node.data, node._constraint)})
                 else:
-                    others.update({node.py_name: node.data})
+                    others.update({node.py_name: (node.data, node._constraint)})
             else:
                 # this is a blanket node (classified into roots)
-                roots.update({node.py_name: node.data})
+                roots.update({node.py_name: (node.data, node._constraint)})
 
     return FunctionFeedback(
         graph=graph,
@@ -224,12 +224,20 @@ class FunctionOptimizer(Optimizer):
         summary = self.summarize()
 
         def repr_node_value(node_dict):
-            return "\n".join(
-                [
-                    f"({type(v).__name__}) {k}={v}" if "__code" not in k else f"(code) {k}:{v}"
-                    for k, v in node_dict.items()
-                ]
-            )
+            temp_list = []
+            for k, v in node_dict.items():
+                if "__code" not in k:
+                    if v[1] is not None:
+                        temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]} ### Allowed values: {v[1]}")
+                    else:
+                        temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]}")
+                else:
+                    if v[1] is not None:
+                        # In current implementation of trace_op, this case is not possible
+                        temp_list.append(f"(code) {k}:{v[0]} ### Constraints: {v[1]}")
+                    else:
+                        temp_list.append(f"(code) {k}:{v[0]}")
+            return "\n".join(temp_list)
 
         # Format prompt
         problem_instance = self.problem_template.format(
