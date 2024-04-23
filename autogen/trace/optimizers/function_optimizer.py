@@ -279,9 +279,9 @@ class FunctionOptimizer(Optimizer):
 
         return update_dict
 
-    def call_llm(self, prompt, verbose=False):  # TODO Get this from utils?
+    def call_llm(self, prompt: str, verbose: Union[bool, str] = False):  # TODO Get this from utils?
         """Call the LLM with a prompt and return the response."""
-        if verbose:
+        if verbose not in (False, "output"):
             print("Prompt\n", prompt)
 
         try:  # Try tp force it to be a json object

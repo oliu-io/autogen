@@ -1,7 +1,7 @@
 from curses import wrapper
 from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.nodes import GRAPH
-from autogen.trace.modules import apply_op, to_data, Module, NodeContainer
+from autogen.trace.modules import to_data, Module, NodeContainer
 from autogen.trace.nodes import MessageNode, USED_NODES, Node, ParameterNode, ExceptionNode, node, get_op_name
 from autogen.trace.utils import global_functions_list, contain
 import inspect
