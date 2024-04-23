@@ -75,6 +75,19 @@ class FunctionFeedback:
     user_feedback: str  # User feedback at the leaf of the graph
 
 
+class Examples:
+    def __init__(self, size: int):
+        self.size = size
+        self.examples = []
+
+    def add(self, example: str):
+        self.examples.append(example)
+        self.examples = self.examples[-self.size :]
+
+    def __iter__(self):
+        return iter(self.examples)
+
+
 class FunctionOptimizer(Optimizer):
     problem_template = dedent(
         """
@@ -159,6 +172,16 @@ class FunctionOptimizer(Optimizer):
         """
     )
 
+    example_prompt = dedent(
+        """
+
+        Here are some feasible but not optimal solutions (i.e. not causing errors but not necessarily achieving desired behaviors) for the problem instance above:
+
+        {examples}
+
+        """
+    )
+
     default_objective = (
         "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
     )
@@ -170,7 +193,8 @@ class FunctionOptimizer(Optimizer):
         *args,
         propagator: Propagator = None,
         objective: Union[None, str] = None,
-        ignore_extraction_error: bool = True,
+        ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
+        n_feasible_solutions: bool = 1,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
@@ -180,8 +204,8 @@ class FunctionOptimizer(Optimizer):
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
         self.objective = objective or self.default_objective
         self.example_problem = self.problem_template.format(
-            code="y = add(a,b)\nz = subtract(y, c)",
-            documentation="add: add two numbers\nsubtract: subtract two numbers",
+            code="y = add(x=a,y=b)\nz = subtract(x=y, y=c)",
+            documentation="add: add x and y \nsubtract: subtract y from x",
             variables="(int) a = 5",
             outputs="(int) z = 1",
             others="(int) y = 6",
@@ -195,6 +219,8 @@ class FunctionOptimizer(Optimizer):
             }
             """
         )
+
+        self.feasible_solutions = Examples(n_feasible_solutions)
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
@@ -239,6 +265,9 @@ class FunctionOptimizer(Optimizer):
                         temp_list.append(f"(code) {k}:{v[0]}")
             return "\n".join(temp_list)
 
+        if not summary.user_feedback.startswith("TraceExecutionError"):  # feasible
+            self.feasible_solutions.add(summary.variables)
+
         # Format prompt
         problem_instance = self.problem_template.format(
             code="\n".join([v for k, v in sorted(summary.graph)]),
@@ -256,6 +285,13 @@ class FunctionOptimizer(Optimizer):
             example_response=self.example_response,
             problem_instance=problem_instance,
         )
+
+        if self.feasible_solutions is not None:
+            examples_str = ""
+            for i, example in enumerate(self.feasible_solutions):
+                examples_str += f"Example {i+1}:\n{repr_node_value(example)}\n\n"
+            prompt += self.example_prompt.format(examples=examples_str)
+
         response = self.call_llm(prompt, verbose=verbose)
 
         if "TERMINATE_UPDATE" in response:
