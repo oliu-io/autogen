@@ -13,8 +13,8 @@ import json
 
 def repr_function_call(child: MessageNode):
     function_call = f"{child.py_name} = {child.info['fun_name']}("
-    for parent in child.parents:
-        function_call += f"{parent.py_name}, "
+    for k, v in child.inputs.items():
+        function_call += f"{k}={v.py_name}, "
     function_call = function_call[:-2] + ")"
     return function_call
 
