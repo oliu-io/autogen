@@ -199,7 +199,7 @@ class FunModule(Module):
                 # Temporary fix for the issue of the code block not being able to be executed
                 e_node = ExceptionNode(
                     e,
-                    inputs=[self.parameter],
+                    inputs={"code": self.parameter},
                     description=f"[exception] The code parameter {self.parameter.py_name} has a syntax error.",
                     name="exception_" + self.parameter.py_name,
                     info=self.info,
