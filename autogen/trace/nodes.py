@@ -7,7 +7,7 @@ import re
 from autogen.trace.utils import MinHeap
 
 
-def node(message, name=None, trainable=False):
+def node(message, name=None, trainable=False, constraint=None):
     """Create a Node from a message. If message is already a Node, return it.
     This method is for the convenience of the user, it should be used over
     directly invoking Node."""
@@ -15,14 +15,14 @@ def node(message, name=None, trainable=False):
         if isinstance(message, Node):
             message = message._data
             name = name or message.name
-        return ParameterNode(message, name=name, trainable=True)
+        return ParameterNode(message, name=name, trainable=True, constraint=constraint)
     else:
         if isinstance(message, Node):
             if name is not None:
                 warnings.warn(f"Name {name} is ignored because message is already a Node.")
             return message
         else:
-            return Node(message, name=name)
+            return Node(message, name=name, constraint=constraint)
 
 
 NAME_SCOPES = []  # A stack of name scopes
@@ -288,7 +288,7 @@ class Node(AbstractNode[T]):
         # Check for root node with no parents
         if self._backwarded:
             raise AttributeError(f"{self} has been backwarded.")
-        self._add_feedback("user", feedback)
+        self._add_feedback(Node("FEEDBACK_ORACLE"), propagator.init_feedback(feedback))
         if len(self.parents) == 0:  # This is a root. Nothing to propagate
             if visualize:
                 digraph.node(self.py_name, label=get_label(self))
@@ -683,7 +683,7 @@ class MessageNode(Node[T]):
     ) -> None:
         super().__init__(value, name=name, description=description, constraint=constraint, info=info)
 
-        assert isinstance(inputs, list) or isinstance(inputs, dict)
+        assert isinstance(inputs, list) or isinstance(inputs, dict), "Inputs to MessageNode must be a list or a dict."
         # If inputs is not a dict, we create a dict with the names of the nodes as keys
         if isinstance(inputs, list):
             inputs = {v.name: v for v in inputs}
@@ -717,7 +717,7 @@ class ExceptionNode(MessageNode[T]):
 
     def __init__(
         self,
-        value,
+        value: Exception,
         *,
         inputs: Union[List[Node], Dict[str, Node]],
         description: str = "[ExceptionNode] This is node containing the error of execution.",
@@ -725,6 +725,9 @@ class ExceptionNode(MessageNode[T]):
         name=None,
         info=None,
     ) -> None:
+        e = value
+        error_type = re.search(r"<class '(.*)'>", str(type(e))).group(1)
+        value = f"({error_type}) {str(e)}"
         super().__init__(value, inputs=inputs, description=description, constraint=constraint, name=name, info=info)
 
 

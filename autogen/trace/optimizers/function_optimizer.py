@@ -15,15 +15,15 @@ import re
 
 def repr_function_call(child: MessageNode):
     function_call = f"{child.py_name} = {child.info['fun_name']}("
-    for parent in child.parents:
-        function_call += f"{parent.py_name}, "
+    for k, v in child.inputs.items():
+        function_call += f"{k}={v.py_name}, "
     function_call = function_call[:-2] + ")"
     return function_call
 
 
 def node_to_function_feedback(node_feedback: NodeFeedback):
     """Convert a NodeFeedback to a FunctionFeedback"""
-    depth = node_feedback.graph[-1][0]
+    depth = 0 if len(node_feedback.graph) == 0 else node_feedback.graph[-1][0]
     graph = []
     others = {}
     roots = {}
@@ -36,7 +36,7 @@ def node_to_function_feedback(node_feedback: NodeFeedback):
         visited.add(node)
 
         if node.is_root:  # Need an or condition here
-            roots.update({node.py_name: node.data})
+            roots.update({node.py_name: (node.data, node._constraint)})
         else:
             # Some might be root (i.e. blanket nodes) and some might be intermediate nodes
             # Blanket nodes belong to roots
@@ -46,12 +46,12 @@ def node_to_function_feedback(node_feedback: NodeFeedback):
                 documentation.update({node.info["fun_name"]: node.description})
                 graph.append((level, repr_function_call(node)))
                 if level == depth:
-                    output.update({node.py_name: node.data})
+                    output.update({node.py_name: (node.data, node._constraint)})
                 else:
-                    others.update({node.py_name: node.data})
+                    others.update({node.py_name: (node.data, node._constraint)})
             else:
                 # this is a blanket node (classified into roots)
-                roots.update({node.py_name: node.data})
+                roots.update({node.py_name: (node.data, node._constraint)})
 
     return FunctionFeedback(
         graph=graph,
@@ -75,6 +75,19 @@ class FunctionFeedback:
     roots: Dict[str, Any]  # Root variable name and its data
     output: Dict[str, Any]  # Leaf variable name and its data
     user_feedback: str  # User feedback at the leaf of the graph
+
+
+class Examples:
+    def __init__(self, size: int):
+        self.size = size
+        self.examples = []
+
+    def add(self, example: str):
+        self.examples.append(example)
+        self.examples = self.examples[-self.size :]
+
+    def __iter__(self):
+        return iter(self.examples)
 
 
 class FunctionOptimizer(Optimizer):
@@ -165,6 +178,20 @@ class FunctionOptimizer(Optimizer):
         """
     )
 
+    example_prompt = dedent(
+        """
+
+        Here are some feasible but not optimal solutions (i.e. not causing errors but not necessarily achieving desired behaviors) for the problem instance above:
+
+        {examples}
+
+        """
+    )
+
+    default_objective = (
+        "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
+    )
+
     def __init__(
         self,
         parameters: List[ParameterNode],
@@ -172,7 +199,8 @@ class FunctionOptimizer(Optimizer):
         *args,
         propagator: Propagator = None,
         objective: Union[None, str] = None,
-        ignore_extraction_error: bool = True,
+        ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
+        n_feasible_solutions: bool = 0,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
@@ -180,13 +208,10 @@ class FunctionOptimizer(Optimizer):
         if config_list is None:
             config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
-        self.objective = (
-            objective
-            or "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
-        )
+        self.objective = objective or self.default_objective
         self.example_problem = self.problem_template.format(
-            code="y = add(a,b)\nz = subtract(y, c)",
-            documentation="add: add two numbers\nsubtract: subtract two numbers",
+            code="y = add(x=a,y=b)\nz = subtract(x=y, y=c)",
+            documentation="add: add x and y \nsubtract: subtract y from x",
             variables="(int) a = 5",
             outputs="(int) z = 1",
             others="(int) y = 6",
@@ -201,6 +226,8 @@ class FunctionOptimizer(Optimizer):
             """
         )
 
+        self.feasible_solutions = Examples(n_feasible_solutions)
+
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
         return NodePropagator()
@@ -208,7 +235,7 @@ class FunctionOptimizer(Optimizer):
     def summarize(self):
         # Aggregate feedback from all the parameters
         feedbacks = [self.propagator.aggregate(node.feedback) for node in self.parameters if node.trainable]
-        summary = sum(feedbacks[1:], feedbacks[0])  # NodeFeedback
+        summary = sum(feedbacks[1:], feedbacks[0]) if len(feedbacks) > 1 else feedbacks[0]  # NodeFeedback
         # Construct variables and update others
         # Some trainable nodes might not receive feedback, because they might not be connected to the output
         summary = node_to_function_feedback(summary)
@@ -229,12 +256,23 @@ class FunctionOptimizer(Optimizer):
         summary = self.summarize()
 
         def repr_node_value(node_dict):
-            return "\n".join(
-                [
-                    f"({type(v).__name__}) {k}={v}" if "__code" not in k else f"(code) {k}:{v}"
-                    for k, v in node_dict.items()
-                ]
-            )
+            temp_list = []
+            for k, v in node_dict.items():
+                if "__code" not in k:
+                    if v[1] is not None:
+                        temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]} ### Allowed values: {v[1]}")
+                    else:
+                        temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]}")
+                else:
+                    if v[1] is not None:
+                        # In current implementation of trace_op, this case is not possible
+                        temp_list.append(f"(code) {k}:{v[0]} ### Constraints: {v[1]}")
+                    else:
+                        temp_list.append(f"(code) {k}:{v[0]}")
+            return "\n".join(temp_list)
+
+        if not summary.user_feedback.startswith("TraceExecutionError"):  # feasible
+            self.feasible_solutions.add(summary.variables)
 
         # Format prompt
         problem_instance = self.problem_template.format(
@@ -253,6 +291,13 @@ class FunctionOptimizer(Optimizer):
             example_response=self.example_response,
             problem_instance=problem_instance,
         )
+
+        if self.feasible_solutions is not None:
+            examples_str = ""
+            for i, example in enumerate(self.feasible_solutions):
+                examples_str += f"Example {i+1}:\n{repr_node_value(example)}\n\n"
+            prompt += self.example_prompt.format(examples=examples_str)
+
         response = self.call_llm(prompt, verbose=verbose)
 
         if "TERMINATE_UPDATE" in response:
@@ -305,6 +350,10 @@ class FunctionOptimizer(Optimizer):
             else:
                 suggestion = {}
 
+        if len(suggestion) == 0:
+            print("LLM returns invalid format, cannot extract suggestions from JSON")
+            print(response)
+
         # Convert the suggestion in text into the right data type
         # TODO: might need some automatic type conversion
         update_dict = {}
@@ -323,9 +372,9 @@ class FunctionOptimizer(Optimizer):
 
         return update_dict
 
-    def call_llm(self, prompt, verbose=False):  # TODO Get this from utils?
+    def call_llm(self, prompt: str, verbose: Union[bool, str] = False):  # TODO Get this from utils?
         """Call the LLM with a prompt and return the response."""
-        if verbose:
+        if verbose not in (False, "output"):
             print("Prompt\n", prompt)
 
         try:  # Try tp force it to be a json object

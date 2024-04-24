@@ -71,8 +71,9 @@ class Module(NodeContainer):
         return parameters
 
 
+# TODO to test it and clean up the code
 def apply_op(op, output, *args, **kwargs):
-    """Apply an op to container of Nodes.
+    """A broadcasting operation that applies an op to container of Nodes.
 
     Args:
         op (callable): the operator to be applied.
@@ -95,7 +96,6 @@ def apply_op(op, output, *args, **kwargs):
     assert all(admissible_type(x, output) for x in inputs)  # All inputs are either Nodes or the same type as output
 
     if isinstance(output, list) or isinstance(output, tuple):
-        output = list(output)
         assert all(
             isinstance(x, Node) or len(output) == len(x) for x in inputs
         ), f"output {output} and inputs {inputs} are of different lengths."
@@ -103,6 +103,8 @@ def apply_op(op, output, *args, **kwargs):
             _args = [x if isinstance(x, Node) else x[k] for x in args]
             _kwargs = {kk: vv if isinstance(vv, Node) else vv[k] for kk, vv in kwargs.items()}
             output[k] = apply_op(op, output[k], *_args, **_kwargs)
+        if isinstance(output, tuple):
+            output = tuple(output)
 
     elif isinstance(output, dict):
         for k, v in output.items():
@@ -123,4 +125,20 @@ def apply_op(op, output, *args, **kwargs):
 
 def to_data(obj):
     """Extract the data from a node or a container of nodes."""
-    return apply_op(lambda x: x.data, copy.deepcopy(obj), obj)
+    # For node containers (tuple, list, dict, set, NodeContainer), we need to recursively extract the data from the nodes.
+    if isinstance(obj, Node):  # base case
+        return obj.data
+    elif isinstance(obj, tuple):
+        return tuple(to_data(x) for x in obj)
+    elif isinstance(obj, list):
+        return [to_data(x) for x in obj]
+    elif isinstance(obj, dict):
+        return {k: to_data(v) for k, v in obj.items()}
+    elif isinstance(obj, set):
+        return {to_data(x) for x in obj}
+    elif isinstance(obj, NodeContainer):
+        output = copy.copy(obj)
+        for k, v in obj.__dict__.items():
+            setattr(output, k, to_data(v))
+    else:
+        return obj
