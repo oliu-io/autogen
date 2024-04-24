@@ -194,7 +194,7 @@ class FunctionOptimizer(Optimizer):
         propagator: Propagator = None,
         objective: Union[None, str] = None,
         ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
-        n_feasible_solutions: bool = 1,
+        n_feasible_solutions: bool = 0,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
