@@ -150,9 +150,6 @@ class FunctionOptimizer(Optimizer):
 
         You should write down your thought process (reason about how feedback applies to #Variables based on #Stepsize) and finally make a suggestion of the desired values of #Variables. You cannot change the lines of code in #Code but only the values in #Variables. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
         Your output should be in the following json format, satisfying the json syntax:
-        JSON, keys and values require double-quotes
-        JSON keys: ["response", "topic grade level", "too_hard"]
-        JSON value type: [escaped string, int, truth value]
 
         {{
         "reasoning": <Your reasoning>,
