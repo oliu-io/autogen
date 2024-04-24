@@ -81,11 +81,15 @@ class Examples:
         self.examples = []
 
     def add(self, example: str):
-        self.examples.append(example)
-        self.examples = self.examples[-self.size :]
+        if self.size > 0:
+            self.examples.append(example)
+            self.examples = self.examples[-self.size :]
 
     def __iter__(self):
         return iter(self.examples)
+
+    def __len__(self):
+        return len(self.examples)
 
 
 class FunctionOptimizer(Optimizer):
@@ -111,12 +115,17 @@ class FunctionOptimizer(Optimizer):
 
         #Feedback:
         {feedback}
+
+        #Stepsize:
+        {stepsize}
         """
     )
 
+    default_objective = "You need to change the <value> of the variables in #Variables to improve the output in accordance to #Feedback and #Stepsize. Do not change other parts except those in #Variables."
+
     system_message_template = dedent(
         """
-        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the code's execution result.
+        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the execution result.
 
         Specifically, a problem will be composed of the following parts:
         - #Code: the code whose results you need to improve.
@@ -126,17 +135,16 @@ class FunctionOptimizer(Optimizer):
         - #Others: the intermediate values created through the code execution.
         - #Outputs: the result of the code.
         - #Feedback: the feedback about the code's execution result.
+        - #Stepsize: a number between 0 and 1 indicating how much to trust the feedback. A value of 0 means the feedback is completely ignored, and a value of 1 means the feedback is completely trusted.
 
         In #Variables, #Outputs, and #Others, the format is:
         <type> <variable_name> = <value>
-        You need to change the <value> of the variables in #Variables to improve the code's output in accordance to #Feedback and their data types specified in <type>. If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
+        Their data types specified in <type>. If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
         The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
 
         Objective: {objective}
 
-        Output format:
-
-        You should write down your thought process and finally make a suggestion of the desired values of #Variables. You cannot change the lines of code in #Code but only the values in #Variables. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
+        Output format: You should write down your thought process (reason about how feedback applies to #Variables based on #Stepsize) and finally make a suggestion of the desired values of #Variables. You can only make change of values in #Variables, not other parts. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
         Your output should be in the following json format, satisfying the json syntax (json does support single quotes):
         {{
         "reasoning": <Your reasoning>,
@@ -169,21 +177,27 @@ class FunctionOptimizer(Optimizer):
 
         {problem_instance}
 
+        ================================
+        """
+    )
+
+    response_prompt = dedent(
+        """
+        Your response:
         """
     )
 
     example_prompt = dedent(
         """
 
-        Here are some feasible but not optimal solutions (i.e. not causing errors but not necessarily achieving desired behaviors) for the problem instance above:
+        Here are some feasible but not optimal solutions for the current problem instance. Consider this as a hint to help you understand the problem better.
+
+        ================================
 
         {examples}
 
+        ================================
         """
-    )
-
-    default_objective = (
-        "Your goal is to improve the code's output based on the feedback by changing variables used in the code."
     )
 
     def __init__(
@@ -195,6 +209,7 @@ class FunctionOptimizer(Optimizer):
         objective: Union[None, str] = None,
         ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
         n_feasible_solutions: bool = 0,
+        stepsize=1,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
@@ -211,6 +226,7 @@ class FunctionOptimizer(Optimizer):
             others="(int) y = 6",
             inputs="(int) b = 1\n(int) c = 5",
             feedback="The result of the code is not as expected. The result should be 10, but the code returns 1",
+            stepsize=1,
         )
         self.example_response = dedent(
             """
@@ -221,6 +237,7 @@ class FunctionOptimizer(Optimizer):
         )
 
         self.feasible_solutions = Examples(n_feasible_solutions)
+        self.stepsize = stepsize
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
@@ -277,6 +294,7 @@ class FunctionOptimizer(Optimizer):
             outputs=repr_node_value(summary.output),
             others=repr_node_value(summary.others),
             feedback=summary.user_feedback,
+            stepsize=self.stepsize,
         )
 
         prompt = self.system_message_template.format(
@@ -286,11 +304,13 @@ class FunctionOptimizer(Optimizer):
             problem_instance=problem_instance,
         )
 
-        if self.feasible_solutions is not None:
+        if len(self.feasible_solutions) > 0:
             examples_str = ""
             for i, example in enumerate(self.feasible_solutions):
                 examples_str += f"Example {i+1}:\n{repr_node_value(example)}\n\n"
             prompt += self.example_prompt.format(examples=examples_str)
+
+        prompt += self.response_prompt
 
         response = self.call_llm(prompt, verbose=verbose)
 
