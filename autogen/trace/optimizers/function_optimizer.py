@@ -323,12 +323,14 @@ class FunctionOptimizer(Optimizer):
             return {}
 
         # Extract the suggestion from the response
+        suggestion = {}
         attempt_n = 0
         while attempt_n < 2:
             try:
                 suggestion = json.loads(response.strip())["suggestion"]
                 break
             except json.JSONDecodeError:  # TODO try to fix it
+                print("Fixing json.JSONDecodeError...")
                 # First defense: we try to fix it
                 response = response.replace("'", '"')
                 # then we try to fix the double quotes inside the string
@@ -338,39 +340,27 @@ class FunctionOptimizer(Optimizer):
                     reasoning_text = match.group(1)
                     correct_text = reasoning_text.replace('"', "'")
                     response = response.replace(reasoning_text, correct_text)
-
-                print("LLM returns invalid format, cannot extract suggestions from JSON")
-                print(response)
                 attempt_n += 1
             except KeyError:
-                print("LLM returns invalid format, cannot extract suggestions from JSON")
-                print(response.strip())
                 attempt_n += 1
 
-        # the final attempt is to just get ANYTHING and leave to the outer control to fix it
-        if attempt_n == 2:
+        if len(suggestion) == 0:
             # we try to extract key/value separately and return it as a dictionary
-
             pattern = r'"suggestion":\s*\{(.*?)\}'
             suggestion_match = re.search(pattern, response.strip(), re.DOTALL)
             if suggestion_match:
                 suggestion = {}
-
                 # Extract the entire content of the suggestion dictionary
                 suggestion_content = suggestion_match.group(1)
-
                 # Regex to extract each key-value pair
                 pair_pattern = r'"([^"]+)":\s*"?(.*?)"?(?:,|$)'
-
                 # Find all matches of key-value pairs
                 pairs = re.findall(pair_pattern, suggestion_content)
                 for key, value in pairs:
                     suggestion[key] = value
-            else:
-                suggestion = {}
 
         if len(suggestion) == 0:
-            print("LLM returns invalid format, cannot extract suggestions from JSON")
+            print("Cannot extract suggestion from LLM's response: ")
             print(response)
 
         # Convert the suggestion in text into the right data type
