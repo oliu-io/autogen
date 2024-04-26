@@ -95,8 +95,35 @@ class Examples:
 
 
 class FunctionOptimizer(Optimizer):
+    # This is generic representation prompt, which just explains how to read the problem.
+    representation_prompt = dedent(
+        """
+        You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
+
+        Specifically, a problem will be composed of the following parts:
+        - #Instruction: the instruction which describes the things you need to do or the question you should answer.
+        - #Code: the code defined in the problem.
+        - #Documentation: the documentation of each function used in #Code. The explanation might be incomplete and just contain high-level description. You can use the values in #Others to help infer how those functions work.
+        - #Variables: the input variables that you can change.
+        - #Inputs: the values of other inputs to the code, which are not changeable.
+        - #Others: the intermediate values created through the code execution.
+        - #Outputs: the result of the code output.
+        - #Feedback: the feedback about the code's execution result.
+
+        In #Variables, #Inputs, #Outputs, and #Others, the format is:
+
+        <data_type> <variable_name> = <value>
+
+        If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
+        """
+    )
+
     problem_template = dedent(
         """
+        #Instruction
+
+        {instruction}
+
         #Code
         {code}
 
@@ -117,81 +144,57 @@ class FunctionOptimizer(Optimizer):
 
         #Feedback:
         {feedback}
-
-        #Stepsize:
-        {stepsize}
         """
     )
 
-    default_objective = "You need to change the <value> of the variables in #Variables to improve the output in accordance to #Feedback and #Stepsize. Do not change other parts except those in #Variables."
+    # Optimization
+    default_objective = "You need to change the <value> of the variables in #Variables to improve the output in accordance to #Feedback."
 
-    system_message_template = dedent(
+    output_format_prompt = dedent(
         """
-        You're tasked debug and solve a coding/algorithm problem. You will see the code, the documentation of each function used in the code, and the feedback about the execution result.
-
-        Specifically, a problem will be composed of the following parts:
-        - #Code: the code whose results you need to improve.
-        - #Documentation: the documentation of each function used in the code.
-        - #Variables: the values of the variables that you need to change.
-        - #Inputs: the values of other inputs to the code
-        - #Others: the intermediate values created through the code execution.
-        - #Outputs: the result of the code.
-        - #Feedback: the feedback about the code's execution result.
-        - #Stepsize: a number between 0 and 1 indicating how much to trust the feedback. A value of 0 means the feedback is completely ignored, and a value of 1 means the feedback is completely trusted.
-
-        In #Variables, #Outputs, and #Others, the format is:
-        <type> <variable_name> = <value>
-        Their data types specified in <type>. If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
-        The explanation in #Documentation might be incomplete and just contain high-level description of each function. You can use the values in #Others to help infer how those functions work.
-
-        Objective: {objective}
-
-        Output format:
-
-        You should write down your thought process (reason about how feedback applies to #Variables based on #Stepsize) and finally make a suggestion of the desired values of #Variables. You cannot change the lines of code in #Code but only the values in #Variables. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
-        Your output should be in the following json format, satisfying the json syntax:
+        Output_format: Your output should be in the following json format, satisfying the json syntax:
 
         {{
         "reasoning": <Your reasoning>,
+        "answer": <Your answer>,
         "suggestion": {{
             <variable_1>: <suggested_value_1>,
             <variable_2>: <suggested_value_2>,
         }}
         }}
 
-        If no changes are needed, just output TERMINATE_UPDATE as opposed to the json format above.
+        You should write down your thought process in "reasoning". If #Instruction asks for an answer, write it down in "answer". If you need to suggest a change in the values of #Variables, write down the suggested values in "suggestion". Remember you can change only the values in #Variables, not others. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
 
-
-        Here is an example of problem instance:
-
-        ================================
-
-        {example_problem}
-
-        ================================
-
-        Below is an ideal response for the problem above.
-
-        ================================
-
-        {example_response}
-
-        ================================
-
-        Now you see problem instance:
-
-        {problem_instance}
-
-        ================================
+        If no changes or answer are needed, just output TERMINATE.
         """
     )
 
-    response_prompt = dedent(
+    example_problem_template = dedent(
         """
+        Here is an example of problem instance and response:
+
+        ================================
+        {example_problem}
+        ================================
+
+        Your response:
+        {example_response}
+        """
+    )
+
+    user_prompt_template = dedent(
+        """
+        Now you see problem instance:
+
+        ================================
+        {problem_instance}
+        ================================
+
         Your response:
         """
     )
 
+    # TODO
     example_prompt = dedent(
         """
 
@@ -214,7 +217,8 @@ class FunctionOptimizer(Optimizer):
         objective: Union[None, str] = None,
         ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
         n_feasible_solutions: bool = 0,
-        stepsize=1,
+        include_example=False,  # TODO # include example problem and response in the prompt
+        stepsize=1,  # TODO
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
@@ -224,6 +228,7 @@ class FunctionOptimizer(Optimizer):
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
         self.objective = objective or self.default_objective
         self.example_problem = self.problem_template.format(
+            instruction=self.default_objective,
             code="y = add(x=a,y=b)\nz = subtract(x=y, y=c)",
             documentation="add: add x and y \nsubtract: subtract y from x",
             variables="(int) a = 5",
@@ -236,13 +241,15 @@ class FunctionOptimizer(Optimizer):
         self.example_response = dedent(
             """
             {"reasoning": 'In this case, the desired response would be to change the value of input a to 14, as that would make the code return 10.',
+             "answer", {},
              "suggestion": {"a": 10}
             }
             """
         )
 
-        self.feasible_solutions = Examples(n_feasible_solutions)
-        self.stepsize = stepsize
+        self.feasible_solutions = Examples(n_feasible_solutions)  # TODO
+        self.stepsize = stepsize  # TODO
+        self.include_example = include_example
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
@@ -267,62 +274,93 @@ class FunctionOptimizer(Optimizer):
         }  # non-variable roots
         return summary
 
-    def _step(self, verbose=False, *args, **kwargs) -> Dict[ParameterNode, Any]:
-        assert isinstance(self.propagator, NodePropagator)
-        summary = self.summarize()
-
-        def repr_node_value(node_dict):
-            temp_list = []
-            for k, v in node_dict.items():
-                if "__code" not in k:
-                    if v[1] is not None:
-                        temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]} ### Allowed values: {v[1]}")
-                    else:
-                        temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]}")
+    @staticmethod
+    def repr_node_value(node_dict):
+        temp_list = []
+        for k, v in node_dict.items():
+            if "__code" not in k:
+                if v[1] is not None:
+                    temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]} ### Allowed values: {v[1]}")
                 else:
-                    if v[1] is not None:
-                        # In current implementation of trace_op, this case is not possible
-                        temp_list.append(f"(code) {k}:{v[0]} ### Constraints: {v[1]}")
-                    else:
-                        temp_list.append(f"(code) {k}:{v[0]}")
-            return "\n".join(temp_list)
+                    temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]}")
+            else:
+                if v[1] is not None:
+                    # In current implementation of trace_op, this case is not possible
+                    temp_list.append(f"(code) {k}:{v[0]} ### Constraints: {v[1]}")
+                else:
+                    temp_list.append(f"(code) {k}:{v[0]}")
+        return "\n".join(temp_list)
 
-        if not summary.user_feedback.startswith("TraceExecutionError"):  # feasible
-            self.feasible_solutions.add(summary.variables)
-
-        # Format prompt
-        problem_instance = self.problem_template.format(
+    def probelm_instance(self, summary):
+        return self.problem_template.format(
+            instruction=self.objective,
             code="\n".join([v for k, v in sorted(summary.graph)]),
             documentation="\n".join([v for v in summary.documentation.values()]),
-            variables=repr_node_value(summary.variables),
-            inputs=repr_node_value(summary.inputs),
-            outputs=repr_node_value(summary.output),
-            others=repr_node_value(summary.others),
+            variables=self.repr_node_value(summary.variables),
+            inputs=self.repr_node_value(summary.inputs),
+            outputs=self.repr_node_value(summary.output),
+            others=self.repr_node_value(summary.others),
             feedback=summary.user_feedback,
-            stepsize=self.stepsize,
         )
 
-        prompt = self.system_message_template.format(
-            objective=self.objective,
-            example_problem=self.example_problem,
-            example_response=self.example_response,
-            problem_instance=problem_instance,
-        )
+    # if not summary.user_feedback.startswith("TraceExecutionError"):  # feasible
+    #     self.feasible_solutions.add(summary.variables)
+    # if len(self.feasible_solutions) > 0:
+    #     examples_str = ""
+    #     for i, example in enumerate(self.feasible_solutions):
+    #         examples_str += f"Example {i+1}:\n{self.repr_node_value(example)}\n\n"
+    #     prompt += self.example_prompt.format(examples=examples_str)
 
-        if len(self.feasible_solutions) > 0:
-            examples_str = ""
-            for i, example in enumerate(self.feasible_solutions):
-                examples_str += f"Example {i+1}:\n{repr_node_value(example)}\n\n"
-            prompt += self.example_prompt.format(examples=examples_str)
+    def construct_prompt(self, *args, **kwargs):
+        """Construct the system and user prompt."""
+        summary = self.summarize()
+        system_prompt = self.representation_prompt + self.output_format_prompt  # generic representation + output rule
+        user_pormpt = self.user_prompt_template.format(
+            problem_instance=self.probelm_instance(summary)
+        )  # problem instance
+        if self.include_example:
+            user_pormpt = (
+                self.example_problem_template.format(
+                    example_problem=self.example_problem, example_response=self.example_response
+                )
+                + user_pormpt
+            )
+        return system_prompt, user_pormpt
 
-        prompt += self.response_prompt
+    def _step(self, verbose=False, *args, **kwargs) -> Dict[ParameterNode, Any]:
+        assert isinstance(self.propagator, NodePropagator)
 
-        response = self.call_llm(prompt, verbose=verbose)
+        system_prompt, user_pormpt = self.construct_prompt()
+        response = self.call_llm(system_prompt=system_prompt, user_prompt=user_pormpt, verbose=verbose)
 
-        if "TERMINATE_UPDATE" in response:
+        if "TERMINATE" in response:
             return {}
 
-        # Extract the suggestion from the response
+        suggestion = self.extract_llm_suggestion(response)
+        update_dict = self.construct_update_dict(suggestion)
+
+        return update_dict
+
+    def construct_update_dict(self, suggestion: Dict[str, Any]) -> Dict[ParameterNode, Any]:
+        """Convert the suggestion in text into the right data type."""
+        # TODO: might need some automatic type conversion
+        update_dict = {}
+        for node in self.parameters:
+            if node.trainable and node.py_name in suggestion:
+                try:
+                    update_dict[node] = type(node.data)(suggestion[node.py_name])
+                except (ValueError, KeyError) as e:
+                    # catch error due to suggestion missing the key or wrong data type
+                    if self.ignore_extraction_error:
+                        warnings.warn(
+                            f"Cannot convert the suggestion '{suggestion[node.py_name]}' for {node.py_name} to the right data type"
+                        )
+                    else:
+                        raise e
+        return update_dict
+
+    def extract_llm_suggestion(self, response: str):
+        """Extract the suggestion from the response."""
         suggestion = {}
         attempt_n = 0
         while attempt_n < 2:
@@ -360,59 +398,28 @@ class FunctionOptimizer(Optimizer):
                     suggestion[key] = value
 
         if len(suggestion) == 0:
-            print("Cannot extract suggestion from LLM's response: ")
+            print("Cannot extract suggestion from LLM's response:")
             print(response)
+        return suggestion
 
-        # Convert the suggestion in text into the right data type
-        # TODO: might need some automatic type conversion
-        update_dict = {}
-        for node in self.parameters:
-            if node.trainable and node.py_name in suggestion:
-                try:
-                    update_dict[node] = type(node.data)(suggestion[node.py_name])
-                except (ValueError, KeyError) as e:
-                    # catch error due to suggestion missing the key or wrong data type
-                    if self.ignore_extraction_error:
-                        warnings.warn(
-                            f"Cannot convert the suggestion '{suggestion[node.py_name]}' for {node.py_name} to the right data type"
-                        )
-                    else:
-                        raise e
-
-        return update_dict
-
-    def call_llm(self, prompt: str, verbose: Union[bool, str] = False):  # TODO Get this from utils?
+    def call_llm(
+        self, system_prompt: str, user_prompt: str, verbose: Union[bool, str] = False
+    ):  # TODO Get this from utils?
         """Call the LLM with a prompt and return the response."""
         if verbose not in (False, "output"):
-            print("Prompt\n", prompt)
+            print("Prompt\n", system_prompt + user_prompt)
+
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
         try:  # Try tp force it to be a json object
             response = self.llm.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
+                messages=messages,
                 response_format={"type": "json_object"},
             )
         except Exception:
-            response = self.llm.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-            )
+            response = self.llm.create(messages=messages)
         response = response.choices[0].message.content
 
         if verbose:
             print("LLM response:\n", response)
         return response
-
-
-# class FunctionDistributiveOptimizer(FunctionOptimizer):
-#     def default_propagator(self):
-#         """Return the default Propagator object of the optimizer."""
-#         return FunctionDistributivePropagate()
