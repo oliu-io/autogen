@@ -195,12 +195,12 @@ class FunModule(Module):
                 methods.update({k: self._fun.__globals__[k]})
             try:
                 exec(code)  # define the function
-            except SyntaxError as e:
+            except (SyntaxError, NameError) as e:
                 # Temporary fix for the issue of the code block not being able to be executed
                 e_node = ExceptionNode(
                     e,
                     inputs={"code": self.parameter},
-                    description=f"[exception] The code parameter {self.parameter.py_name} has a syntax error.",
+                    description=f"[exception] The code parameter {self.parameter.py_name} has an error.",
                     name="exception_" + self.parameter.py_name,
                     info=self.info,
                 )

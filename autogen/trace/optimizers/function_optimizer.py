@@ -94,29 +94,16 @@ class Examples:
         return len(self.examples)
 
 
-class FunctionOptimizer(Optimizer):
-    # This is generic representation prompt, which just explains how to read the problem.
-    representation_prompt = dedent(
-        """
-        You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
-
-        Specifically, a problem will be composed of the following parts:
-        - #Instruction: the instruction which describes the things you need to do or the question you should answer.
-        - #Code: the code defined in the problem.
-        - #Documentation: the documentation of each function used in #Code. The explanation might be incomplete and just contain high-level description. You can use the values in #Others to help infer how those functions work.
-        - #Variables: the input variables that you can change.
-        - #Inputs: the values of other inputs to the code, which are not changeable.
-        - #Others: the intermediate values created through the code execution.
-        - #Outputs: the result of the code output.
-        - #Feedback: the feedback about the code's execution result.
-
-        In #Variables, #Inputs, #Outputs, and #Others, the format is:
-
-        <data_type> <variable_name> = <value>
-
-        If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
-        """
-    )
+@dataclass
+class ProblemInstance:
+    instruction: str
+    code: str
+    documentation: str
+    variables: str
+    inputs: str
+    others: str
+    outputs: str
+    feedback: str
 
     problem_template = dedent(
         """
@@ -144,6 +131,43 @@ class FunctionOptimizer(Optimizer):
 
         #Feedback:
         {feedback}
+        """
+    )
+
+    def __repr__(self) -> str:
+        return self.problem_template.format(
+            instruction=self.instruction,
+            code=self.code,
+            documentation=self.documentation,
+            variables=self.variables,
+            inputs=self.inputs,
+            outputs=self.outputs,
+            others=self.others,
+            feedback=self.feedback,
+        )
+
+
+class FunctionOptimizer(Optimizer):
+    # This is generic representation prompt, which just explains how to read the problem.
+    representation_prompt = dedent(
+        """
+        You're tasked to solve a coding/algorithm problem. You will see the instruction, the code, the documentation of each function used in the code, and the feedback about the execution result.
+
+        Specifically, a problem will be composed of the following parts:
+        - #Instruction: the instruction which describes the things you need to do or the question you should answer.
+        - #Code: the code defined in the problem.
+        - #Documentation: the documentation of each function used in #Code. The explanation might be incomplete and just contain high-level description. You can use the values in #Others to help infer how those functions work.
+        - #Variables: the input variables that you can change.
+        - #Inputs: the values of other inputs to the code, which are not changeable.
+        - #Others: the intermediate values created through the code execution.
+        - #Outputs: the result of the code output.
+        - #Feedback: the feedback about the code's execution result.
+
+        In #Variables, #Inputs, #Outputs, and #Others, the format is:
+
+        <data_type> <variable_name> = <value>
+
+        If <type> is (code), it means <value> is the source code of a python code, which may include docstring and definitions.
         """
     )
 
@@ -227,7 +251,7 @@ class FunctionOptimizer(Optimizer):
             config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
         self.llm = autogen.OpenAIWrapper(config_list=config_list)
         self.objective = objective or self.default_objective
-        self.example_problem = self.problem_template.format(
+        self.example_problem = ProblemInstance.problem_template.format(
             instruction=self.default_objective,
             code="y = add(x=a,y=b)\nz = subtract(x=y, y=c)",
             documentation="add: add x and y \nsubtract: subtract y from x",
@@ -292,7 +316,7 @@ class FunctionOptimizer(Optimizer):
         return "\n".join(temp_list)
 
     def probelm_instance(self, summary):
-        return self.problem_template.format(
+        return ProblemInstance(
             instruction=self.objective,
             code="\n".join([v for k, v in sorted(summary.graph)]),
             documentation="\n".join([v for v in summary.documentation.values()]),
@@ -316,7 +340,7 @@ class FunctionOptimizer(Optimizer):
         summary = self.summarize()
         system_prompt = self.representation_prompt + self.output_format_prompt  # generic representation + output rule
         user_pormpt = self.user_prompt_template.format(
-            problem_instance=self.probelm_instance(summary)
+            problem_instance=str(self.probelm_instance(summary))
         )  # problem instance
         if self.include_example:
             user_pormpt = (
