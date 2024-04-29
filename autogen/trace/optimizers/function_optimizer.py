@@ -315,16 +315,17 @@ class FunctionOptimizer(Optimizer):
                     temp_list.append(f"(code) {k}:{v[0]}")
         return "\n".join(temp_list)
 
-    def probelm_instance(self, summary):
+    def probelm_instance(self, summary, mask=None):
+        mask = mask or []
         return ProblemInstance(
             instruction=self.objective,
-            code="\n".join([v for k, v in sorted(summary.graph)]),
-            documentation="\n".join([v for v in summary.documentation.values()]),
-            variables=self.repr_node_value(summary.variables),
-            inputs=self.repr_node_value(summary.inputs),
-            outputs=self.repr_node_value(summary.output),
-            others=self.repr_node_value(summary.others),
-            feedback=summary.user_feedback,
+            code="\n".join([v for k, v in sorted(summary.graph)]) if "code" not in mask else "",
+            documentation="\n".join([v for v in summary.documentation.values()]) if "documentation" not in mask else "",
+            variables=self.repr_node_value(summary.variables) if "variables" not in mask else "",
+            inputs=self.repr_node_value(summary.inputs) if "inputs" not in mask else "",
+            outputs=self.repr_node_value(summary.output) if "outputs" not in mask else "",
+            others=self.repr_node_value(summary.others) if "others" not in mask else "",
+            feedback=summary.user_feedback if "feedback" not in mask else "",
         )
 
     # if not summary.user_feedback.startswith("TraceExecutionError"):  # feasible
@@ -335,12 +336,12 @@ class FunctionOptimizer(Optimizer):
     #         examples_str += f"Example {i+1}:\n{self.repr_node_value(example)}\n\n"
     #     prompt += self.example_prompt.format(examples=examples_str)
 
-    def construct_prompt(self, *args, **kwargs):
+    def construct_prompt(self, mask=None, *args, **kwargs):
         """Construct the system and user prompt."""
         summary = self.summarize()
         system_prompt = self.representation_prompt + self.output_format_prompt  # generic representation + output rule
         user_pormpt = self.user_prompt_template.format(
-            problem_instance=str(self.probelm_instance(summary))
+            problem_instance=str(self.probelm_instance(summary, mask=mask))
         )  # problem instance
         if self.include_example:
             user_pormpt = (
@@ -351,10 +352,10 @@ class FunctionOptimizer(Optimizer):
             )
         return system_prompt, user_pormpt
 
-    def _step(self, verbose=False, *args, **kwargs) -> Dict[ParameterNode, Any]:
+    def _step(self, verbose=False, mask=None, *args, **kwargs) -> Dict[ParameterNode, Any]:
         assert isinstance(self.propagator, NodePropagator)
 
-        system_prompt, user_pormpt = self.construct_prompt()
+        system_prompt, user_pormpt = self.construct_prompt(mask=mask)
         response = self.call_llm(system_prompt=system_prompt, user_prompt=user_pormpt, verbose=verbose)
 
         if "TERMINATE" in response:

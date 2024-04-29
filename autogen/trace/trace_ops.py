@@ -267,7 +267,7 @@ class FunModule(Module):
                         inputs[k] = v
 
         # Nodes used to create the outputs but not in the inputs are external dependencies.
-        external_dependencies = [node for node in used_nodes if node not in inputs.values()]
+        external_dependencies = [node for node in used_nodes if not contain(inputs.values(), node)]
         self.info["external_dependencies"] = external_dependencies
 
         # Make sure all nodes in used_nodes are in the parents of the returned node.

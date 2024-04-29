@@ -444,6 +444,9 @@ class Node(AbstractNode[T]):
         else:
             return ops.add(self, node(other))
 
+    def __radd__(self, other):
+        return self.__add__(other)
+
     def __sub__(self, other):
         import autogen.trace.operators as ops
 
