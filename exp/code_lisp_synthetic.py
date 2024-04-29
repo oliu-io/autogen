@@ -1,11 +1,3 @@
-"""
-This now becomes just a program suite of implementing each Lisp interpreter functions
-We also don't support recursion and that's reflected in the program description
-
-https://arxiv.org/pdf/2212.10561.pdf
-
-"""
-
 from autogen.trace.nodes import node, GRAPH
 import string
 import random
@@ -14,8 +6,7 @@ from textwrap import dedent
 
 from typing import List
 import copy
-from autogen.trace.operators import *
-from autogen.trace.trace_ops import FunModule
+from autogen.trace.trace_ops import FunModule, trace_op
 
 import io, contextlib
 import sys
@@ -78,7 +69,7 @@ def get_VERSION():
 
 def random_trace(description=None, n_outputs=1, node_dict="auto",
                  wrap_output=True, unpack_input=True, trainable=False,
-                 allow_external_dependencies=False):
+                 allow_external_dependencies=False, catch_execution_error=True):
     def decorator(fun):
         if get_VERSION() == "full":
             return FunModule(
@@ -90,7 +81,8 @@ def random_trace(description=None, n_outputs=1, node_dict="auto",
                 unpack_input=unpack_input,
                 trainable=trainable,
                 decorator_name="@random_trace",
-                allow_external_dependencies=allow_external_dependencies
+                allow_external_dependencies=allow_external_dependencies,
+                catch_execution_error=catch_execution_error
             )
         else:
             return FunModule(
@@ -102,16 +94,15 @@ def random_trace(description=None, n_outputs=1, node_dict="auto",
                 unpack_input=unpack_input,
                 trainable=True,
                 decorator_name="",
-                allow_external_dependencies=allow_external_dependencies
+                allow_external_dependencies=allow_external_dependencies,
+                catch_execution_error=catch_execution_error
             )
 
     return decorator
 
-
 """
 We put empty functions first
 """
-
 
 class EmptyFuncs:
     @staticmethod
@@ -230,9 +221,6 @@ def eval_procedure(parms, body, env, args):
     return eval_exp(body, new_env)
 
 
-# @random_trace(
-#     description="[get_procedure] Return a procedure which evaluates body in a new environment with parms bound to the args passed to the procedure (in the same order as parms)."
-# )
 def get_procedure(parms, body, env):
     return lambda *args: eval_procedure(parms, body, env, args)
 
@@ -249,7 +237,7 @@ def otherwise_case(x, env):
 @random_trace(
     description="[list_case] Handle the function specified by the first value of x. Handle the first value of x being quote, if, define, set!, lambda, or otherwise. Return the result.",
     allow_external_dependencies=True,
-    unpack_input=False,
+    unpack_input=True,
     catch_execution_error=False
 )
 def list_case(x, env):
@@ -262,6 +250,7 @@ def list_case(x, env):
             return eval_exp(x[3], env)
     elif x[0] == 'define':
         env[x[1]] = eval_exp(x[2], env)
+        print("inside define", env)
     elif x[0] == 'set!':
         env.find(x[1])[x[1]] = eval_exp(x[2], env)
     elif x[0] == 'lambda':
@@ -280,7 +269,10 @@ def not_list_case(x, env):
         return None
     return x
 
+@trace_op(description="[eval_exp] Evaluate an expression in an environment and return the result. Check if x is a list, a string, or neither, and call the corresponding function.",
+         allow_external_dependencies=True, catch_execution_error=False, unpack_input=True)
 def eval_exp(x, env):
+    print("inside eval_exp", env)
     if isinstance(x, list):
         return list_case(x, env)
     elif isinstance(x, str):
@@ -352,8 +344,15 @@ def standard_env(includes=["math", "ops", "simple_math"]):
 
 # Initialize a standard environment. Parse and evaluate a list of expressions, returning the final result.
 def evaluate_program(program):
-    env = standard_env()
+    env = node(standard_env())
     last = None
     for expression in program:
         last = parse_and_update(expression, env)
     return last
+
+if __name__ == '__main__':
+    env = {'_outer': None}
+    expression = '(define square (lambda (r) (* r r)))'
+    exp = parse(expression)
+    result = eval_exp(exp, env)
+    print(env)
