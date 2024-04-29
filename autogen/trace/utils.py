@@ -7,6 +7,7 @@ builtins_list = dir(builtins)
 # Filter for function names; this includes exceptions, so you might want to refine this
 global_functions_list = [name for name in builtins_list if callable(getattr(builtins, name))]
 
+
 def contain(container_of_nodes, node):
     # check for identity instead of value
     return any([node is n for n in container_of_nodes])
@@ -50,7 +51,8 @@ class MinHeap:
             self.heapify(self.heap)
 
     def __contains__(self, item):
-        return item in self.heap
+        # return item in self.heap
+        return contain(self.heap, item)
 
     def __len__(self):
         return len(self.heap)
@@ -300,8 +302,6 @@ def simple_shrink(dot_str, shrink=True):
     blocks = ["\n".join(b) for b in blocks]
 
     return begin_str + "\n".join(blocks) + "\n" + end_str
-
-
 
 
 # Currently do not support nested if-statement or for-loop
