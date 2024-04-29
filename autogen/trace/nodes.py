@@ -633,8 +633,10 @@ class Node(AbstractNode[T]):
 
         return ct.items(self)
 
-    def pop(self, *args, **kwargs):
-        return self.call("pop", *args, **kwargs)
+    def pop(self, __index=-1):
+        # python does hidden type checks
+        import autogen.trace.operators as ops
+        return ops.pop(self, node(__index))
 
     def append(self, *args, **kwargs):
         return self.call("append", *args, **kwargs)

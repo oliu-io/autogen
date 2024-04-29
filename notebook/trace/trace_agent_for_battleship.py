@@ -58,7 +58,7 @@ If we wrap the function to a class, has access to "self", it can learn to store 
 # 2. Need to develop some strategies
 
 from battleship import BattleshipBoard
-from autogen.trace.trace_ops import trace_op
+from autogen.trace.trace_ops import trace_op, trace_class
 from autogen.trace.nodes import node
 
 # ===== Scenario 0 ===== #
@@ -75,12 +75,17 @@ def user_fb_for_coords_validity(board, coords):
     except Exception as e:
         return str(e), 0
 
+# ==== Scenario 1 ==== #
+
+
 # ==== Scenario 2 ==== #
 
 # To make scenario 2 more efficient, we use a smaller board
 
+@trace_class
 class Agent:
-    @trace_op("[select_coordinate] Given a map, select a coordinate to see if we can earn reward.", trainable=True)
+    @trace_op(trainable=True,
+              allow_external_dependencies=True)
     def select_coordinate(self, map):
         """
         Given a map, select a coordinate to see if we can earn reward.
