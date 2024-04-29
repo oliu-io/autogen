@@ -46,16 +46,18 @@ If we wrap the function to a class, has access to "self", it can learn to store 
 # 2. Need to know to place shots on the board
 # 3. Need to develop basic heuristics (battleships are either vertical or horizontal)
 
-# Scenario 2: Learning to play against a weak opponent (two boards).
+# Scenario 2: Learning to play against a weak pre-defined opponent (one pre-set boards).
 # Challenge:
 # 1. Execute everything in Scenario 1, should be able to do it.
 # 2. Need to understand the agent's own board and the opponent's board (to gauge when the game will end)
 
-# Scenario 3: Learning to play against a medium opponent (two boards).
+# Scenario 3: Learning to set up and play against a weak pre-defined opponent (set their own board).
 # Let's say this opponent has some biases of placing battleships...but otherwise have good heuristics
 # Challenge:
 # 1. Need to learn the distribution of where the opponent might place battleships -- can memorize them
 # 2. Need to develop some strategies
+
+# Scenario 4: Learning to self-play (both agents set own board)
 
 from battleship import BattleshipBoard
 from autogen.trace.trace_ops import trace_op, trace_class
@@ -76,11 +78,31 @@ def user_fb_for_coords_validity(board, coords):
         return str(e), 0
 
 # ==== Scenario 1 ==== #
+@trace_op("[select_coordinate] Given a map, select a valid coordinate to see if we can earn reward.", trainable=True)
+def select_coordinate(map):
+    """
+    Given a map, select a valid coordinate. We might earn reward from this coordinate.
+    """
+    return [0, 0]
 
+def user_fb_for_placing_shot(board, coords):
+    # this is already a multi-step cumulative reward problem
+    # obs, reward, terminal, feedback
+    try:
+        reward = board.check_shot(coords[0], coords[1])
+        new_map = board.get_shots()
+        terminal = board.check_terminate()
+        return new_map, reward, terminal, f"Got {int(reward)} reward."
+    except Exception as e:
+        return board.get_shots(), 0, False, str(e)
 
 # ==== Scenario 2 ==== #
 
 # To make scenario 2 more efficient, we use a smaller board
+# We are going to do a self-play training
+# the agent needs to do three things:
+# 1. Understand their own board
+# 2.
 
 @trace_class
 class Agent:
@@ -92,6 +114,9 @@ class Agent:
         We can create and store things as self.list_of_coords
         """
         return map
+
+    def understand_own_board(self, board):
+        return ""
 
 def user_fb_for_placing_shot(board, coords):
     # this is already a multi-step cumulative reward problem
