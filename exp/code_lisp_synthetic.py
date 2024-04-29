@@ -175,9 +175,6 @@ class EmptyFuncs:
         return 3
 
 
-@random_trace(
-    description="[get_env] Return a new env inside env with parms mapped to their corresponding args, and env as the new env's outer env."
-)
 def get_env(parms, args, env=None):
     new_env = {"_outer": env}
     for parm, arg in zip(parms, args):
@@ -185,7 +182,6 @@ def get_env(parms, args, env=None):
     return new_env
 
 
-@random_trace(description="[get_math] Get a dictionary mapping math library function names to their functions.")
 def get_math():
     d = {}
     for name in dir(math):
@@ -194,7 +190,6 @@ def get_math():
     return d
 
 
-@random_trace(description="[get_ops] Get a dictionary mapping math library function names to their functions.")
 def get_ops():
     return {
         "+": (lambda x, y: x + y),
@@ -209,16 +204,10 @@ def get_ops():
     }
 
 
-@random_trace(
-    description="[get_simple_math] Get a dictionary mapping 'abs', 'min', 'max', 'not', 'round' to their functions."
-)
 def get_simple_math():
     return {"abs": abs, "min": min, "max": max, "not": lambda x: not x, "round": round}
 
 
-@random_trace(
-    description="[apply_fn_dict_key] Return the value of fn_dict_generator()[key](*args_list) in standard_env."
-)
 def apply_fn_dict_key(fn_dict_generator, key, args_list):
     fn_dict = fn_dict_generator()
     return fn_dict[key](*args_list)
@@ -241,11 +230,16 @@ def eval_procedure(parms, body, env, args):
     return eval_exp(body, new_env)
 
 
+# @random_trace(
+#     description="[get_procedure] Return a procedure which evaluates body in a new environment with parms bound to the args passed to the procedure (in the same order as parms)."
+# )
 def get_procedure(parms, body, env):
     return lambda *args: eval_procedure(parms, body, env, args)
 
+
 @random_trace(
-    description="[otherwise_case] Get the procedure by evaluating the first value of x. Then, evaluate the arguments and apply the procedure to them. Return the result."
+    description="[otherwise_case] Get the procedure by evaluating the first value of x. Then, evaluate the arguments and apply the procedure to them. Return the result.",
+    allow_external_dependencies=True
 )
 def otherwise_case(x, env):
     p = eval_exp(x[0], env)
@@ -253,7 +247,10 @@ def otherwise_case(x, env):
     return p(*args)
 
 @random_trace(
-    description="[list_case] Handle the function specified by the first value of x. Handle the first value of x being quote, if, define, set!, lambda, or otherwise. Return the result."
+    description="[list_case] Handle the function specified by the first value of x. Handle the first value of x being quote, if, define, set!, lambda, or otherwise. Return the result.",
+    allow_external_dependencies=True,
+    unpack_input=False,
+    catch_execution_error=False
 )
 def list_case(x, env):
     if x[0] == 'quote':
@@ -275,7 +272,8 @@ def list_case(x, env):
         return proc(*args)
 
 @random_trace(
-    description="[not_list_case] Return x if it's not a list, otherwise return None."
+    description="[not_list_case] Return x if it's not a list, otherwise return None.",
+    allow_external_dependencies=True
 )
 def not_list_case(x, env):
     if isinstance(x, list):
@@ -290,12 +288,13 @@ def eval_exp(x, env):
     else:
         return not_list_case(x, env)
 
+
 @random_trace(description="[tokenize] Convert a string into a list of tokens, including parens.")
 def tokenize(s):
     "Convert a string into a list of tokens, including parens."
     return s.replace("(", " ( ").replace(")", " ) ").split()
 
-
+@trace_op(description="[atom] Infer type of a token")
 def atom(token):
     try:
         return int(token)
@@ -326,6 +325,7 @@ def parse(program):
     return read_from_tokens(tokenize(program))
 
 
+@trace_op(description="[nested_list_to_str] Convert a nested list into a string with nesting represented by parentheses.")
 def nested_list_to_str(exp):
     if isinstance(exp, list):
         return '(' + ' '.join(map(nested_list_to_str, exp)) + ')'
