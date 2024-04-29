@@ -185,3 +185,5 @@ test/agentchat/test_agent_scripts/*
 figures/
 Digraph*
 key.sh
+
+trace_docs/_build/*
