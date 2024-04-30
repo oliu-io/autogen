@@ -154,6 +154,13 @@ class BattleshipBoard(object):
             str_rep += ' '.join(row) + '\n'
         print(str_rep)
 
+    def visualize_own_board(self):
+        str_rep = ''
+        board = self.get_shots_overlay_board()
+        for row in board:
+            str_rep += ' '.join(row) + '\n'
+        print(str_rep)
+
     def visualize_shots(self):
         str_rep = ''
         for row in self.shots:

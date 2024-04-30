@@ -131,6 +131,12 @@ class BattleshipBoard(object):
     def get_shots(self):
         return self.shots
 
+    def get_shots_overlay_board(self):
+        # this is the self-view of the board, where the player can see their own board
+        # we can make a choice on whether to show O or show . instead
+        shots_overlay_board = [[self.board[row][col] if self.shots[row][col] == '.' else self.shots[row][col] for col in range(self.width)] for row in range(self.height)]
+        return shots_overlay_board
+
     def get_hits(self):
         return self.hits
 
@@ -145,6 +151,13 @@ class BattleshipBoard(object):
     def visualize_board(self):
         str_rep = ''
         for row in self.board:
+            str_rep += ' '.join(row) + '\n'
+        print(str_rep)
+
+    def visualize_own_board(self):
+        str_rep = ''
+        board = self.get_shots_overlay_board()
+        for row in board:
             str_rep += ' '.join(row) + '\n'
         print(str_rep)
 
