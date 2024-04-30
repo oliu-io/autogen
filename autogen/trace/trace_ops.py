@@ -158,6 +158,8 @@ class FunModule(Module):
         self._fun = fun
         self.node_dict = node_dict
         self.description = description
+        if n_outputs > 1:
+            warnings.warn("Setting n_outputs>1 will be deprecated.")
         self.n_outputs = n_outputs
         self.wrap_output = wrap_output
         self.unpack_input = unpack_input
