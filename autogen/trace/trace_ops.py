@@ -165,7 +165,7 @@ class FunModule(Module):
         self.allow_external_dependencies = allow_external_dependencies
         self.parameter = None
         if trainable:
-            self.parameter = ParameterNode(self.info["source"], name="__code")
+            self.parameter = ParameterNode(self.info["source"], name="__code", constraint=self.info["doc"])
 
     def filter_global_namespaces(self, keys):
         """

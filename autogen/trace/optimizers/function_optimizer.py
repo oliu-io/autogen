@@ -22,7 +22,7 @@ def repr_function_call(child: MessageNode):
 
 
 def node_to_function_feedback(node_feedback: NodeFeedback):
-    """Convert a NodeFeedback to a FunctionFeedback"""
+    """Convert a NodeFeedback to a FunctionFeedback. roots, others, outputs are dict of variable name and its data and constraints."""
     depth = 0 if len(node_feedback.graph) == 0 else node_feedback.graph[-1][0]
     graph = []
     others = {}
@@ -104,11 +104,11 @@ class ProblemInstance:
     others: str
     outputs: str
     feedback: str
+    constraints: str
 
     problem_template = dedent(
         """
         #Instruction
-
         {instruction}
 
         #Code
@@ -119,6 +119,9 @@ class ProblemInstance:
 
         #Variables
         {variables}
+
+        #Constraints
+        {constraints}
 
         #Inputs
         {inputs}
@@ -140,6 +143,7 @@ class ProblemInstance:
             code=self.code,
             documentation=self.documentation,
             variables=self.variables,
+            constraints=self.constraints,
             inputs=self.inputs,
             outputs=self.outputs,
             others=self.others,
@@ -158,6 +162,7 @@ class FunctionOptimizer(Optimizer):
         - #Code: the code defined in the problem.
         - #Documentation: the documentation of each function used in #Code. The explanation might be incomplete and just contain high-level description. You can use the values in #Others to help infer how those functions work.
         - #Variables: the input variables that you can change.
+        - #Constraints: the constraints or descriptions of the variables in #Variables.
         - #Inputs: the values of other inputs to the code, which are not changeable.
         - #Others: the intermediate values created through the code execution.
         - #Outputs: the result of the code output.
@@ -256,6 +261,7 @@ class FunctionOptimizer(Optimizer):
             code="y = add(x=a,y=b)\nz = subtract(x=y, y=c)",
             documentation="add: add x and y \nsubtract: subtract y from x",
             variables="(int) a = 5",
+            constraints="a: a > 0",
             outputs="(int) z = 1",
             others="(int) y = 6",
             inputs="(int) b = 1\n(int) c = 5",
@@ -303,16 +309,21 @@ class FunctionOptimizer(Optimizer):
         temp_list = []
         for k, v in node_dict.items():
             if "__code" not in k:
+                temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]}")
+            else:
+                temp_list.append(f"(code) {k}:{v[0]}")
+        return "\n".join(temp_list)
+
+    @staticmethod
+    def repr_node_constraint(node_dict):
+        temp_list = []
+        for k, v in node_dict.items():
+            if "__code" not in k:
                 if v[1] is not None:
-                    temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]} ### Allowed values: {v[1]}")
-                else:
-                    temp_list.append(f"({type(v[0]).__name__}) {k}={v[0]}")
+                    temp_list.append(f"({type(v[0]).__name__}) {k}: {v[1]}")
             else:
                 if v[1] is not None:
-                    # In current implementation of trace_op, this case is not possible
-                    temp_list.append(f"(code) {k}:{v[0]} ### Constraints: {v[1]}")
-                else:
-                    temp_list.append(f"(code) {k}:{v[0]}")
+                    temp_list.append(f"(code) {k}: {v[1]}")
         return "\n".join(temp_list)
 
     def probelm_instance(self, summary, mask=None):
@@ -322,6 +333,7 @@ class FunctionOptimizer(Optimizer):
             code="\n".join([v for k, v in sorted(summary.graph)]) if "code" not in mask else "",
             documentation="\n".join([v for v in summary.documentation.values()]) if "documentation" not in mask else "",
             variables=self.repr_node_value(summary.variables) if "variables" not in mask else "",
+            constraints=self.repr_node_constraint(summary.variables) if "variables" not in mask else "",
             inputs=self.repr_node_value(summary.inputs) if "inputs" not in mask else "",
             outputs=self.repr_node_value(summary.output) if "outputs" not in mask else "",
             others=self.repr_node_value(summary.others) if "others" not in mask else "",
