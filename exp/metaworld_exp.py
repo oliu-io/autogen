@@ -6,6 +6,7 @@
 # Run experiment
 
 # %%
+import autogen
 import llfbench
 import random
 import os
@@ -168,6 +169,7 @@ def optimize_policy(
     mask=None,
     verbose=False,
     provide_reward=False,
+    model="gpt-4-turbo-preview",
 ):
     writer = SummaryWriter(logdir)
 
@@ -179,7 +181,9 @@ def optimize_policy(
         """
         return [0, 0, 0, 0]
 
-    optimizer = trace.optimizers.FunctionOptimizer(controller.parameters(), memory_size=0)
+    config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
+    config_list = [config for config in config_list if config["model"] == model]
+    optimizer = trace.optimizers.FunctionOptimizer(controller.parameters(), config_list=config_list)
 
     print("Optimization Starts")
     log = dict(returns=[], successes=[], episode_lens=[])
@@ -193,7 +197,7 @@ def optimize_policy(
             # Provide feedback to the last observation
             feedback = f"Success: {traj['success'][-1]}"
             if provide_reward:
-                feedback += f"Rewards: {sum(traj['reward'])}"
+                feedback += f" Rewards: {sum(traj['reward'])}"
             target = traj["observation"][-1]["observation"]
             # Logging Evaluate the current policy (Data not used in training)
             returns, successes, episode_lens = evaluate(env, horizon, controller, n_episodes=n_episodes)
@@ -219,11 +223,14 @@ def optimize_policy(
                 "The goal of the task is to pick up a puck and put it to a goal position." + optimizer.objective
             )
 
+            # optimizer.objective = "Your job is to control a Sawyer robot arm to solve a pick-place task. The goal of the task is to pick up a puck and put it to a goal position. You will get observations of the robot state and the world state in the form of json strings. Your objective is to provide control inputs to the robot to achieve the task's goal state over multiple time steps. Your actions are 4-dim vectors, where the first 3 dimensions control the movement of the robot's end effector in the x, y, and z directions, and the last dimension controls the gripper state (0 means opening it, and 1 means closing it). You action at each step sets the robot's target pose for that step in relative coordinate. The robot will move towards that pose using a P controller." + optimizer.default_objective
+
+            # optimizer.objective = optimizer.default_objective + "Your job is to control a Sawyer robot arm to solve a pick-place task. The goal of the task is to pick up a puck and put it to a goal position. You will get observations of the robot state and the world state in the form of json strings. Your objective is to provide control inputs to the robot to achieve the task's goal state over multiple time steps. Your actions are 4-dim vectors, where the first 3 dimensions control the movement of the robot's end effector in the x, y, and z directions, and the last dimension controls the gripper state (0 means opening it, and 1 means closing it). You action at each step sets the robot's target pose for that step in relative coordinate. The robot will move towards that pose using a P controller."
+
         # Optimization step
         optimizer.zero_feedback()
         optimizer.backward(target, feedback)
         optimizer.step(verbose=verbose, mask=mask)
-
         print(f"Iteration: {i}")
         print(f"Feedback: {feedback}")
         print(f"Parameter:\n {controller.parameter.data}")
@@ -248,21 +255,26 @@ if __name__ == "__main__":
     parser.add_argument("--relative", type=bool, default=True)
     parser.add_argument("--feedback_type", type=str, default="a")
     parser.add_argument("--mask", type=str, default=None)
-    parser.add_argument("--verbose", type=bool, default=False)
+    parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--provide_reward", action="store_true")
     parser.add_argument("--logdir", type=str, default="./exp_results")
     parser.add_argument("--note", type=str, default="")
+    parser.add_argument("--model", type=str, default="gpt-4-turbo-preview")
     args = parser.parse_args()
 
     # logging
     logdir = args.logdir + f"/{args.env_name}"
     logdir += (
-        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}"
+        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}_model_{args.model}_"
         + args.note
     )
     logdir += datetime.now().strftime("%Y%m%d-%H%M%S")
     os.makedirs(logdir, exist_ok=True)
     pickle.dump(args, open(os.path.join(logdir, "args.pkl"), "wb"))  # Save the arguments for reproducibility
+
+    # printing
+    if args.verbose is False:
+        args.verbose = "output"
 
     evaluate_expert(args.env_name, args.horizon, args.n_episodes, seed=args.seed)
     optimize_policy(
@@ -273,6 +285,9 @@ if __name__ == "__main__":
         seed=args.seed,
         relative=args.relative,
         feedback_type=args.feedback_type,
+        provide_reward=args.provide_reward,
         logdir=logdir,
         mask=args.mask,
+        model=args.model,
+        verbose=args.verbose,
     )
