@@ -276,6 +276,7 @@ class FunctionOptimizer(Optimizer):
         n_feasible_solutions: bool = 0,
         include_example=False,  # TODO # include example problem and response in the prompt
         stepsize=1,  # TODO
+        max_tokens=4096,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
@@ -308,6 +309,7 @@ class FunctionOptimizer(Optimizer):
         self.feasible_solutions = Examples(n_feasible_solutions)  # TODO
         self.stepsize = stepsize  # TODO
         self.include_example = include_example
+        self.max_tokens = max_tokens
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
@@ -388,7 +390,9 @@ class FunctionOptimizer(Optimizer):
         assert isinstance(self.propagator, NodePropagator)
         summary = self.summarize()
         system_prompt, user_pormpt = self.construct_prompt(summary, mask=mask)
-        response = self.call_llm(system_prompt=system_prompt, user_prompt=user_pormpt, verbose=verbose)
+        response = self.call_llm(
+            system_prompt=system_prompt, user_prompt=user_pormpt, verbose=verbose, max_tokens=self.max_tokens
+        )
 
         if "TERMINATE" in response:
             return {}
@@ -422,45 +426,39 @@ class FunctionOptimizer(Optimizer):
         attempt_n = 0
         while attempt_n < 2:
             try:
-                suggestion = json.loads(response.strip())["suggestion"]
+                suggestion = json.loads(response)["suggestion"]
                 break
             except json.JSONDecodeError:  # TODO try to fix it
-                print("Fixing json.JSONDecodeError...")
-                # First defense: we try to fix it
-                response = response.replace("'", '"')
-                # then we try to fix the double quotes inside the string
-                pattern = r'"reasoning": "(.*?)",\s*"suggestion"'
-                match = re.search(pattern, response)
-                if match:
-                    reasoning_text = match.group(1)
-                    correct_text = reasoning_text.replace('"', "'")
-                    response = response.replace(reasoning_text, correct_text)
+                # Remove things outside the brackets
+                response = re.findall(r"\{.*\}", response, re.DOTALL)[0]
                 attempt_n += 1
             except KeyError:
                 attempt_n += 1
 
         if len(suggestion) == 0:
             # we try to extract key/value separately and return it as a dictionary
-            pattern = r'"suggestion":\s*\{(.*?)\}'
-            suggestion_match = re.search(pattern, response.strip(), re.DOTALL)
+            pattern = r'"suggestion"\s*:\s*\{(.*?)\}'
+            suggestion_match = re.search(pattern, response, re.DOTALL)
             if suggestion_match:
                 suggestion = {}
                 # Extract the entire content of the suggestion dictionary
                 suggestion_content = suggestion_match.group(1)
-                # Regex to extract each key-value pair
-                pair_pattern = r'"([^"]+)":\s*"?(.*?)"?(?:,|$)'
+                # Regex to extract each key-value pair;
+                # This scheme assumes double quotes but is robust to missing cammas at the end of the line
+                pair_pattern = r'"([a-zA-Z0-9_]+)"\s*:\s*"(.*)"'
                 # Find all matches of key-value pairs
-                pairs = re.findall(pair_pattern, suggestion_content)
+                pairs = re.findall(pair_pattern, suggestion_content, re.DOTALL)
                 for key, value in pairs:
                     suggestion[key] = value
 
         if len(suggestion) == 0:
             print("Cannot extract suggestion from LLM's response:")
             print(response)
+
         return suggestion
 
     def call_llm(
-        self, system_prompt: str, user_prompt: str, verbose: Union[bool, str] = False
+        self, system_prompt: str, user_prompt: str, verbose: Union[bool, str] = False, max_tokens: int = 4096
     ):  # TODO Get this from utils?
         """Call the LLM with a prompt and return the response."""
         if verbose not in (False, "output"):
@@ -474,7 +472,7 @@ class FunctionOptimizer(Optimizer):
                 response_format={"type": "json_object"},
             )
         except Exception:
-            response = self.llm.create(messages=messages)
+            response = self.llm.create(messages=messages, max_tokens=max_tokens)
         response = response.choices[0].message.content
 
         if verbose:
