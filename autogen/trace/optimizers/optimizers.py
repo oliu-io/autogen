@@ -46,7 +46,15 @@ class Optimizer(AbstractOptimizer):
         return self._propagator
 
     def step(self, *args, **kwargs):
-        update_dict = self._step(*args, **kwargs)
+        update_dict = self.propose(*args, **kwargs)
+        self.update(update_dict)
+
+    def propose(self, *args, **kwargs):
+        """Propose the new data of the parameters based on the feedback."""
+        return self._step(*args, **kwargs)
+
+    def update(self, update_dict: Dict[ParameterNode, Any]):
+        """Update the trainable parameters given a dictionary of new data."""
         for p, d in update_dict.items():
             if p.trainable:
                 p._data = d
