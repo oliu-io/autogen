@@ -13,8 +13,14 @@ import json
 import re
 
 
+def get_fun_name(node: MessageNode):
+    if isinstance(node.info, dict) and "fun_name" in node.info:
+        return node.info["fun_name"]
+    return node.name.split(":")[0]
+
+
 def repr_function_call(child: MessageNode):
-    function_call = f"{child.py_name} = {child.info['fun_name']}("
+    function_call = f"{child.py_name} = {get_fun_name(child)}("
     for k, v in child.inputs.items():
         function_call += f"{k}={v.py_name}, "
     function_call = function_call[:-2] + ")"
@@ -43,7 +49,7 @@ def node_to_function_feedback(node_feedback: NodeFeedback):
             if all([p in visited for p in node.parents]):
                 # this is an intermediate node
                 assert isinstance(node, MessageNode)
-                documentation.update({node.info["fun_name"]: node.description})
+                documentation.update({get_fun_name(node): node.description})
                 graph.append((level, repr_function_call(node)))
                 if level == depth:
                     output.update({node.py_name: (node.data, node._constraint)})
@@ -151,6 +157,23 @@ class ProblemInstance:
         )
 
 
+class Buffer:
+    def __init__(self, size: int):
+        self.size = size
+        self.buffer = []
+
+    def add(self, item):
+        if self.size > 0:
+            self.buffer.append(item)
+            self.buffer = self.buffer[-self.size :]
+
+    def __iter__(self):
+        return iter(self.buffer)
+
+    def __len__(self):
+        return len(self.buffer)
+
+
 class FunctionOptimizer(Optimizer):
     # This is generic representation prompt, which just explains how to read the problem.
     representation_prompt = dedent(
@@ -219,7 +242,6 @@ class FunctionOptimizer(Optimizer):
         {problem_instance}
         ================================
 
-        Your response:
         """
     )
 
@@ -234,6 +256,12 @@ class FunctionOptimizer(Optimizer):
         {examples}
 
         ================================
+        """
+    )
+
+    final_prompt = dedent(
+        """
+        Your response:
         """
     )
 
@@ -340,17 +368,8 @@ class FunctionOptimizer(Optimizer):
             feedback=summary.user_feedback if "feedback" not in mask else "",
         )
 
-    # if not summary.user_feedback.startswith("TraceExecutionError"):  # feasible
-    #     self.feasible_solutions.add(summary.variables)
-    # if len(self.feasible_solutions) > 0:
-    #     examples_str = ""
-    #     for i, example in enumerate(self.feasible_solutions):
-    #         examples_str += f"Example {i+1}:\n{self.repr_node_value(example)}\n\n"
-    #     prompt += self.example_prompt.format(examples=examples_str)
-
-    def construct_prompt(self, mask=None, *args, **kwargs):
+    def construct_prompt(self, summary, mask=None, *args, **kwargs):
         """Construct the system and user prompt."""
-        summary = self.summarize()
         system_prompt = self.representation_prompt + self.output_format_prompt  # generic representation + output rule
         user_pormpt = self.user_prompt_template.format(
             problem_instance=str(self.probelm_instance(summary, mask=mask))
@@ -362,12 +381,13 @@ class FunctionOptimizer(Optimizer):
                 )
                 + user_pormpt
             )
+        user_pormpt += self.final_prompt
         return system_prompt, user_pormpt
 
     def _step(self, verbose=False, mask=None, *args, **kwargs) -> Dict[ParameterNode, Any]:
         assert isinstance(self.propagator, NodePropagator)
-
-        system_prompt, user_pormpt = self.construct_prompt(mask=mask)
+        summary = self.summarize()
+        system_prompt, user_pormpt = self.construct_prompt(summary, mask=mask)
         response = self.call_llm(system_prompt=system_prompt, user_prompt=user_pormpt, verbose=verbose)
 
         if "TERMINATE" in response:
