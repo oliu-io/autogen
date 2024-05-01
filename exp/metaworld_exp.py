@@ -28,15 +28,6 @@ def parse_obs(obs):
     return obs
 
 
-def control_offset(obs, action):
-    """
-    Turn relative control to absolute control
-    """
-    offset = obs["observation"]["hand_pos"]
-    action = [action[0] + offset[0], action[1] + offset[1], action[2] + offset[2], action[3]]
-    return action
-
-
 class TracedEnv:
     def __init__(self, env_name, seed=0, feedback_type="a", relative=True):
         random.seed(seed)
@@ -44,7 +35,7 @@ class TracedEnv:
         self.env = llfbench.make(env_name, feedback_type=feedback_type)
         self.env.reset(seed=seed)
         self.env.action_space.seed(seed)
-        self.relative = relative
+        self.env.control_mode("relative" if relative else "absolute")
         self.obs = None
 
     @trace.trace_op()
@@ -64,7 +55,7 @@ class TracedEnv:
         # information would be leaked. Below is a hack to prevent raward and
         # info from being leaked.
         try:  # Not traced
-            control = control_offset(self.obs, action.data) if self.relative else action.data
+            control = action.data if isinstance(action, trace.Node) else action
             next_obs, reward, termination, truncation, info = self.env.step(control)
             next_obs["observation"] = parse_obs(next_obs["observation"])
             self.obs = next_obs
@@ -147,7 +138,7 @@ def evaluate(env, horizon, policy, n_episodes=10):
 
 
 def evaluate_expert(env_name, horizon, n_episodes, seed=0):
-    env = TracedEnv(env_name, seed=seed, relative=False)
+    env = TracedEnv(env_name, seed=seed, relative=True)
 
     def expert_policy(obs, env):
         action = env.env.expert_action
