@@ -1,22 +1,20 @@
 # %% [markdown]
 # # Learning Code as Policy for Metaworld
 #
-#
-# This notebook shows a basic example of using the optimizer to follow language feedback online during interaction.
 
 # %%
 # Run experiment
 
 # %%
 import llfbench
-import autogen.trace as trace
-from autogen.trace.trace_ops import ExceptionNode, TraceExecutionError
-from autogen.trace.optimizers import FunctionOptimizer
 import random
+import os
+import pickle
 import numpy as np
 from datetime import datetime
-
 from torch.utils.tensorboard import SummaryWriter
+import autogen.trace as trace
+from autogen.trace.trace_ops import ExceptionNode, TraceExecutionError
 
 
 def parse_obs(obs):
@@ -60,13 +58,19 @@ class TracedEnv:
         return obs, info
 
     def step(self, action):
-        # this is a hack to prevent raward and info from being leaked
+        # We trace the step function; however, we do not trace the generation of
+        # reward and info since we want to test the ability of agent to learn
+        # from language feedback alone. We cannot simply apply trace_op, as the
+        # information would be leaked. Below is a hack to prevent raward and
+        # info from being leaked.
         try:  # Not traced
             control = control_offset(self.obs, action.data) if self.relative else action.data
             next_obs, reward, termination, truncation, info = self.env.step(control)
             next_obs["observation"] = parse_obs(next_obs["observation"])
             self.obs = next_obs
-        except Exception as e:
+        except (
+            Exception
+        ) as e:  # Since we are not using trace_op, we need to handle exceptions maually as trace_op does internally.
             e_node = ExceptionNode(
                 e,
                 inputs={"action": action},
@@ -75,6 +79,7 @@ class TracedEnv:
             )
             raise TraceExecutionError(e_node)
 
+        # This is a way to hack trace_op to prevent reward and info from being traced.
         @trace.trace_op()
         def step(action):
             """
@@ -87,8 +92,7 @@ class TracedEnv:
 
 
 def rollout(env, horizon, controller):
-    """Run optimizer step for every time step."""
-
+    """Rollout a controller in an env for horizon steps."""
     traj = dict(observation=[], action=[], reward=[], termination=[], truncation=[], success=[], input=[])
 
     # Initialize the environment
@@ -104,8 +108,9 @@ def rollout(env, horizon, controller):
             next_obs, reward, termination, truncation, info = env.step(action)
         except trace.TraceExecutionError as e:
             error = e
+            break
 
-        if error is None:
+        if error is None:  # log
             traj["observation"].append(next_obs)
             traj["action"].append(action)
             traj["reward"].append(reward)
@@ -123,28 +128,18 @@ def evaluate(env, horizon, policy, n_episodes=10):
     returns = []
     successes = []
     episode_lens = []
-    distances = []  # XXX
     for _ in range(n_episodes):
         traj, error = rollout(env, horizon, policy)
-        assert error is None
+        assert error is None, "Error in rollout."
         sum_of_rewards = sum(traj["reward"])
         success = sum(traj["success"]) > 0
         episode_len = len(traj["reward"])
         returns.append(sum_of_rewards)
         successes.append(success)
         episode_lens.append(episode_len)
-
-        # Debug
-        distance = 0
-        for obs in traj["observation"]:
-            obs = obs["observation"].data
-            distance += np.linalg.norm(np.array(obs["hand_pos"]) - np.array(obs["goal_pos"]))
-        distances.append(distance)
-
     print(f"Average return: {np.mean(returns)} (std: {np.std(returns)})")
     print(f"Average success: {np.mean(success)} (std: {np.std(success)})")
     print(f"Average episode length: {np.mean(episode_lens)} (std: {np.std(episode_lens)})")
-    print(f"Distance to goal (average): {np.mean(distances)}")
     return returns, successes, episode_lens
 
 
@@ -180,13 +175,12 @@ def optimize_policy(
     feedback_type=("hp", "hn"),
     logdir="./exp_results",
     mask=None,
-):  # None or list
-    env = TracedEnv(env_name, seed=seed, feedback_type=feedback_type, relative=relative)
-
-    logdir = logdir + f"/{env_name}"
-
+    verbose=False,
+    provide_reward=False,
+):
     writer = SummaryWriter(logdir)
 
+    # Define the variable
     @trace.trace_op(trainable=True)
     def controller(obs):
         """
@@ -196,16 +190,19 @@ def optimize_policy(
 
     optimizer = trace.optimizers.FunctionOptimizer(controller.parameters(), memory_size=0)
 
-    print("Optimization")
+    print("Optimization Starts")
     log = dict(returns=[], successes=[], episode_lens=[])
     for i in range(n_optimization_steps):
         env = TracedEnv(env_name, seed=seed, feedback_type=feedback_type, relative=relative)  # fix init condition
         # Rollout and collect feedback
         traj, error = rollout(env, horizon, controller)
+
+        # Compute feedback and logging
         if error is None:
-            # only get feedback for the last observation
-            feedback = f"Success: {traj['success'][-1]}. Rewards: {sum(traj['reward'])}"
-            # feedback += 'For the last observation, you get feedback: '+ traj["observation"][-1]["feedback"].data
+            # Provide feedback to the last observation
+            feedback = f"Success: {traj['success'][-1]}"
+            if provide_reward:
+                feedback += f"Rewards: {sum(traj['reward'])}"
             target = traj["observation"][-1]["observation"]
             # Logging Evaluate the current policy (Data not used in training)
             returns, successes, episode_lens = evaluate(env, horizon, controller, n_episodes=n_episodes)
@@ -220,7 +217,7 @@ def optimize_policy(
             feedback = str(error)
             target = error.exception_node
 
-        # Optimization step
+        # Set the objective based on MW env
         optimizer.objective = (
             optimizer.default_objective
             + " Hint: "
@@ -231,9 +228,10 @@ def optimize_policy(
                 "The goal of the task is to pick up a puck and put it to a goal position." + optimizer.objective
             )
 
+        # Optimization step
         optimizer.zero_feedback()
         optimizer.backward(target, feedback)
-        optimizer.step(verbose=True, mask=mask)
+        optimizer.step(verbose=verbose, mask=mask)
 
         print(f"Iteration: {i}")
         print(f"Feedback: {feedback}")
@@ -259,10 +257,21 @@ if __name__ == "__main__":
     parser.add_argument("--relative", type=bool, default=True)
     parser.add_argument("--feedback_type", type=str, default="a")
     parser.add_argument("--mask", type=str, default=None)
+    parser.add_argument("--verbose", type=bool, default=False)
+    parser.add_argument("--provide_reward", action="store_true")
+    parser.add_argument("--logdir", type=str, default="./exp_results")
+    parser.add_argument("--note", type=str, default="")
     args = parser.parse_args()
 
-    logdir = f"./exp_results/{args.env_name}/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}"
-    logdir = logdir + datetime.now().strftime("%Y%m%d-%H%M%S")
+    # logging
+    logdir = args.logdir + f"/{args.env_name}"
+    logdir += (
+        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}"
+        + args.note
+    )
+    logdir += datetime.now().strftime("%Y%m%d-%H%M%S")
+    os.makedirs(logdir, exist_ok=True)
+    pickle.dump(args, open(os.path.join(logdir, "args.pkl"), "wb"))  # Save the arguments for reproducibility
 
     evaluate_expert(args.env_name, args.horizon, args.n_episodes, seed=args.seed)
     optimize_policy(
