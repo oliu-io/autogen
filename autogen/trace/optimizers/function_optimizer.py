@@ -215,7 +215,7 @@ class FunctionOptimizer(Optimizer):
         }}
         }}
 
-        You should write down your thought process in "reasoning". If #Instruction asks for an answer, write it down in "answer". If you need to suggest a change in the values of #Variables, write down the suggested values in "suggestion". Remember you can change only the values in #Variables, not others. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors.
+        You should write down your thought process in "reasoning". If #Instruction asks for an answer, write it down in "answer". If you need to suggest a change in the values of #Variables, write down the suggested values in "suggestion". Remember you can change only the values in #Variables, not others. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors, and you should not change the function name or the function signature.
 
         If no changes or answer are needed, just output TERMINATE.
         """
