@@ -277,6 +277,7 @@ class FunctionOptimizer(Optimizer):
         include_example=False,  # TODO # include example problem and response in the prompt
         stepsize=1,  # TODO
         max_tokens=4096,
+        log=True,
         **kwargs,
     ):
         super().__init__(parameters, *args, propagator=propagator, **kwargs)
@@ -310,6 +311,7 @@ class FunctionOptimizer(Optimizer):
         self.stepsize = stepsize  # TODO
         self.include_example = include_example
         self.max_tokens = max_tokens
+        self.log = [] if log else None
 
     def default_propagator(self):
         """Return the default Propagator object of the optimizer."""
@@ -399,6 +401,9 @@ class FunctionOptimizer(Optimizer):
 
         suggestion = self.extract_llm_suggestion(response)
         update_dict = self.construct_update_dict(suggestion)
+
+        if self.log is not None:
+            self.log.append({"system_prompt": system_prompt, "user_prompt": user_pormpt, "response": response})
 
         return update_dict
 
