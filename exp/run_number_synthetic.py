@@ -26,6 +26,43 @@ def get_dataset(n=100, init_seed=1111):
         seeds.append(random.randint(0, 99999))
     return seeds
 
+
+def simple_newton_test(program, seed):
+    h = 0.1
+    x = 0.5
+    x_0, x_1, x_2 = x - h, x, x + h
+    y_0, y_1, y_2 = program(x_0, seed=seed), program(x_1, seed=seed), program(x_2, seed=seed)
+    # by increasing x, we are getting smaller
+    if y_2 < y_1 or y_1 < y_0:
+        return True
+
+
+def get_hard_dataset(n=100, init_seed=1111):
+    # just do a filtering here
+    random.seed(init_seed)
+    seeds = []
+    while len(seeds) < n:
+        seed = random.randint(0, 99999)
+        try:
+            program = NumericalProgramSampler(chain_length=4, param_num=1, logic_prob=0, max_gen_var=5,
+                                              seed=seed, verbose=False)
+        except:
+            # if we get an error program, we just move on
+            continue
+
+        # we do two checks:
+        # 1. The output can't be larger than 1e5
+        if program.goal_output > 1e5:
+            continue
+        # 2. The input/output can't move in the same direction
+        pass_test = simple_newton_test(program, seed)
+        if not pass_test:
+            continue
+
+        seeds.append(seed)
+
+    return seeds
+
 def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
     GRAPH.clear()
 
@@ -126,7 +163,8 @@ def run_basic_agent_exp(agent_type='basic'):
     else:
         raise Exception("Agent type not implemented")
 
-    problem_ids = get_dataset(n=args.n)
+    # problem_ids = get_dataset(n=args.n)
+    problem_ids = get_hard_dataset(n=args.n)
     n_steps = args.steps  # we allow 10 optimization steps
 
     instruction = ("You are choosing an input that after some operations will result in an output. You will observe some feedback telling you whether"
@@ -159,8 +197,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--n", type=int, default=100)
-    parser.add_argument('--c', type=int, default=5)
-    parser.add_argument('--g', type=int, default=4)
+    parser.add_argument('--c', type=int, default=7)
+    parser.add_argument('--g', type=int, default=5)
     parser.add_argument('--p', type=int, default=1)
     parser.add_argument('--steps', type=int, default=5)
     parser.add_argument('--verbose', action='store_true')

@@ -45,8 +45,8 @@ math_ops_programs = {
     "+": reformat("""lambda a, b: a + b"""),
     "-": reformat("""lambda a, b: a - b"""),
     "*": reformat("""lambda a, b: a * b"""),
-    "/": reformat("""lambda a, b: a / b"""),
-    "//": reformat("""lambda a, b: a // b"""),
+    "/": reformat("""lambda a, b: a / b if b!=0 else a"""),
+    "//": reformat("""lambda a, b: a // b if b!=0 else a"""),
     # "%": reformat("""lambda a, b: a % b"""),
     # "**": reformat("""lambda a, b: a ** b""")
 }
@@ -56,7 +56,7 @@ MAX_VALUE = 3
 MIN_VALUE = -3
 possible_input_values = [i for i in range(MIN_VALUE, MAX_VALUE + 1) if i != 0]
 
-def create_input_var(input_min=-10, input_max=10):
+def create_input_var(input_min=-3, input_max=3):
     # sample and return a random 5 letter name
     retry = 10
     cnt = 0
@@ -67,7 +67,8 @@ def create_input_var(input_min=-10, input_max=10):
         cnt += 1
         name = "node_" + "".join(random.choices(string.ascii_lowercase, k=5))
 
-    value = random.randint(input_min, input_max)
+    # value = random.randint(input_min, input_max)
+    value = random.choice([-3, -2, -1, 1, 2, 3])
     return node(value, name)
 
 
