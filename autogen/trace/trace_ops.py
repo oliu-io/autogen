@@ -167,9 +167,11 @@ class FunModule(Module):
         self.allow_external_dependencies = allow_external_dependencies
         self.parameter = None
         if trainable:
-            signature = re.search(r"\s*(def.*\"\"\")", source, re.DOTALL).group(1)
-            if signature is None:  # if there is no docstring just take the first line
+            signature_sr = re.search(r"\s*(def.*\"\"\")", source, re.DOTALL)
+            if signature_sr is None:  # if there is no docstring just take the first line
                 signature = re.search(r"\s*(def.*:)", source).group(1)
+            else:
+                signature = signature_sr.group(1)
             self.parameter = ParameterNode(
                 self.info["source"], name="__code", constraint="The code should start with:\n" + signature
             )
