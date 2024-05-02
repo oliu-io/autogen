@@ -202,7 +202,9 @@ class FunModule(Module):
                 methods.update({k: self._fun.__globals__[k]})
             try:
                 exec(code)  # define the function
-            except (SyntaxError, NameError) as e:
+                fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
+                fun = locals()[fun_name]
+            except (SyntaxError, NameError, KeyError) as e:
                 # Temporary fix for the issue of the code block not being able to be executed
                 e_node = ExceptionNode(
                     e,
@@ -212,8 +214,8 @@ class FunModule(Module):
                     info=self.info,
                 )
                 raise TraceExecutionError(e_node)
-            fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
-            return locals()[fun_name]
+
+            return fun
 
     @property
     def name(self):
