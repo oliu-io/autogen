@@ -31,12 +31,19 @@ def parse_obs(obs):
 
 class TracedEnv:
     def __init__(self, env_name, seed=0, feedback_type="a", relative=True):
-        random.seed(seed)
-        np.random.seed(seed)
-        self.env = llfbench.make(env_name, feedback_type=feedback_type)
-        self.env.reset(seed=seed)
-        self.env.action_space.seed(seed)
-        self.env.control_mode("relative" if relative else "absolute")
+        self.seed = seed
+        self.env_name = env_name
+        self.feedback_type = feedback_type
+        self.relative = relative
+        self.init()
+
+    def init(self):
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        self.env = llfbench.make(self.env_name, feedback_type=self.feedback_type)
+        self.env.reset(seed=self.seed)
+        self.env.action_space.seed(self.seed)
+        self.env.control_mode("relative" if self.relative else "absolute")
         self.obs = None
 
     @trace.trace_op()
@@ -75,17 +82,17 @@ class TracedEnv:
         @trace.trace_op()
         def step(action):
             """
-            Take action in the environment and return the next observation, reward, termination, truncation, and info.
+            Take action in the environment and return the next observation
             """
-            return next_obs, None, termination, truncation, {}
+            return next_obs
 
-        next_obs, _, termination, truncation, _ = step(action)  # traced
+        next_obs = step(action)  # traced
         return next_obs, reward, termination, truncation, info
 
 
 def rollout(env, horizon, controller):
     """Rollout a controller in an env for horizon steps."""
-    traj = dict(observation=[], action=[], reward=[], termination=[], truncation=[], success=[], input=[])
+    traj = dict(observation=[], action=[], reward=[], termination=[], truncation=[], success=[], input=[], info=[])
 
     # Initialize the environment
     obs, info = env.reset()
@@ -93,9 +100,9 @@ def rollout(env, horizon, controller):
 
     # Rollout
     for t in range(horizon):
+        controller_input = obs["observation"]
         error = None
         try:  # traced
-            controller_input = obs["observation"]
             action = controller(controller_input)
             next_obs, reward, termination, truncation, info = env.step(action)
         except trace.TraceExecutionError as e:
@@ -109,6 +116,7 @@ def rollout(env, horizon, controller):
             traj["termination"].append(termination)
             traj["truncation"].append(truncation)
             traj["success"].append(info["success"])
+            traj["info"].append(info)
             if termination or truncation or info["success"]:
                 break
             obs = next_obs
@@ -122,7 +130,7 @@ def evaluate(env, horizon, policy, n_episodes=10):
     episode_lens = []
     for _ in range(n_episodes):
         traj, error = rollout(env, horizon, policy)
-        assert error is None, "Error in rollout."
+        assert error is None, f"Error in rollout. {error}"
         sum_of_rewards = sum(traj["reward"])
         success = sum(traj["success"]) > 0
         episode_len = len(traj["reward"])
@@ -170,6 +178,8 @@ def optimize_policy(
     verbose=False,
     provide_reward=False,
     model="gpt-4-turbo-preview",
+    random_init=False,
+    concat_feedback=False,
 ):
     writer = SummaryWriter(logdir)
 
@@ -178,62 +188,78 @@ def optimize_policy(
     def controller(obs):
         """
         A feedback controller that computes the action based on the observation.
+
+        Args:
+            obs: (dict) The observation from the environment. Each key is a string (indicating a type of observation) and the value is a list of floats.
+        Output:
+            action: (list or nd.array) A 4-dimensional vector.
         """
         return [0, 0, 0, 0]
 
     config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
     config_list = [config for config in config_list if config["model"] == model]
-    optimizer = trace.optimizers.FunctionOptimizer(controller.parameters(), config_list=config_list)
+    optimizer = trace.optimizers.FunctionOptimizerV2(controller.parameters(), config_list=config_list)
+
+    env = TracedEnv(env_name, seed=seed, feedback_type=feedback_type, relative=relative)
 
     print("Optimization Starts")
-    log = dict(returns=[], successes=[], episode_lens=[])
+    log = dict(returns=[], successes=[], episode_lens=[], optimizer_log=[])
     for i in range(n_optimization_steps):
-        env = TracedEnv(env_name, seed=seed, feedback_type=feedback_type, relative=relative)  # fix init condition
+        if not random_init:
+            env.init()  # fix init condition
         # Rollout and collect feedback
         traj, error = rollout(env, horizon, controller)
 
         # Compute feedback and logging
         if error is None:
             # Provide feedback to the last observation
-            feedback = f"Success: {traj['success'][-1]}"
-            if provide_reward:
-                feedback += f" Rewards: {sum(traj['reward'])}"
+            feedback = f"Success: {traj['success'][-1]}\n"
+            feedback += f"Return: {sum(traj['reward'])}"
+
+            if concat_feedback:
+                feedback += "\nFeedback received:"
+                for obs in traj["observation"][1:]:
+                    feedback += f"\n{obs['feedback'].data}"
+
             target = traj["observation"][-1]["observation"]
-            # Logging Evaluate the current policy (Data not used in training)
-            returns, successes, episode_lens = evaluate(env, horizon, controller, n_episodes=n_episodes)
-            log["returns"].append(returns)
-            log["successes"].append(successes)
-            log["episode_lens"].append(episode_lens)
-            writer.add_scalar("Rollout/return", sum(traj["reward"]), i)
-            writer.add_scalar("Rollout/success", traj["success"][-1], i)
-            writer.add_scalar("Evaluation/return", sum(returns), i)
-            writer.add_scalar("Evaluation/success", sum(successes), i)
+            try:
+                # Logging Evaluate the current policy (Data not used in training)
+                returns, successes, episode_lens = evaluate(env, horizon, controller, n_episodes=n_episodes)
+                log["returns"].append(returns)
+                log["successes"].append(successes)
+                log["episode_lens"].append(episode_lens)
+                writer.add_scalar("Rollout/return", sum(traj["reward"]), i)
+                writer.add_scalar("Rollout/success", traj["success"][-1], i)
+                writer.add_scalar("Evaluation/return", sum(returns), i)
+                writer.add_scalar("Evaluation/success", sum(successes), i)
+            except Exception:
+                pass
         else:  # Self debugging
             feedback = str(error)
             target = error.exception_node
 
         # Set the objective based on MW env
         optimizer.objective = (
-            optimizer.default_objective
-            + " Hint: "
-            + traj["observation"][0]["instruction"].data.replace("absolute", "relative")
+            traj["observation"][0]["instruction"].data.replace("absolute", "relative") + optimizer.default_objective
         )
-        if env_name == "llf-metaworld-pick-place-v2":
+        if (
+            env_name == "llf-metaworld-pick-place-v2"
+        ):  # add "The goal of the task is to pick up a puck and put it to a goal position." to the original llfbench instruction
             optimizer.objective = (
-                "The goal of the task is to pick up a puck and put it to a goal position." + optimizer.objective
+                "Your job is to control a Sawyer robot arm to solve a pick-place task. The goal of the task is to pick up a puck and put it to a goal position. You will get observations of the robot state and the world state in the form of json strings. Your objective is to provide control inputs to the robot to achieve the task's goal state over multiple time steps. Your actions are 4-dim vectors, where the first 3 dimensions control the movement of the robot's end effector in the x, y, and z directions, and the last dimension controls the gripper state (0 means opening it, and 1 means closing it). You action at each step sets the robot's target pose for that step in relative coordinate. The robot will move towards that pose using a P controller."
+                + optimizer.default_objective
             )
-
-            # optimizer.objective = "Your job is to control a Sawyer robot arm to solve a pick-place task. The goal of the task is to pick up a puck and put it to a goal position. You will get observations of the robot state and the world state in the form of json strings. Your objective is to provide control inputs to the robot to achieve the task's goal state over multiple time steps. Your actions are 4-dim vectors, where the first 3 dimensions control the movement of the robot's end effector in the x, y, and z directions, and the last dimension controls the gripper state (0 means opening it, and 1 means closing it). You action at each step sets the robot's target pose for that step in relative coordinate. The robot will move towards that pose using a P controller." + optimizer.default_objective
-
-            # optimizer.objective = optimizer.default_objective + "Your job is to control a Sawyer robot arm to solve a pick-place task. The goal of the task is to pick up a puck and put it to a goal position. You will get observations of the robot state and the world state in the form of json strings. Your objective is to provide control inputs to the robot to achieve the task's goal state over multiple time steps. Your actions are 4-dim vectors, where the first 3 dimensions control the movement of the robot's end effector in the x, y, and z directions, and the last dimension controls the gripper state (0 means opening it, and 1 means closing it). You action at each step sets the robot's target pose for that step in relative coordinate. The robot will move towards that pose using a P controller."
 
         # Optimization step
         optimizer.zero_feedback()
         optimizer.backward(target, feedback)
         optimizer.step(verbose=verbose, mask=mask)
+
         print(f"Iteration: {i}")
         print(f"Feedback: {feedback}")
         print(f"Parameter:\n {controller.parameter.data}")
+        log["optimizer_log"] = optimizer.log
+        pickle.dump(log, open(os.path.join(logdir, "log.pkl"), "wb"))
 
     returns, successes, episode_lens = evaluate(env, horizon, controller, n_episodes=n_episodes)
     log["returns"].append(returns)
@@ -260,12 +286,14 @@ if __name__ == "__main__":
     parser.add_argument("--logdir", type=str, default="./exp_results")
     parser.add_argument("--note", type=str, default="")
     parser.add_argument("--model", type=str, default="gpt-4-turbo-preview")
+    parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--random_init", action="store_true")
     args = parser.parse_args()
 
     # logging
     logdir = args.logdir + f"/{args.env_name}"
     logdir += (
-        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}_model_{args.model}_"
+        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}_model_{args.model}_random_init_{args.random_init}"
         + args.note
     )
     logdir += datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -275,6 +303,11 @@ if __name__ == "__main__":
     # printing
     if args.verbose is False:
         args.verbose = "output"
+
+    # baseline
+    if args.baseline:
+        args.concat_feedback = True
+        args.mask = ["#Documentation", "#Code", "#Inputs", "#Others"]
 
     evaluate_expert(args.env_name, args.horizon, args.n_episodes, seed=args.seed)
     optimize_policy(
@@ -290,4 +323,6 @@ if __name__ == "__main__":
         mask=args.mask,
         model=args.model,
         verbose=args.verbose,
+        random_init=args.random_init,
+        concat_feedback=args.concat_feedback,
     )
