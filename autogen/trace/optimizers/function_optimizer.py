@@ -362,14 +362,16 @@ class FunctionOptimizer(Optimizer):
         mask = mask or []
         return ProblemInstance(
             instruction=self.objective,
-            code="\n".join([v for k, v in sorted(summary.graph)]) if "code" not in mask else "",
-            documentation="\n".join([v for v in summary.documentation.values()]) if "documentation" not in mask else "",
-            variables=self.repr_node_value(summary.variables) if "variables" not in mask else "",
-            constraints=self.repr_node_constraint(summary.variables) if "variables" not in mask else "",
-            inputs=self.repr_node_value(summary.inputs) if "inputs" not in mask else "",
-            outputs=self.repr_node_value(summary.output) if "outputs" not in mask else "",
-            others=self.repr_node_value(summary.others) if "others" not in mask else "",
-            feedback=summary.user_feedback if "feedback" not in mask else "",
+            code="\n".join([v for k, v in sorted(summary.graph)]) if "#Code" not in mask else "",
+            documentation="\n".join([v for v in summary.documentation.values()])
+            if "#Documentation" not in mask
+            else "",
+            variables=self.repr_node_value(summary.variables) if "#Variables" not in mask else "",
+            constraints=self.repr_node_constraint(summary.variables) if "#Constraints" not in mask else "",
+            inputs=self.repr_node_value(summary.inputs) if "#Inputs" not in mask else "",
+            outputs=self.repr_node_value(summary.output) if "#Outputs" not in mask else "",
+            others=self.repr_node_value(summary.others) if "#Others" not in mask else "",
+            feedback=summary.user_feedback if "#Feedback" not in mask else "",
         )
 
     def construct_prompt(self, summary, mask=None, *args, **kwargs):
@@ -483,3 +485,30 @@ class FunctionOptimizer(Optimizer):
         if verbose:
             print("LLM response:\n", response)
         return response
+
+
+class FunctionOptimizerV2(FunctionOptimizer):
+    # Make the reasoning part more explicit
+
+    output_format_prompt = dedent(
+        """
+        Output_format: Your output should be in the following json format, satisfying the json syntax:
+
+        {{
+        "reasoning": <Your reasoning>,
+        "answer": <Your answer>,
+        "suggestion": {{
+            <variable_1>: <suggested_value_1>,
+            <variable_2>: <suggested_value_2>,
+        }}
+        }}
+
+        In "reasoning", explain the problem: 1. what the #Instruction means 2. what the #Feedback on #Output means to #Variables considering how #Variables are used in #Code and other values in #Documentation, #Inputs, #Others. 3. Reasoning about the suggested changes in #Variables (if needed) and the expected result.
+
+        If #Instruction asks for an answer, write it down in "answer".
+
+        If you need to suggest a change in the values of #Variables, write down the suggested values in "suggestion". Remember you can change only the values in #Variables, not others. When <type> of a variable is (code), you should write the new definition in the format of python code without syntax errors, and you should not change the function name or the function signature.
+
+        If no changes or answer are needed, just output TERMINATE.
+        """
+    )

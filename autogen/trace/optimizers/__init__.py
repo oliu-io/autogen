@@ -1,1 +1,1 @@
-from autogen.trace.optimizers.function_optimizer import FunctionOptimizer
+from autogen.trace.optimizers.function_optimizer import FunctionOptimizer, FunctionOptimizerV2
