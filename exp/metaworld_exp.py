@@ -180,6 +180,7 @@ def optimize_policy(
     model="gpt-4-turbo-preview",
     random_init=False,
     concat_feedback=False,
+    optimizer_cls=trace.optimizers.FunctionOptimizerV2,
 ):
     writer = SummaryWriter(logdir)
 
@@ -198,7 +199,7 @@ def optimize_policy(
 
     config_list = autogen.config_list_from_json("OAI_CONFIG_LIST")
     config_list = [config for config in config_list if config["model"] == model]
-    optimizer = trace.optimizers.FunctionOptimizerV2(controller.parameters(), config_list=config_list)
+    optimizer = optimizer_cls(controller.parameters(), config_list=config_list)
 
     env = TracedEnv(env_name, seed=seed, feedback_type=feedback_type, relative=relative)
 
@@ -239,16 +240,25 @@ def optimize_policy(
             target = error.exception_node
 
         # Set the objective based on MW env
-        optimizer.objective = (
-            traj["observation"][0]["instruction"].data.replace("absolute", "relative") + optimizer.default_objective
-        )
-        if (
-            env_name == "llf-metaworld-pick-place-v2"
-        ):  # add "The goal of the task is to pick up a puck and put it to a goal position." to the original llfbench instruction
-            optimizer.objective = (
-                "Your job is to control a Sawyer robot arm to solve a pick-place task. The goal of the task is to pick up a puck and put it to a goal position. You will get observations of the robot state and the world state in the form of json strings. Your objective is to provide control inputs to the robot to achieve the task's goal state over multiple time steps. Your actions are 4-dim vectors, where the first 3 dimensions control the movement of the robot's end effector in the x, y, and z directions, and the last dimension controls the gripper state (0 means opening it, and 1 means closing it). You action at each step sets the robot's target pose for that step in relative coordinate. The robot will move towards that pose using a P controller."
-                + optimizer.default_objective
+
+        instruction = traj["observation"][0]["instruction"].data
+        infix = "You will get observations of the robot state "
+        prefix, postfix = instruction.split(infix)
+        # Add an task specific explanation; as the original instruction is too general and vague
+        if env_name == "llf-metaworld-pick-place-v2":
+            hint = (
+                prefix + "The goal of the task is to pick up a puck and put it to a goal position. " + infix + postfix
             )
+        elif env_name == "llf-metaworld-push-v2":
+            hint = prefix + "The goal of the task is to push a puck to a goal position. " + infix + postfix
+        elif env_name == "llf-metaworld-drawer-close-v2":
+            hint = prefix + "The goal of the task is to push and close a drwr (drawer). " + infix + postfix
+        elif env_name == "llf-metaworld-drawer-open-v2":
+            hint = prefix + "The goal of the task is to pull and open a drwr (drawer). " + infix + postfix
+        else:
+            hint = instruction
+
+        optimizer.objective = hint + optimizer.default_objective
 
         # Optimization step
         optimizer.zero_feedback()
@@ -287,6 +297,7 @@ if __name__ == "__main__":
     parser.add_argument("--note", type=str, default="")
     parser.add_argument("--model", type=str, default="gpt-4-turbo-preview")
     parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--llmasopt", action="store_true")
     parser.add_argument("--random_init", action="store_true")
     args = parser.parse_args()
 
@@ -305,9 +316,17 @@ if __name__ == "__main__":
         args.verbose = "output"
 
     # baseline
+    # only one of the two can be true
+    assert not (args.baseline and args.llmasopt), "Only one of the two can be true"
     if args.baseline:
-        args.concat_feedback = True
+        concat_feedback = True
         args.mask = ["#Documentation", "#Code", "#Inputs", "#Others"]
+    else:
+        concat_feedback = False
+    if args.llmasopt:
+        optimizer_cls = trace.optimizers.LlmAsOptimizer
+    else:
+        optimizer_cls = trace.optimizers.FunctionOptimizerV2
 
     evaluate_expert(args.env_name, args.horizon, args.n_episodes, seed=args.seed)
     optimize_policy(
@@ -324,5 +343,6 @@ if __name__ == "__main__":
         model=args.model,
         verbose=args.verbose,
         random_init=args.random_init,
-        concat_feedback=args.concat_feedback,
+        concat_feedback=concat_feedback,
+        optimizer_cls=optimizer_cls,
     )
