@@ -40,13 +40,13 @@ logic_ops_programs = {
 }
 
 # Not suppoprting unary ops for now
-math_ops = ["+", "-", "*", "/", "//"]  # , "**", "%"
+math_ops = ["+", "-", "*", "/"]  # "//", , "%", "**"
 math_ops_programs = {
     "+": reformat("""lambda a, b: a + b"""),
     "-": reformat("""lambda a, b: a - b"""),
     "*": reformat("""lambda a, b: a * b"""),
     "/": reformat("""lambda a, b: a / b if b!=0 else a"""),
-    "//": reformat("""lambda a, b: a // b if b!=0 else a"""),
+    # "//": reformat("""lambda a, b: a // b if b!=0 else a"""),
     # "%": reformat("""lambda a, b: a % b"""),
     # "**": reformat("""lambda a, b: a ** b""")
 }

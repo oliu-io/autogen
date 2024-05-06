@@ -40,19 +40,19 @@ def reformat(program_str: str):
 
 unary_string_ops = ["capitalize", "lower", "upper", "swapcase", "title"]
 unary_string_ops_programs = {
-    "capitalize": reformat("""lambda s: s.capitalize()"""),
-    "lower": reformat("""lambda s: s.lower()"""),
-    "upper": reformat("""lambda s: s.upper()"""),
-    "swapcase": reformat("""lambda s: s.swapcase()"""),
-    "title": reformat("""lambda s: s.title()"""),
+    "capitalize": reformat("""lambda s: s.capitalize() if type(s) == str else s"""),
+    "lower": reformat("""lambda s: s.lower() if type(s) == str else s"""),
+    "upper": reformat("""lambda s: s.upper() if type(s) == str else s"""),
+    "swapcase": reformat("""lambda s: s.swapcase() if type(s) == str else s"""),
+    "title": reformat("""lambda s: s.title() if type(s) == str else s"""),
 }
 
 # split, replace, concat
 string_mutation_ops = ["split", "replace", "concat"]
 string_mutation_ops_programs = {
-    "split": reformat("""lambda s, t: s.split(t)"""),  # 2 inputs
-    "concat": reformat("""lambda s, t: s + t"""),  # 2 inputs
-    "replace": reformat("""lambda s, a, b: s.replace(a, b)"""),  # 3 inputs
+    "split": reformat("""lambda s, t: s.split(t) if type(s) == str and type(t) == str else s"""),  # 2 inputs
+    "concat": reformat("""lambda s, t: s + t if type(s) == str and type(t) == str else s"""),  # 2 inputs
+    "replace": reformat("""lambda s, a, b: s.replace(a, b) if type(s) == str and type(t) == str else s"""),  # 3 inputs
 }
 
 variable_name_collide_list = set()
