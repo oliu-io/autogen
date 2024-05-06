@@ -16,7 +16,7 @@ import re
 from autogen.trace.optimizers.function_optimizer import FunctionOptimizer
 
 
-class LlmAsOptimizer(FunctionOptimizer):
+class OPRO(FunctionOptimizer):
     user_prompt_template = dedent(
         """
         Below are some example variables and their feedbacks.
@@ -70,5 +70,4 @@ class LlmAsOptimizer(FunctionOptimizer):
         examples = "\n".join(examples)
 
         user_prompt = self.user_prompt_template.format(examples=examples, instruction=self.objective)
-        breakpoint()
         return self.output_format_prompt, user_prompt
