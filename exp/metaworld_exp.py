@@ -324,7 +324,7 @@ if __name__ == "__main__":
     else:
         concat_feedback = False
     if args.llmasopt:
-        optimizer_cls = trace.optimizers.LlmAsOptimizer
+        optimizer_cls = trace.optimizers.OPRO
     else:
         optimizer_cls = trace.optimizers.FunctionOptimizerV2
 
