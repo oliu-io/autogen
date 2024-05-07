@@ -133,7 +133,8 @@ class FunModule(Module):
             source = match.group(1).strip()
         # Check if it's a recursive function, throws exception if it is
         # Trace does not support recursive functions right now
-        pattern = r"def [a-zA-Z0-9_]*\(.*\):\n(.*)"
+        # pattern = r"def [a-zA-Z0-9_]*\(.*\):\n(.*)"
+        pattern = r"def [a-zA-Z0-9_]*\(.*:\n(.*)"
         match = re.search(pattern, source, re.DOTALL)
         body = match.group(1)
         if " " + fun.__qualname__ + "(" in body and fun.__qualname__ not in global_functions_list:
