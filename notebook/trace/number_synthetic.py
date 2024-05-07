@@ -40,23 +40,23 @@ logic_ops_programs = {
 }
 
 # Not suppoprting unary ops for now
-math_ops = ["+", "-", "*", "/", "%", "//"]  # , "**"
+math_ops = ["+", "-", "*", "/"]  # "//", , "%", "**"
 math_ops_programs = {
     "+": reformat("""lambda a, b: a + b"""),
     "-": reformat("""lambda a, b: a - b"""),
     "*": reformat("""lambda a, b: a * b"""),
-    "/": reformat("""lambda a, b: a / b"""),
-    "%": reformat("""lambda a, b: a % b"""),
-    "//": reformat("""lambda a, b: a // b"""),
+    "/": reformat("""lambda a, b: a / b if b!=0 else a"""),
+    # "//": reformat("""lambda a, b: a // b if b!=0 else a"""),
+    # "%": reformat("""lambda a, b: a % b"""),
     # "**": reformat("""lambda a, b: a ** b""")
 }
 
 variable_name_collide_list = set()
-MAX_VALUE = 2
-MIN_VALUE = -2
+MAX_VALUE = 3
+MIN_VALUE = -3
+possible_input_values = [i for i in range(MIN_VALUE, MAX_VALUE + 1) if i != 0]
 
-
-def create_input_var(input_min=-10, input_max=10):
+def create_input_var(input_min=-3, input_max=3):
     # sample and return a random 5 letter name
     retry = 10
     cnt = 0
@@ -67,12 +67,15 @@ def create_input_var(input_min=-10, input_max=10):
         cnt += 1
         name = "node_" + "".join(random.choices(string.ascii_lowercase, k=5))
 
-    value = random.randint(input_min, input_max)
+    # value = random.randint(input_min, input_max)
+    value = random.choice([-3, -2, -1, 1, 2, 3])
     return node(value, name)
 
 
 def create_var():
-    value = random.randint(MIN_VALUE, MAX_VALUE)
+    # value = random.randint(MIN_VALUE, MAX_VALUE)
+    idx = random.randint(0, len(possible_input_values) - 1)
+    value = possible_input_values[idx]
     return value
 
 
@@ -143,9 +146,9 @@ class NumericalProgramSampler:
         if y_hat == self._goal_output.data:
             return "Success."
         elif y_hat < self._goal_output.data:
-            return "The number needs to be larger."
+            return f"The output {y_hat} needs to be larger."
         elif y_hat > self._goal_output.data:
-            return "The number needs to be smaller."
+            return f"The output {y_hat} needs to be smaller."
 
     def display_computation_graph(self):
         return self._goal_output.backward(visualize="True", feedback="fine")

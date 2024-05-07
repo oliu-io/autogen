@@ -165,8 +165,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--n", type=int, default=100)
-    parser.add_argument('--c', type=int, default=5)
-    parser.add_argument('--g', type=int, default=4)
+    parser.add_argument('--c', type=int, default=7)
+    parser.add_argument('--g', type=int, default=5)
     parser.add_argument('--p', type=int, default=1)
     parser.add_argument('--steps', type=int, default=5)
     parser.add_argument('--verbose', action='store_true')

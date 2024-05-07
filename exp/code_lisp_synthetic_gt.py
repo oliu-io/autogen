@@ -87,59 +87,6 @@ class Environment(dict):
             key = key.data
         super().__setitem__(key, value)
 
-
-global_env = Environment()
-global_env.update(standard_env())
-
-def eval_expression(x, env=global_env):
-    "Evaluate an expression in an environment."
-    # we first unpack
-
-    if isinstance(x, Node):
-        x = x.data
-
-    if isinstance(x, str):
-        return env.data.find(x)[x]
-    elif not isinstance(x, list):
-        return x
-
-    op, *args = x
-    if op == 'quote':
-        return args[0]
-    elif op == 'define':
-        (name, exp) = args
-        env.data[name] = eval_expression(exp, env)
-    elif op == 'lambda':
-        (parms, body) = args
-        return lambda *args: eval_expression(body, node(Environment(parms, args, env)))
-    elif op == 'if':
-        (test, conseq, alt) = args
-        exp = (conseq if eval_expression(test, env) else alt)
-        return eval_expression(exp, env)
-    else:
-        proc = eval_expression(op, env)
-        vals = [eval_expression(arg, env) for arg in args]
-        return proc(*vals)
-
-
-test_program = [
-    "(define r 10)",
-    "(define circle-area (lambda (r) (* pi (* r r))))",
-    "(circle-area 3)",
-    "(quote (1 2 3))",
-    "(if (> 10 20) (quote true) (quote false))"
-]
-
-global_env = node(global_env)
-
-for expr in test_program:
-    parsed_expr = parse(expr)
-    result = eval_expression(parsed_expr, global_env)
-    if isinstance(result, list):
-        print([x.data for x in result])
-    else:
-        print(result)  # Outputs for each expression
-
 # what if we use this to showcase multi-agent conversation using this...
 # we write a tester class/function that can test the output of the program, provide feedback dynamically
 # multi-round conversation
@@ -299,3 +246,59 @@ class CodingAgent:
 
     def true_test_read_from_tokens(self):
         assert self.read_from_tokens(['(', '1', '+', '(', '2', '*', '3', ')', ')']) == [1, '+', [2, '*', 3]]
+
+global_env = Environment()
+global_env.update(standard_env())
+
+# make a list of
+# this structure of code cannot be done
+# good to think about it (current limitations)
+
+def eval_expression(x, env=global_env):
+    "Evaluate an expression in an environment."
+    # we first unpack
+
+    if isinstance(x, Node):
+        x = x.data
+
+    if isinstance(x, str):
+        return env.data.find(x)[x]
+    elif not isinstance(x, list):
+        return x
+
+    op, *args = x
+    if op == 'quote':
+        return args[0]
+    elif op == 'define':
+        (name, exp) = args
+        env.data[name] = eval_expression(exp, env)
+    elif op == 'lambda':
+        (parms, body) = args
+        return lambda *args: eval_expression(body, node(Environment(parms, args, env)))
+    elif op == 'if':
+        (test, conseq, alt) = args
+        exp = (conseq if eval_expression(test, env) else alt)
+        return eval_expression(exp, env)
+    else:
+        proc = eval_expression(op, env)
+        vals = [eval_expression(arg, env) for arg in args]
+        return proc(*vals)
+
+
+test_program = [
+    "(define r 10)",
+    "(define circle-area (lambda (r) (* pi (* r r))))",
+    "(circle-area 3)",
+    "(quote (1 2 3))",
+    "(if (> 10 20) (quote true) (quote false))"
+]
+
+global_env = node(global_env)
+
+for expr in test_program:
+    parsed_expr = parse(expr)
+    result = eval_expression(parsed_expr, global_env)
+    if isinstance(result, list):
+        print([x.data for x in result])
+    else:
+        print(result)  # Outputs for each expression
