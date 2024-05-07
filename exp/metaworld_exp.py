@@ -243,20 +243,21 @@ def optimize_policy(
 
         instruction = traj["observation"][0]["instruction"].data
         infix = "You will get observations of the robot state "
-        prefix, postfix = instruction.split(infix)
+        prefix, suffix = instruction.split(infix)
+        keys = ", ".join(traj["observation"][0]["observation"].data.keys())
+        suffix = suffix.replace("json strings.", f"dict, where the keys are {keys}.")
+
         # Add an task specific explanation; as the original instruction is too general and vague
         if env_name == "llf-metaworld-pick-place-v2":
-            hint = (
-                prefix + "The goal of the task is to pick up a puck and put it to a goal position. " + infix + postfix
-            )
+            hint = prefix + "The goal of the task is to pick up a puck and put it to a goal position. " + infix + suffix
         elif env_name == "llf-metaworld-push-v2":
-            hint = prefix + "The goal of the task is to push a puck to a goal position. " + infix + postfix
+            hint = prefix + "The goal of the task is to push a puck to a goal position. " + infix + suffix
         elif env_name == "llf-metaworld-drawer-close-v2":
-            hint = prefix + "The goal of the task is to push and close a drwr (drawer). " + infix + postfix
+            hint = prefix + "The goal of the task is to push and close a drwr (drawer). " + infix + suffix
         elif env_name == "llf-metaworld-drawer-open-v2":
-            hint = prefix + "The goal of the task is to pull and open a drwr (drawer). " + infix + postfix
+            hint = prefix + "The goal of the task is to pull and open a drwr (drawer). " + infix + suffix
         else:
-            hint = instruction
+            hint = prefix + infix + suffix
 
         optimizer.objective = hint + optimizer.default_objective
 
@@ -297,14 +298,37 @@ if __name__ == "__main__":
     parser.add_argument("--note", type=str, default="")
     parser.add_argument("--model", type=str, default="gpt-4-turbo-preview")
     parser.add_argument("--baseline", action="store_true")
-    parser.add_argument("--llmasopt", action="store_true")
+    parser.add_argument("--opro", action="store_true")
     parser.add_argument("--random_init", action="store_true")
+    parser.add_argument("--memory_size", type=int, default=0)
+    parser.add_argument("--test", action="store_true")
     args = parser.parse_args()
+
+    # only one of the two can be true
+    assert not (args.baseline and args.opro), "Only one of the two can be true"
+    if args.baseline:
+        concat_feedback = True
+        args.mask = ["#Documentation", "#Code", "#Inputs", "#Others"]
+        args.note += "_baseline"
+    else:
+        concat_feedback = False
+    if args.opro:
+        args.note += "_opro"
+        optimizer_cls = trace.optimizers.OPRO
+    else:
+        if args.memory_size > 0:
+            memory_size = args.memory_size
+
+            def optimizer_cls(*args, **kwargs):
+                return trace.optimizers.FunctionOptimizerV2Memory(*args, memory_size=memory_size, **kwargs)
+
+        else:
+            optimizer_cls = trace.optimizers.FunctionOptimizerV2
 
     # logging
     logdir = args.logdir + f"/{args.env_name}"
     logdir += (
-        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}_model_{args.model}_random_init_{args.random_init}"
+        f"/seed_{args.seed}_feedback_type_{args.feedback_type}_mask_{args.mask}_reward_{args.provide_reward}_model_{args.model}_random_init_{args.random_init}_memory_size_{args.memory_size}"
         + args.note
     )
     logdir += datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -314,19 +338,6 @@ if __name__ == "__main__":
     # printing
     if args.verbose is False:
         args.verbose = "output"
-
-    # baseline
-    # only one of the two can be true
-    assert not (args.baseline and args.llmasopt), "Only one of the two can be true"
-    if args.baseline:
-        concat_feedback = True
-        args.mask = ["#Documentation", "#Code", "#Inputs", "#Others"]
-    else:
-        concat_feedback = False
-    if args.llmasopt:
-        optimizer_cls = trace.optimizers.OPRO
-    else:
-        optimizer_cls = trace.optimizers.FunctionOptimizerV2
 
     evaluate_expert(args.env_name, args.horizon, args.n_episodes, seed=args.seed)
     optimize_policy(
