@@ -6,6 +6,7 @@ from autogen.trace.optimizers.optimizers import Optimizer
 from autogen.trace.propagators import NodeFeedback, NodePropagator
 from textwrap import dedent, indent
 from autogen.trace.propagators.propagators import Propagator
+from autogen.trace.optimizers.buffers import FIFOBuffer
 import autogen
 import warnings
 import json
@@ -83,23 +84,6 @@ class FunctionFeedback:
     user_feedback: str  # User feedback at the leaf of the graph
 
 
-class Examples:
-    def __init__(self, size: int):
-        self.size = size
-        self.examples = []
-
-    def add(self, example: str):
-        if self.size > 0:
-            self.examples.append(example)
-            self.examples = self.examples[-self.size :]
-
-    def __iter__(self):
-        return iter(self.examples)
-
-    def __len__(self):
-        return len(self.examples)
-
-
 @dataclass
 class ProblemInstance:
     instruction: str
@@ -155,23 +139,6 @@ class ProblemInstance:
             others=self.others,
             feedback=self.feedback,
         )
-
-
-class Buffer:
-    def __init__(self, size: int):
-        self.size = size
-        self.buffer = []
-
-    def add(self, item):
-        if self.size > 0:
-            self.buffer.append(item)
-            self.buffer = self.buffer[-self.size :]
-
-    def __iter__(self):
-        return iter(self.buffer)
-
-    def __len__(self):
-        return len(self.buffer)
 
 
 class FunctionOptimizer(Optimizer):
@@ -273,9 +240,7 @@ class FunctionOptimizer(Optimizer):
         propagator: Propagator = None,
         objective: Union[None, str] = None,
         ignore_extraction_error: bool = True,  # ignore the type conversion error when extracting updated values from LLM's suggestion
-        n_feasible_solutions: bool = 0,
         include_example=False,  # TODO # include example problem and response in the prompt
-        stepsize=1,  # TODO
         max_tokens=4096,
         log=True,
         **kwargs,
@@ -307,8 +272,6 @@ class FunctionOptimizer(Optimizer):
             """
         )
 
-        self.feasible_solutions = Examples(n_feasible_solutions)  # TODO
-        self.stepsize = stepsize  # TODO
         self.include_example = include_example
         self.max_tokens = max_tokens
         self.log = [] if log else None
@@ -377,25 +340,25 @@ class FunctionOptimizer(Optimizer):
     def construct_prompt(self, summary, mask=None, *args, **kwargs):
         """Construct the system and user prompt."""
         system_prompt = self.representation_prompt + self.output_format_prompt  # generic representation + output rule
-        user_pormpt = self.user_prompt_template.format(
+        user_prompt = self.user_prompt_template.format(
             problem_instance=str(self.probelm_instance(summary, mask=mask))
         )  # problem instance
         if self.include_example:
-            user_pormpt = (
+            user_prompt = (
                 self.example_problem_template.format(
                     example_problem=self.example_problem, example_response=self.example_response
                 )
-                + user_pormpt
+                + user_prompt
             )
-        user_pormpt += self.final_prompt
-        return system_prompt, user_pormpt
+        user_prompt += self.final_prompt
+        return system_prompt, user_prompt
 
     def _step(self, verbose=False, mask=None, *args, **kwargs) -> Dict[ParameterNode, Any]:
         assert isinstance(self.propagator, NodePropagator)
         summary = self.summarize()
-        system_prompt, user_pormpt = self.construct_prompt(summary, mask=mask)
+        system_prompt, user_prompt = self.construct_prompt(summary, mask=mask)
         response = self.call_llm(
-            system_prompt=system_prompt, user_prompt=user_pormpt, verbose=verbose, max_tokens=self.max_tokens
+            system_prompt=system_prompt, user_prompt=user_prompt, verbose=verbose, max_tokens=self.max_tokens
         )
 
         if "TERMINATE" in response:
@@ -405,7 +368,7 @@ class FunctionOptimizer(Optimizer):
         update_dict = self.construct_update_dict(suggestion)
 
         if self.log is not None:
-            self.log.append({"system_prompt": system_prompt, "user_prompt": user_pormpt, "response": response})
+            self.log.append({"system_prompt": system_prompt, "user_prompt": user_prompt, "response": response})
 
         return update_dict
 
@@ -512,3 +475,36 @@ class FunctionOptimizerV2(FunctionOptimizer):
         If no changes or answer are needed, just output TERMINATE.
         """
     )
+
+
+class FunctionOptimizerV2Memory(FunctionOptimizerV2):
+    # Add memory to the optimizer
+    def __init__(self, *args, memory_size=0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.memory = FIFOBuffer(memory_size)
+
+    def construct_prompt(self, summary, mask=None, *args, **kwargs):
+        """Construct the system and user prompt."""
+        system_prompt, user_prompt = super().construct_prompt(summary, mask=mask)
+        if len(self.memory) > 0:  # Add examples
+            prefix = user_prompt.split(self.final_prompt)[0]
+            examples = []
+            for variables, feedback in self.memory:
+                examples.append(
+                    json.dumps(
+                        {
+                            "variables": {k: v[0] for k, v in variables.items()},
+                            "feedback": feedback,
+                        },
+                        indent=4,
+                    )
+                )
+            examples = "\n".join(examples)
+            user_prompt = (
+                prefix
+                + f"\nBelow are some variables and their feedbacks you received in the past.\n\n{examples}\n\n"
+                + self.final_prompt
+            )
+        self.memory.add((summary.variables, summary.user_feedback))
+
+        return system_prompt, user_prompt
