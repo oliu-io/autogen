@@ -181,6 +181,8 @@ if __name__ == '__main__':
     trainset = examples[:20]
     valset = examples[20:]
 
+    # 14
+
     stats = {}
 
     dp = Predict()
