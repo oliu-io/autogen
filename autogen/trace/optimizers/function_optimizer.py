@@ -400,7 +400,9 @@ class FunctionOptimizer(Optimizer):
                 break
             except json.JSONDecodeError:  # TODO try to fix it
                 # Remove things outside the brackets
-                response = re.findall(r"\{.*\}", response, re.DOTALL)[0]
+                response = re.findall(r"{.*}", response, re.DOTALL)
+                if len(response) > 0:
+                    response = response[0]
                 attempt_n += 1
             except KeyError:
                 attempt_n += 1

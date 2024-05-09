@@ -268,14 +268,17 @@ def split(x: Any, y: Any, maxsplit: Any = -1):
 
 
 @trace_op("[strip] Removes the leading and trailing characters of x.", node_dict="auto")
-def strip(x: Any):
-    return x.strip()
+def strip(x: Any, chars=None):
+    return x.strip(chars)
 
 
 @trace_op("[replace] Replaces all occurrences of substring y in string x with z.", node_dict="auto")
 def replace(x: Any, old: Any, new: Any, count: Any = -1):
     return x.replace(old, new, count)
 
+@trace_op("[format] Fills in a string template with content, str.format()", node_dict="auto")
+def format(x: Any, *args, **kwargs):
+    return x.format(*args, **kwargs)
 
 # Exception operator
 @trace_op("[error] x triggers an error during execution. The error message is e.", node_dict="auto")

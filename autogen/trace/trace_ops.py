@@ -342,7 +342,6 @@ class FunModule(Module):
         # Support instance methods.
         return functools.partial(self.__call__, obj)
 
-
 def trace_class(cls):
     """
     Wrap a class with this decorator.
@@ -356,15 +355,26 @@ def trace_class(cls):
     parameters = []
     parameters_dict = {}
 
-    for name, method in cls.__dict__.items():
-        if callable(method) and isinstance(method, FunModule):
-            parameters.append(method.parameter)
-            parameters_dict[name] = method.parameter
+    all_accessible_cls = [cls] + list(cls.__bases__)
+
+    for traversable_cls in all_accessible_cls:
+        for name, method in traversable_cls.__dict__.items():
+            if callable(method) and isinstance(method, FunModule):
+                if method.parameter is not None:
+                    parameters.append(method.parameter)
+                    parameters_dict[name] = method.parameter
 
     setattr(cls, "parameters_", parameters)
     setattr(cls, "parameters_dict_", parameters_dict)
 
+    def update_node_parameters(self):
+        for name, obj in self.__dict__.items():
+            if isinstance(obj, ParameterNode):
+                self.parameters_.append(obj)
+                self.parameters_dict_[name] = obj
+
     def parameters(self):
+        # grab the dynamically added parameters
         return self.parameters_
 
     def parameters_dict(self):
