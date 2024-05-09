@@ -276,6 +276,9 @@ def strip(x: Any):
 def replace(x: Any, old: Any, new: Any, count: Any = -1):
     return x.replace(old, new, count)
 
+@trace_op("[format] Fills in a string template with content, str.format()", node_dict="auto")
+def format(x: Any, *args, **kwargs):
+    return x.format(*args, **kwargs)
 
 # Exception operator
 @trace_op("[error] x triggers an error during execution. The error message is e.", node_dict="auto")

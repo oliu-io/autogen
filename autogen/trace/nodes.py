@@ -571,6 +571,13 @@ class Node(AbstractNode[T]):
         return bool(self._data)
 
     # string operators
+    def format(self, *args, **kwargs):
+        if type(self._data) is not str:
+            raise AttributeError(f"{type(self._data)} object has no attribute 'format'.")
+
+        import autogen.trace.operators as ops
+        return ops.format(self, *args, **kwargs)
+
     def capitalize(self):
         if type(self._data) is not str:
             raise AttributeError(f"{type(self._data)} object has no attribute 'capitalize'.")
