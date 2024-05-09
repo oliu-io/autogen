@@ -268,8 +268,8 @@ def split(x: Any, y: Any, maxsplit: Any = -1):
 
 
 @trace_op("[strip] Removes the leading and trailing characters of x.", node_dict="auto")
-def strip(x: Any):
-    return x.strip()
+def strip(x: Any, chars=None):
+    return x.strip(chars)
 
 
 @trace_op("[replace] Replaces all occurrences of substring y in string x with z.", node_dict="auto")
