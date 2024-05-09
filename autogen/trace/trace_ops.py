@@ -265,18 +265,21 @@ class FunModule(Module):
             inputs = {}
             # args, varargs, varkw, defaults, kwonlyargs, kwonlydefaults, ann
             _, varargs, varkw, _, _, _, _ = inspect.getfullargspec(self.fun)
+
+            def create_node(n):
+                if isinstance(n, FunModule) and n.parameter is not None:
+                    n = n.parameter
+                return node(n)
+
             for k, v in spec.items():
                 if k == varargs:  # unpack varargs
                     for i, n in enumerate(v):
-                        if isinstance(n, Node):
-                            inputs[f"args_{i}"] = n
+                        inputs[f"args_{i}"] = create_node(n)
                 elif k == varkw:  # unpack varkw
                     for kk, n in v.items():
-                        if isinstance(n, Node):
-                            inputs[kk] = n
+                        inputs[kk] = create_node(n)
                 else:
-                    if isinstance(v, Node):
-                        inputs[k] = v
+                    inputs[k] = create_node(v)
 
         # Nodes used to create the outputs but not in the inputs are external dependencies.
         external_dependencies = [node for node in used_nodes if not contain(inputs.values(), node)]
