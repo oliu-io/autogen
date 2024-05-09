@@ -376,11 +376,9 @@ def trace_class(cls):
 
     def parameters(self):
         # grab the dynamically added parameters
-        update_node_parameters(self)
         return self.parameters_
 
     def parameters_dict(self):
-        update_node_parameters(self)
         return self.parameters_dict_
 
     cls.parameters = parameters
