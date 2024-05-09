@@ -357,10 +357,14 @@ def trace_class(cls):
     parameters = []
     parameters_dict = {}
 
-    for name, method in cls.__dict__.items():
-        if callable(method) and isinstance(method, FunModule):
-            parameters.append(method.parameter)
-            parameters_dict[name] = method.parameter
+    all_accessible_cls = [cls] + list(cls.__bases__)
+
+    for traversable_cls in all_accessible_cls:
+        for name, method in traversable_cls.__dict__.items():
+            if callable(method) and isinstance(method, FunModule):
+                if method.parameter is not None:
+                    parameters.append(method.parameter)
+                    parameters_dict[name] = method.parameter
 
     setattr(cls, "parameters_", parameters)
     setattr(cls, "parameters_dict_", parameters_dict)
