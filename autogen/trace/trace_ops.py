@@ -293,7 +293,6 @@ class FunModule(Module):
 
         if not GRAPH.TRACE:
             inputs = {}  # We don't need to keep track of the inputs if we are not tracing.
-
         # Wrap the output as a MessageNode or an ExceptionNode
         if self.n_outputs == 1 or isinstance(outputs, Exception):
             nodes = self.wrap(outputs, inputs, external_dependencies)
@@ -304,8 +303,6 @@ class FunModule(Module):
 
     def wrap(self, output: Any, inputs: Union[List[Node], Dict[str, Node]], external_dependencies: List[Node]):
         """Wrap the output as a MessageNode of inputs as the parents."""
-        if output is None:
-            return MessageNode(None, description=self.description, inputs=inputs, name=self.name, info=self.info)
         # Some nodes are used in the operator fun, we need to wrap the output as a MessageNode.
         if not self.wrap_output:  # TODO do we ever use this?
             # If the output is already a Node, we don't need to wrap it.
@@ -321,6 +318,8 @@ class FunModule(Module):
         else:
             description = self.description
             name = self.name
+        if output is None:
+            return MessageNode(None, description=self.description, inputs=inputs, name=self.name, info=self.info)
         if isinstance(output, Exception):
             e_node = ExceptionNode(
                 output,
