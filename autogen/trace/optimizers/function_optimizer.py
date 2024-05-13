@@ -404,7 +404,7 @@ class FunctionOptimizer(Optimizer):
                 if len(response) > 0:
                     response = response[0]
                 attempt_n += 1
-            except KeyError:
+            except Exception:
                 attempt_n += 1
 
         if len(suggestion) == 0:
