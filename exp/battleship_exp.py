@@ -45,18 +45,18 @@ def eval_policy(policy, args):
     np.random.seed(args.seed)
     scores = []
     for _ in range(args.n_eval_episodes):
-        board_width = np.random.randint(args.board_size, int(2 * args.board_size))
-        board_height = np.random.randint(args.board_size, int(2 * args.board_size))
+        board_width = 10  # np.random.randint(args.board_size, int(2 * args.board_size))
+        board_height = 10  # np.random.randint(args.board_size, int(2 * args.board_size))
         horizon = board_width * board_height
         policy.init(board_width, board_height)
-        rewards = rollout(policy, board_width, board_height, args.num_each_type, args.exclude_ships, horizon)
+        rewards = rollout(policy, board_width, board_height, num_each_type=3, exclude_ships=["C"], horizon=horizon)
         scores.append(rewards.mean())
     scores = np.array(scores)
     print(f"Scores: {scores.mean()} ({scores.std()})")
     return scores
 
 
-def run(args):
+def run(args, baseline_score=0):
     # Seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -91,26 +91,27 @@ def run(args):
 
         def select_coordinate(self, map):
             plan = self.reason(map)
-
-            act = self.act
-            output = act(map, plan)
+            output = self.act(plan)
             return output
 
         @trace_op(trainable=True)
-        def act(self, map, plan):
+        def act(self, plan):
             """
-            Given a map, select a target coordinate in a Battleship game. In map, O denotes misses, X denotes successes, and . denotes unknown positions.
-            """
-            return
-
-        @trace_op(trainable=True)
-        def reason(self, map) -> str:
-            """
-            Given a map, analyze the board in in a Battleship game. In map, O denotes misses, X denotes successes, and . denotes unknown positions.
+            Execute the plan. The output is a list of int of length 2.
             """
             return [0, 0]
 
-    policy = Policy2()
+        @trace_op(trainable=True)
+        def reason(self, board):
+            """
+            Analyze the board in in a Battleship game and make a winning plan. In board, O denotes misses, X denotes successes, and . denotes unknown positions.
+            """
+            return
+
+    if args.policy == "policy2":
+        policy = Policy2()
+    else:
+        policy = Policy()
 
     def reset_board():
         # square board
@@ -170,7 +171,9 @@ def run(args):
                 returns = eval_policy(policy, args)
                 log["returns"].append(returns)
                 log["instant reward"].append(reward)
-                writer.add_scalar("Evaluation/mean score", returns.mean(), i + 1)  # i+1 to account for the initial log
+                writer.add_scalar(
+                    "Evaluation/regret", baseline_score - returns.mean(), i + 1
+                )  # i+1 to account for the initial log
                 writer.add_scalar("Training/instant reward", reward, i)
 
                 writer.flush()
@@ -216,26 +219,26 @@ if __name__ == "__main__":
     parser.add_argument("--num_each_type", type=int, default=1)
     parser.add_argument("--exclude_ships", nargs="+", type=str, default=("C", "B"))
     parser.add_argument("--visualize", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max_calls", type=int, default=20)
     parser.add_argument("--memory_size", type=int, default=0)
     parser.add_argument("--n_eval_episodes", type=int, default=100)
     parser.add_argument("--logdir", type=str, default="battleship_results")
     parser.add_argument("--optimizer", type=str, default="FunctionOptimizerV2Memory")
+    parser.add_argument("--policy", type=str, default="basic")
     args = parser.parse_args()
 
     # Log
-    args.logdir += (
-        f"/{args.optimizer}_mem{args.memory_size}/seed_{args.seed}_size{args.board_size}_num{args.num_each_type}"
-    )
+    args.logdir += f"/{args.optimizer}_mem{args.memory_size}_policy_{args.policy}/seed_{args.seed}_size{args.board_size}_num{args.num_each_type}"
     args.logdir += datetime.now().strftime("%Y%m%d-%H%M%S")
     os.makedirs(args.logdir, exist_ok=True)
 
     pickle.dump(args, open(f"{args.logdir}/args.pkl", "wb"))
 
     print("Enumeration")
-    scores = eval_policy(BasicEnumerator(), args)
-    pickle.dump(scores, open(f"{args.logdir}/enumeration_scores.pkl", "wb"))
+    baseline_scores = eval_policy(BasicEnumerator(), args)
+    pickle.dump(baseline_scores, open(f"{args.logdir}/enumeration_scores.pkl", "wb"))
     print("Random")
     scores = eval_policy(RandomPolicy(), args)
     pickle.dump(scores, open(f"{args.logdir}/random_policy_scores.pkl", "wb"))
@@ -249,4 +252,4 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Unknown optimizer {args.optimizer}")
 
-    run(args)
+    run(args, baseline_score=baseline_scores.mean())
