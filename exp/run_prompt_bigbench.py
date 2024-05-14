@@ -9,12 +9,13 @@ from datasets import load_dataset
 
 from typing import List
 import copy
-from autogen.trace.trace_ops import FunModule, trace_op, trace_class, TraceExecutionError
+from autogen.trace.bundle import FunModule, bundle, trace_class, TraceExecutionError
 from autogen.trace.nodes import Node
 
 import re
 from tqdm import tqdm
-import ray # for parallelization
+import ray  # for parallelization
+
 
 def eval_metric(true, prediction):
     # two types of answers:
@@ -29,6 +30,7 @@ def eval_metric(true, prediction):
         # substring match
         return prediction == true
 
+
 class LLMCallable:
     def __init__(self, config_list=None, max_tokens=512, verbose=False):
         if config_list is None:
@@ -37,7 +39,7 @@ class LLMCallable:
         self.max_tokens = max_tokens
         self.verbose = verbose
 
-    @trace_op(catch_execution_error=False)
+    @bundle(catch_execution_error=False)
     def call_llm(self, user_prompt):
         """
         Sends the constructed prompt (along with specified request) to an LLM.
@@ -46,8 +48,7 @@ class LLMCallable:
         if self.verbose not in (False, "output"):
             print("Prompt\n", system_prompt + user_prompt)
 
-        messages = [{"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}]
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
         try:
             response = self.llm.create(
@@ -69,7 +70,8 @@ class Predict(LLMCallable):
         super().__init__()
 
         self.demos = []
-        self.prompt_template = dedent("""
+        self.prompt_template = dedent(
+            """
         Given the fields `question`, produce the fields `answer`.
 
         ---
@@ -82,17 +84,21 @@ class Predict(LLMCallable):
         ---
         Question: {}
         Answer:
-        """)
+        """
+        )
 
-        self.prompt_template = node(self.prompt_template, trainable=True,
-                                    constraint="The prompt template needs to include {question} for the LLM to answer.")
+        self.prompt_template = node(
+            self.prompt_template,
+            trainable=True,
+            constraint="The prompt template needs to include {question} for the LLM to answer.",
+        )
 
-    @trace_op(trainable=True)
+    @bundle(trainable=True)
     def extract_answer(self, response):
         answer = response.split("\nAnswer:")[1].strip()
         return answer
 
-    @trace_op(trainable=True)
+    @bundle(trainable=True)
     def create_prompt(self, prompt_template, question):
         return prompt_template.format(question)
 
@@ -106,6 +112,7 @@ class Predict(LLMCallable):
         response = self.call_llm(user_prompt)
         return self.extract_answer(response)
 
+
 def learn_predict(dp, optimizer, examples):
     # optimizer.objective = optimizer.default_objective
 
@@ -117,17 +124,21 @@ def learn_predict(dp, optimizer, examples):
             # This is also online optimization
             # we have the opportunity to keep changing the function with each round of interaction
             try:
-                response = dp.forward(example['question'])
-                correctness = eval_metric(example['answer'], response.data)
-                feedback = "The answer is correct! No need to change anything." if correctness else f"The answer is wrong. Please choose from the given options. The correct answer is \"{example['answer']}\". Please modify the prompt and relevant parts of the program to help LLM produce the right answer."
+                response = dp.forward(example["question"])
+                correctness = eval_metric(example["answer"], response.data)
+                feedback = (
+                    "The answer is correct! No need to change anything."
+                    if correctness
+                    else f"The answer is wrong. Please choose from the given options. The correct answer is \"{example['answer']}\". Please modify the prompt and relevant parts of the program to help LLM produce the right answer."
+                )
             except TraceExecutionError as e:
                 # this is essentially a retry
                 response = e.exception_node
                 feedback = response.data
                 correctness = False
 
-            print(example['question'])
-            print("Expected answer:", example['answer'])
+            print(example["question"])
+            print("Expected answer:", example["answer"])
             print("Answer:", response.data)
 
             cum_reward += correctness
@@ -148,14 +159,15 @@ def learn_predict(dp, optimizer, examples):
     print(f"Total reward: {cum_reward}")
     return cum_reward
 
+
 def evaluate_dp(dp, examples):
     rewards = 0
     responses = []
     for example in tqdm(examples):
         try:
-            response = dp.forward(example['question'])
+            response = dp.forward(example["question"])
             responses.append(response.data)
-            correctness = eval_metric(example['answer'], response.data)
+            correctness = eval_metric(example["answer"], response.data)
         except:
             correctness = False
             responses.append(None)
@@ -163,8 +175,10 @@ def evaluate_dp(dp, examples):
         rewards += correctness
     return rewards / len(examples), responses
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="tracking_shuffled_objects_seven_objects")
     parser.add_argument("--task_start", type=int, default=-1, help="Start from a specific task")
@@ -175,30 +189,61 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     import os
+
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
 
-    tasks = ['tracking_shuffled_objects_seven_objects', 'salient_translation_error_detection',
-             'tracking_shuffled_objects_three_objects', 'geometric_shapes', 'object_counting', 'word_sorting',
-             'logical_deduction_five_objects', 'hyperbaton', 'sports_understanding', 'logical_deduction_seven_objects',
-             'multistep_arithmetic_two', 'ruin_names', 'causal_judgement', 'logical_deduction_three_objects',
-             'formal_fallacies', 'snarks', 'boolean_expressions', 'reasoning_about_colored_objects', 'dyck_languages',
-             'navigate', 'disambiguation_qa', 'temporal_sequences', 'web_of_lies',
-             'tracking_shuffled_objects_five_objects', 'penguins_in_a_table', 'movie_recommendation',
-             'date_understanding']
+    tasks = [
+        "tracking_shuffled_objects_seven_objects",
+        "salient_translation_error_detection",
+        "tracking_shuffled_objects_three_objects",
+        "geometric_shapes",
+        "object_counting",
+        "word_sorting",
+        "logical_deduction_five_objects",
+        "hyperbaton",
+        "sports_understanding",
+        "logical_deduction_seven_objects",
+        "multistep_arithmetic_two",
+        "ruin_names",
+        "causal_judgement",
+        "logical_deduction_three_objects",
+        "formal_fallacies",
+        "snarks",
+        "boolean_expressions",
+        "reasoning_about_colored_objects",
+        "dyck_languages",
+        "navigate",
+        "disambiguation_qa",
+        "temporal_sequences",
+        "web_of_lies",
+        "tracking_shuffled_objects_five_objects",
+        "penguins_in_a_table",
+        "movie_recommendation",
+        "date_understanding",
+    ]
 
-    rerun_tasks = ['object_counting', 'word_sorting', 'sports_understanding', 'multistep_arithmetic_two', 'causal_judgement', 'formal_fallacies',
-                    'boolean_expressions', 'dyck_languages', 'navigate', 'web_of_lies']
+    rerun_tasks = [
+        "object_counting",
+        "word_sorting",
+        "sports_understanding",
+        "multistep_arithmetic_two",
+        "causal_judgement",
+        "formal_fallacies",
+        "boolean_expressions",
+        "dyck_languages",
+        "navigate",
+        "web_of_lies",
+    ]
 
     assert args.task in tasks, f"Task {args.task} not found in tasks."
     # note 0:27 covers all tasks
-    run_tasks = tasks[args.task_start:args.task_end] if args.task_start != -1 and args.task_end != -1 else [args.task]
+    run_tasks = tasks[args.task_start : args.task_end] if args.task_start != -1 and args.task_end != -1 else [args.task]
 
     for task in run_tasks:
-
         print(f"Running task {task}")
 
-        save_name = f""
+        save_name = ""
         if args.train:
             save_name += "trained_"
         if args.cot:
@@ -219,18 +264,19 @@ if __name__ == '__main__':
         stats = {}
 
         dp = Predict()
-        optimizer = FunctionOptimizerV2(dp.parameters() + [dp.prompt_template],
-                                        config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
+        optimizer = FunctionOptimizerV2(
+            dp.parameters() + [dp.prompt_template], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST")
+        )
         rewards = learn_predict(dp, optimizer, trainset)
         stats["learned_prompt"] = dp.prompt_template.data
-        stats["extract_answer"] = dp.parameters_dict()['extract_answer'].data
-        stats["create_prompt"] = dp.parameters_dict()['create_prompt'].data
-        stats['optimizer_log'] = optimizer.log
-        stats['train_acc'] = rewards / len(trainset)
+        stats["extract_answer"] = dp.parameters_dict()["extract_answer"].data
+        stats["create_prompt"] = dp.parameters_dict()["create_prompt"].data
+        stats["optimizer_log"] = optimizer.log
+        stats["train_acc"] = rewards / len(trainset)
 
         val_acc, responses = evaluate_dp(dp, valset)
-        stats['val_acc'] = val_acc
-        stats['val_responses'] = responses
+        stats["val_acc"] = val_acc
+        stats["val_responses"] = responses
 
         import pickle
 

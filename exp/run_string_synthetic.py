@@ -1,6 +1,6 @@
 import autogen
-from autogen.trace import trace_op, node
-from autogen.trace.trace_ops import TraceExecutionError
+from autogen.trace import bundle, node
+from autogen.trace.bundle import TraceExecutionError
 from autogen.trace.optimizers import FunctionOptimizer
 from autogen.trace.nodes import GRAPH
 
@@ -67,7 +67,7 @@ def run_exp():
     for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
         program = StringProgramSampler(chain_length=args.c, max_gen_var=args.g, seed=i, param_num=args.p, verbose=False)
-        x = node('aaaaa', "input_x", trainable=True)
+        x = node("aaaaa", "input_x", trainable=True)
         optimizer = FunctionOptimizer([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
 
         history = optimize(program, problem_ids[i], optimizer, x, n_steps, verbose=args.verbose)
@@ -102,7 +102,7 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
         try:
             # to handle context length issue
             action = agent.act(observation, feedback)
-        except Exception as e:
+        except Exception:
             pass
 
         try:
@@ -112,7 +112,7 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
             end_tag = "</ANSWER>"
             start_index = action.find(start_tag)
             end_index = action.find(end_tag)
-            x = action[start_index + len(start_tag):end_index].strip()
+            x = action[start_index + len(start_tag) : end_index].strip()
         except:
             # we keep the original x if there's an error
             print(f"error in parsing:\n {action.strip()}\n")
@@ -127,9 +127,9 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
     return history
 
 
-def run_basic_agent_exp(agent_type='basic'):
+def run_basic_agent_exp(agent_type="basic"):
     llm = Autgen()
-    if agent_type == 'basic':
+    if agent_type == "basic":
         agent = BasicAgent(llm)
     else:
         raise Exception("Agent type not implemented")
@@ -139,7 +139,8 @@ def run_basic_agent_exp(agent_type='basic'):
 
     instruction = (
         "You are choosing an input that after some operations will result in an output. You will observe some feedback telling you whether"
-        "Wrap the input you choose in <ANSWER>...</ANSWER> tags. Your answer should be a string.")
+        "Wrap the input you choose in <ANSWER>...</ANSWER> tags. Your answer should be a string."
+    )
 
     agent.reset(docstring=instruction)
 
@@ -147,7 +148,7 @@ def run_basic_agent_exp(agent_type='basic'):
     for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
         program = StringProgramSampler(chain_length=args.c, max_gen_var=args.g, seed=i, param_num=args.p, verbose=False)
-        x = 'aaaaa'
+        x = "aaaaa"
 
         history = rollout(program, problem_ids[i], agent, x, n_steps, verbose=args.verbose)
         traj_for_all_problems.append(history)
@@ -159,23 +160,23 @@ def run_basic_agent_exp(agent_type='basic'):
         pickle.dump(traj_for_all_problems, f)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--n", type=int, default=100)
-    parser.add_argument('--c', type=int, default=7)
-    parser.add_argument('--g', type=int, default=5)
-    parser.add_argument('--p', type=int, default=1)
-    parser.add_argument('--steps', type=int, default=5)
-    parser.add_argument('--verbose', action='store_true')
-    parser.add_argument('--setup', type=str, default='trace', help='trace, agent')
-    parser.add_argument('--agent_type', type=str, default='basic', help='basic, others...')
+    parser.add_argument("--c", type=int, default=7)
+    parser.add_argument("--g", type=int, default=5)
+    parser.add_argument("--p", type=int, default=1)
+    parser.add_argument("--steps", type=int, default=5)
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--setup", type=str, default="trace", help="trace, agent")
+    parser.add_argument("--agent_type", type=str, default="basic", help="basic, others...")
 
     args = parser.parse_args()
 
-    if args.setup == 'agent':
+    if args.setup == "agent":
         run_basic_agent_exp(args.agent_type)
-    elif args.setup == 'trace':
+    elif args.setup == "trace":
         run_exp()

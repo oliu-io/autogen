@@ -2,7 +2,7 @@ from typing import Optional, List, Dict, Callable, Union, Type, Any, Tuple
 from autogen.trace.nodes import MessageNode, Node, ParameterNode, GRAPH, USED_NODES, NAME_SCOPES, node
 from autogen.trace.utils import for_all_methods
 from autogen.agentchat.agent import Agent
-from autogen.trace.trace_ops import trace_op
+from autogen.trace.bundle import bundle
 
 from autogen.agentchat.conversable_agent import ConversableAgent, colored, ChatResult
 import inspect
@@ -89,12 +89,12 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             *,
             ignore_async_in_sync_chat: bool = False,
         ):
-            # XXX Wrappying the (default) reply functions into a trace_op that returns a MessageNode.
+            # XXX Wrappying the (default) reply functions into a bundle that returns a MessageNode.
             if wrap_all_replies or reply_func in self.default_reply_funcs:
                 if not inspect.iscoroutinefunction(reply_func):
                     _reply_func = reply_func
 
-                    @trace_op(f"[Agent] {str(reply_func)}.", n_outputs=2, unpack_input=False)
+                    @bundle(f"[Agent] {str(reply_func)}.", n_outputs=2, unpack_input=False)
                     def reply_func(self, messages, sender, config):
                         assert all(
                             isinstance(m, Node) for m in messages
@@ -107,7 +107,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
                         )
 
                 else:  # TODO: support coroutinefunction
-                    warnings.warn(f"Coroutine function {reply_func} is not wrapped by trace_op.")
+                    warnings.warn(f"Coroutine function {reply_func} is not wrapped by bundle.")
             super().register_reply(
                 trigger, reply_func, position, config, reset_config, ignore_async_in_sync_chat=ignore_async_in_sync_chat
             )
@@ -200,7 +200,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
         # # output as a MessaageNode. Since ConversibleAgent calls
         # # self._message_to_dict(message), we cannot implement it as a static method
         # # anymore.
-        # @trace_op('[message_to_dict] Convert message to the dict format of Autogen.')
+        # @bundle('[message_to_dict] Convert message to the dict format of Autogen.')
         # def _message_to_dict(self, message: Node) -> Node:
         #     assert isinstance(message, Node), f"Message {message} must be a Node type"
         #     # return super(TracedAgent, self)._message_to_dict(message.data)
@@ -387,7 +387,7 @@ def trace_ConversableAgent(AgentCls, wrap_all_replies=True):
             raise NotImplementedError
 
         # TODO finalize the ones below
-        @trace_op("[generate_oai_reply] Generate a reply using autogen.oai.", n_outputs=2, unpack_input=False)
+        @bundle("[generate_oai_reply] Generate a reply using autogen.oai.", n_outputs=2, unpack_input=False)
         def generate_oai_reply(
             self,
             messages: Optional[List[None]] = None,

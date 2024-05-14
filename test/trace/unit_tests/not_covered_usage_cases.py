@@ -1,4 +1,4 @@
-from autogen.trace import node, trace_op
+from autogen.trace import node, bundle
 from autogen.trace.modules import apply_op
 from autogen.trace.modules import NodeContainer
 import autogen.trace.operators as ops
@@ -8,19 +8,24 @@ import autogen.trace.operators as ops
 """
 Not able to tracing through func_a (updating func_a's parameter)
 """
-@trace_op(description="[func_a] Returns a+1", trainable=True)
+
+
+@bundle(description="[func_a] Returns a+1", trainable=True)
 def func_a(a):
     return a + 1
 
-@trace_op(description="[func_b] Returns b+1", trainable=True, traceable_code=True)
+
+@bundle(description="[func_b] Returns b+1", trainable=True, traceable_code=True)
 def func_b(b):
     return func_a(b) + 1
+
 
 def test_nested_function_visibility():
     x = node(3)
     y = func_b(x)
     fig = y.backward(visualize=True)
     fig.render()
+
 
 test_nested_function_visibility()
 
@@ -30,14 +35,17 @@ test_nested_function_visibility()
 Updating external variables
 """
 
-@trace_op(description="[func_c] Update dictionary")
+
+@bundle(description="[func_c] Update dictionary")
 def func_c(dic):
     dic["a"] = 1
+
 
 def test_func_c_fail():
     dic = {}
     func_c(dic)
     assert "a" in dic, "Failed to update dictionary"
+
 
 def test_func_c_succeed():
     dic = {}
@@ -45,20 +53,24 @@ def test_func_c_succeed():
     func_c(dic)
     assert "a" in dic, "Failed to update dictionary"
 
+
 class Env(dict):
     def __init__(self, init_k, init_v):
         self[init_k] = init_v
+
 
 def test_func_c_with_class_failed():
     dic = Env("c", 0)
     func_c(dic)
     assert "a" in dic, "Failed to update dictionary"
 
+
 def test_func_c_with_class_success():
     dic = node(Env("c", 0))
     func_c(dic)
     assert "a" in dic, "Failed to update dictionary"
     print(dic)
+
 
 # test_func_c_fail()
 # test_func_c_succeed()

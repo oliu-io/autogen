@@ -1,6 +1,6 @@
-from autogen.trace import trace_op, node, Module
+from autogen.trace import bundle, node, Module
 from autogen.trace.nodes import ExceptionNode
-from autogen.trace.trace_ops import TraceExecutionError
+from autogen.trace.bundle import TraceExecutionError
 from autogen.trace.optimizers import FunctionOptimizerV2, FunctionOptimizerV2Memory, OPRO
 from autogen.trace.nodes import GRAPH
 from battleship import BattleshipBoard
@@ -75,7 +75,7 @@ def run(args, baseline_score=0):
         def __call__(self, map):
             return self.select_coordinate(map).data
 
-        @trace_op(trainable=True)
+        @bundle(trainable=True)
         def select_coordinate(self, map):
             """
             Given a map, select a target coordinate in a Battleship game. In map, O denotes misses, X denotes successes, and . denotes unknown positions.
@@ -94,14 +94,14 @@ def run(args, baseline_score=0):
             output = self.act(plan)
             return output
 
-        @trace_op(trainable=True)
+        @bundle(trainable=True)
         def act(self, plan):
             """
             Execute the plan. The output is a list of int of length 2.
             """
             return [0, 0]
 
-        @trace_op(trainable=True)
+        @bundle(trainable=True)
         def reason(self, board):
             """
             Analyze the board in in a Battleship game and make a winning plan. In board, O denotes misses, X denotes successes, and . denotes unknown positions.

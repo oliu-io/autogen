@@ -1,6 +1,6 @@
 import autogen
-from autogen.trace import trace_op, node
-from autogen.trace.trace_ops import TraceExecutionError
+from autogen.trace import bundle, node
+from autogen.trace.bundle import TraceExecutionError
 from autogen.trace.optimizers import FunctionOptimizer, LlmAsOptimizer
 from autogen.trace.nodes import GRAPH
 
@@ -45,8 +45,9 @@ def get_hard_dataset(n=100, init_seed=1111):
     while len(seeds) < n:
         seed = random.randint(0, 99999)
         try:
-            program = NumericalProgramSampler(chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g,
-                                              seed=seed, verbose=False)
+            program = NumericalProgramSampler(
+                chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g, seed=seed, verbose=False
+            )
         except:
             # if we get an error program, we just move on
             continue
@@ -66,7 +67,6 @@ def get_hard_dataset(n=100, init_seed=1111):
 
 
 def optimize(program, program_id, optimizer, x, n_steps, verbose=False, mask=None):
-
     history = []
     feedback = ""
     for i in tqdm(range(n_steps)):
@@ -104,15 +104,16 @@ def run_exp(masking=False, optimizer_name=None):
     traj_for_all_problems = []
     for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
-        program = NumericalProgramSampler(chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g,
-                                          seed=problem_ids[i])
+        program = NumericalProgramSampler(
+            chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g, seed=problem_ids[i]
+        )
         x = node(-1.0, "input_x", trainable=True)
-        if optimizer_name == 'opro':
+        if optimizer_name == "opro":
             optimizer = LlmAsOptimizer([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
         else:
             optimizer = FunctionOptimizer([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
 
-        mask = ['#Documentation', '#Code', '#Inputs', '#Others'] if masking else None
+        mask = ["#Documentation", "#Code", "#Inputs", "#Others"] if masking else None
         try:
             history = optimize(program, problem_ids[i], optimizer, x, n_steps, verbose=args.verbose, mask=mask)
         except:
@@ -121,12 +122,13 @@ def run_exp(masking=False, optimizer_name=None):
         traj_for_all_problems.append(history)
 
     os.makedirs("results", exist_ok=True)
-    agent_name = 'trace_agent' if not masking else 'masked_trace_agent'
+    agent_name = "trace_agent" if not masking else "masked_trace_agent"
     if optimizer_name:
-        agent_name = agent_name + f'_{optimizer_name}'
+        agent_name = agent_name + f"_{optimizer_name}"
 
     with open(f"results/{agent_name}_number_synth_traj_{args.n}_c_{args.c}_g_{args.g}_p_{args.p}.pkl", "wb") as f:
         pickle.dump(traj_for_all_problems, f)
+
 
 def rollout(program, program_id, agent, x, n_steps, verbose=False):
     # similar to "optimize" but we just rollout for all agents
@@ -152,11 +154,11 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
         try:
             # to handle context length issue
             action = agent.act(observation, feedback)
-        except Exception as e:
+        except Exception:
             pass
 
         try:
-            pattern = r'\d+(?:\.\d+)?'
+            pattern = r"\d+(?:\.\d+)?"
             match = re.search(pattern, action.strip())
             first_number = match.group()
             x = float(first_number)
@@ -174,9 +176,9 @@ def rollout(program, program_id, agent, x, n_steps, verbose=False):
     return history
 
 
-def run_basic_agent_exp(agent_type='basic'):
+def run_basic_agent_exp(agent_type="basic"):
     llm = Autgen()
-    if agent_type == 'basic':
+    if agent_type == "basic":
         agent = BasicAgent(llm)
     else:
         raise Exception("Agent type not implemented")
@@ -187,15 +189,17 @@ def run_basic_agent_exp(agent_type='basic'):
 
     instruction = (
         "You are choosing an input that after some operations will result in an output. You will observe some feedback telling you whether"
-        "your output is too large or too small to hit a hidden goal value. You need to choose your input in order to hit that goal output value.")
+        "your output is too large or too small to hit a hidden goal value. You need to choose your input in order to hit that goal output value."
+    )
 
     agent.reset(docstring=instruction)
 
     traj_for_all_problems = []
     for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
-        program = NumericalProgramSampler(chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g,
-                                          seed=problem_ids[i])
+        program = NumericalProgramSampler(
+            chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g, seed=problem_ids[i]
+        )
         x = -1.0
 
         history = rollout(program, problem_ids[i], agent, x, n_steps, verbose=args.verbose)
@@ -207,10 +211,11 @@ def run_basic_agent_exp(agent_type='basic'):
     with open(f"results/{agent_type}_agent_number_synth_traj_{args.n}_c_{args.c}_g_{args.g}_p_{args.p}.pkl", "wb") as f:
         pickle.dump(traj_for_all_problems, f)
 
+
 def run_torch_exp():
     import torch
 
-    x = torch.tensor([5.], requires_grad=True)
+    x = torch.tensor([5.0], requires_grad=True)
 
     problem_ids = get_hard_dataset(n=args.n)
     n_steps = args.steps  # we allow 10 optimization steps
@@ -218,8 +223,9 @@ def run_torch_exp():
     traj_for_all_problems = []
     for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
-        program = NumericalProgramSampler(chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g,
-                                          seed=problem_ids[i])
+        program = NumericalProgramSampler(
+            chain_length=args.c, param_num=args.p, logic_prob=0, max_gen_var=args.g, seed=problem_ids[i]
+        )
         x = torch.tensor([-1.0], requires_grad=True)
 
         # do greadient descent on x, 10 steps
@@ -231,44 +237,47 @@ def run_torch_exp():
             loss = torch.abs(y - program.goal_output)
             loss.backward()
             optimizer.step()
-            history.append((float(x.detach()), float(y.detach()), program.goal_input, program.goal_output, "Gradient feedback"))
+            history.append(
+                (float(x.detach()), float(y.detach()), program.goal_input, program.goal_output, "Gradient feedback")
+            )
 
         history.append(
-            (float(x.detach()), float(y.detach()), program.goal_input, program.goal_output, "Gradient feedback"))
+            (float(x.detach()), float(y.detach()), program.goal_input, program.goal_output, "Gradient feedback")
+        )
 
         traj_for_all_problems.append(history)
 
     os.makedirs("results", exist_ok=True)
-    agent_name = 'torch'
-    agent_name = agent_name + f'_sgd'
+    agent_name = "torch"
+    agent_name = agent_name + "_sgd"
 
     with open(f"results/{agent_name}_number_synth_traj_{args.n}_c_{args.c}_g_{args.g}_p_{args.p}.pkl", "wb") as f:
         pickle.dump(traj_for_all_problems, f)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--n", type=int, default=100)
-    parser.add_argument('--c', type=int, default=7)
-    parser.add_argument('--g', type=int, default=5)
-    parser.add_argument('--p', type=int, default=1)
-    parser.add_argument('--steps', type=int, default=5)
-    parser.add_argument('--verbose', action='store_true')
-    parser.add_argument('--setup', type=str, default='trace', help='trace, opro, masked, torch, agent')
-    parser.add_argument('--agent_type', type=str, default='basic', help='basic...')
+    parser.add_argument("--c", type=int, default=7)
+    parser.add_argument("--g", type=int, default=5)
+    parser.add_argument("--p", type=int, default=1)
+    parser.add_argument("--steps", type=int, default=5)
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--setup", type=str, default="trace", help="trace, opro, masked, torch, agent")
+    parser.add_argument("--agent_type", type=str, default="basic", help="basic...")
 
     args = parser.parse_args()
 
-    if args.setup == 'agent':
+    if args.setup == "agent":
         run_basic_agent_exp(args.agent_type)
-    elif args.setup == 'opro':
-        run_exp(optimizer_name='opro')
-    elif args.setup == 'masked':
+    elif args.setup == "opro":
+        run_exp(optimizer_name="opro")
+    elif args.setup == "masked":
         run_exp(masking=True)
-    elif args.setup == 'trace':
+    elif args.setup == "trace":
         run_exp()
-    elif args.setup == 'torch':
+    elif args.setup == "torch":
         run_torch_exp()

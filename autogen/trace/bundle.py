@@ -42,7 +42,7 @@ class TraceMissingInputsError(Exception):
         return self.message  # f"TraceMissingInputsError: {self.message}"
 
 
-def trace_op(
+def bundle(
     description=None,
     n_outputs=1,
     node_dict="auto",
@@ -52,7 +52,7 @@ def trace_op(
     trainable=False,
     catch_execution_error=True,
     allow_external_dependencies=False,
-    decorator_name="trace_op",
+    decorator_name="bundle",
 ):
     """
     Wrap a function as a FunModule, which returns node objects.
@@ -110,7 +110,7 @@ class FunModule(Module):
         trainable=False,
         catch_execution_error=True,
         allow_external_dependencies=False,
-        decorator_name="@trace_op",
+        decorator_name="@bundle",
     ):
         if traceable_code:
             # if the code is traceable, we don't need to unpack the input and there may be new nodes created in the code block.
@@ -126,7 +126,7 @@ class FunModule(Module):
         source = inspect.getsource(fun)
         if decorator_name in source.split("\n")[0]:
             # The usecase of
-            # @trace_op(...)
+            # @bundle(...)
             # def fun(...):
             #   ...
             match = re.search(r"\s*" + decorator_name + r"\(.*\).*\n\s*(def.*)", inspect.getsource(fun), re.DOTALL)
@@ -207,7 +207,7 @@ class FunModule(Module):
                 exec(code)  # define the function
                 fun_name = re.search(r"\s*def\s+(\w+)", code).group(1)
                 fun = locals()[fun_name]
-            except (SyntaxError, NameError, KeyError) as e:
+            except (SyntaxError, NameError, KeyError, OSError) as e:
                 # Temporary fix for the issue of the code block not being able to be executed
                 e_node = ExceptionNode(
                     e,
@@ -342,10 +342,11 @@ class FunModule(Module):
         # Support instance methods.
         return functools.partial(self.__call__, obj)
 
+
 def trace_class(cls):
     """
     Wrap a class with this decorator.
-    For any method that's decorated by @trace_op,
+    For any method that's decorated by @bundle,
     we can access their parameter by:
     instance.parameters()
     instead of instance.func1.func.__self__.parameter
@@ -396,7 +397,7 @@ def trace_class(cls):
 if __name__ == "__main__":
     x = node("hello")
 
-    @trace_op("[Custom] This is a test function.")
+    @bundle("[Custom] This is a test function.")
     def test(x):
         return x.data + " world"
 

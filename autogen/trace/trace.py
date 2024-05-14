@@ -20,7 +20,7 @@ def trace(cls, wrap_all_replies=True):
 
     Args:
         cls (subclass of ConversableAgent): The class to trace.
-        wrap_all_replies (bool): If True, all registered reply_funcs would be wrapped by trace_op.
+        wrap_all_replies (bool): If True, all registered reply_funcs would be wrapped by bundle.
     """
     assert issubclass(cls, ConversableAgent), "cls must be a subclass of ConversableAgent."
     return trace_ConversableAgent(cls, wrap_all_replies=wrap_all_replies)

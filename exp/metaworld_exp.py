@@ -15,7 +15,7 @@ import numpy as np
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 import autogen.trace as trace
-from autogen.trace.trace_ops import ExceptionNode, TraceExecutionError
+from autogen.trace.bundle import ExceptionNode, TraceExecutionError
 
 
 def parse_obs(obs):
@@ -46,7 +46,7 @@ class TracedEnv:
         self.env.control_mode("relative" if self.relative else "absolute")
         self.obs = None
 
-    @trace.trace_op()
+    @trace.bundle()
     def reset(self):
         """
         Reset the environment and return the initial observation and info.
@@ -59,7 +59,7 @@ class TracedEnv:
     def step(self, action):
         # We trace the step function; however, we do not trace the generation of
         # reward and info since we want to test the ability of agent to learn
-        # from language feedback alone. We cannot simply apply trace_op, as the
+        # from language feedback alone. We cannot simply apply bundle, as the
         # information would be leaked. Below is a hack to prevent raward and
         # info from being leaked.
         try:  # Not traced
@@ -69,7 +69,7 @@ class TracedEnv:
             self.obs = next_obs
         except (
             Exception
-        ) as e:  # Since we are not using trace_op, we need to handle exceptions maually as trace_op does internally.
+        ) as e:  # Since we are not using bundle, we need to handle exceptions maually as bundle does internally.
             e_node = ExceptionNode(
                 e,
                 inputs={"action": action},
@@ -78,8 +78,8 @@ class TracedEnv:
             )
             raise TraceExecutionError(e_node)
 
-        # This is a way to hack trace_op to prevent reward and info from being traced.
-        @trace.trace_op()
+        # This is a way to hack bundle to prevent reward and info from being traced.
+        @trace.bundle()
         def step(action):
             """
             Take action in the environment and return the next observation
@@ -185,7 +185,7 @@ def optimize_policy(
     writer = SummaryWriter(logdir)
 
     # Define the variable
-    @trace.trace_op(trainable=True)
+    @trace.bundle(trainable=True)
     def controller(obs):
         """
         A feedback controller that computes the action based on the observation.

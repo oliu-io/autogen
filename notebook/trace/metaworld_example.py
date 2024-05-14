@@ -16,7 +16,7 @@ env = llfbench.make(env_name)
 env.seed(seed)
 
 
-@trace.trace_op()
+@trace.bundle()
 def reset(n_outputs=2):
     """
     Reset the environment and return the initial observation and info.
@@ -24,7 +24,7 @@ def reset(n_outputs=2):
     return env.reset()  # obs, info
 
 
-@trace.trace_op(n_outputs=5)
+@trace.bundle(n_outputs=5)
 def step(action):
     """
     Take action in the environment and return the next observation, reward, done, and info.
@@ -153,7 +153,7 @@ def multi_step(controller, n_iterations=50, rollout_horizon=3, horizon=30):
 # Need to test backward across time.
 
 
-@trace.trace_op(trainable=True)
+@trace.bundle(trainable=True)
 def controller(obs):
     """
     The controller takes in an observation and returns an action.

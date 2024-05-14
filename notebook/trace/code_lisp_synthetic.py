@@ -16,7 +16,7 @@ We are making this task harder
 """
 
 from autogen.trace.nodes import node, GRAPH
-from autogen.trace.trace_ops import FunModule, trace_op
+from autogen.trace.bundle import FunModule, bundle
 from autogen.trace.nodes import Node
 
 import math
@@ -93,32 +93,35 @@ class Environment(dict):
 global_env = Environment()
 global_env.update(standard_env())
 
-@trace_op(description="[tokenize] Convert a string of characters into a list of tokens.")
+
+@bundle(description="[tokenize] Convert a string of characters into a list of tokens.")
 def tokenize(chars):
     "Convert a string of characters into a list of tokens."
-    return chars.replace('(', ' ( ').replace(')', ' ) ').split()
+    return chars.replace("(", " ( ").replace(")", " ) ").split()
 
-@trace_op(description="[parse] Read a Scheme expression from a string.")
+
+@bundle(description="[parse] Read a Scheme expression from a string.")
 def parse(program):
     return read_from_tokens(tokenize(program))
 
-@trace_op(description="[read_from_tokens] Read an expression from a sequence of tokens.")
+
+@bundle(description="[read_from_tokens] Read an expression from a sequence of tokens.")
 def read_from_tokens(tokens):
     if len(tokens) == 0:
-        raise SyntaxError('unexpected EOF while reading')
+        raise SyntaxError("unexpected EOF while reading")
 
     stack = []
     current_list = []
 
     for token in tokens:
-        if token == '(':
+        if token == "(":
             # Start a new sublist and push it onto the stack
             stack.append(current_list)
             current_list = []
-        elif token == ')':
+        elif token == ")":
             # End the current sublist
             if not stack:
-                raise SyntaxError('unexpected )')
+                raise SyntaxError("unexpected )")
             last_list = current_list
             current_list = stack.pop()
             current_list.append(last_list)
@@ -127,11 +130,12 @@ def read_from_tokens(tokens):
             current_list.append(atom(token))
 
     if stack:
-        raise SyntaxError('unexpected EOF while reading: missing )')
+        raise SyntaxError("unexpected EOF while reading: missing )")
 
     return current_list[0]  # Return the fully parsed expression
 
-@trace_op(description="[atom] Numbers become numbers; every other token is a symbol.")
+
+@bundle(description="[atom] Numbers become numbers; every other token is a symbol.")
 def atom(token):
     try:
         return int(token)
@@ -155,29 +159,30 @@ def eval_expression(x, env=global_env):
         return x
 
     op, *args = x
-    if op == 'quote':
+    if op == "quote":
         return args[0]
-    elif op == 'define':
+    elif op == "define":
         (name, exp) = args
         env.data[name] = eval_expression(exp, env)
-    elif op == 'lambda':
+    elif op == "lambda":
         (parms, body) = args
         return lambda *args: eval_expression(body, node(Environment(parms, args, env)))
-    elif op == 'if':
+    elif op == "if":
         (test, conseq, alt) = args
-        exp = (conseq if eval_expression(test, env) else alt)
+        exp = conseq if eval_expression(test, env) else alt
         return eval_expression(exp, env)
     else:
         proc = eval_expression(op, env)
         vals = [eval_expression(arg, env) for arg in args]
         return proc(*vals)
 
+
 test_program = [
     "(define r 10)",
     "(define circle-area (lambda (r) (* pi (* r r))))",
     "(circle-area 3)",
     "(quote (1 2 3))",
-    "(if (> 10 20) (quote true) (quote false))"
+    "(if (> 10 20) (quote true) (quote false))",
 ]
 
 global_env = node(global_env)

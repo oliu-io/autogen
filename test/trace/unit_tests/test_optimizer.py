@@ -1,5 +1,5 @@
 import autogen
-from autogen.trace import trace_op, node, GRAPH
+from autogen.trace import bundle, node, GRAPH
 from autogen.trace.optimizers import FunctionOptimizer
 
 
@@ -12,7 +12,7 @@ def blackbox(x):
     return -x * 2
 
 
-@trace_op()
+@bundle()
 def bar(x):
     "This is a test function, which does negative scaling."
     return blackbox(x)
@@ -49,7 +49,7 @@ optimizer.step(verbose=True)
 GRAPH.clear()
 
 
-@trace_op()
+@bundle()
 def convert_english_to_numbers(x):
     """This is a function that converts English to numbers. This function has limited ability."""
     # remove special characters, like, ", &, etc.
@@ -143,7 +143,7 @@ def user(output):
 
 
 # We make this function as a parameter that can be optimized.
-@trace_op(trainable=True)
+@bundle(trainable=True)
 def my_fun(x):
     """Test function"""
     return x**2 + 1
