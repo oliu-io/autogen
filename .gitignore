@@ -187,3 +187,4 @@ Digraph*
 key.sh
 
 trace_docs/_build/*
+exp/results_*
