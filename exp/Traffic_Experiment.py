@@ -4,6 +4,7 @@ import numpy as np
 import uxsim as ux
 import itertools
 import argparse
+import os
 import pickle
 from skopt import gp_minimize
 from skopt.space import Integer
@@ -12,7 +13,7 @@ import pyswarms as ps
 import logging
 import autogen
 import autogen.trace as trace
-from autogen.trace.optimizers import FunctionOptimizerV2Memory
+from autogen.trace.optimizers import FunctionOptimizerV2Memory, OPRO
 from autogen.trace.bundle import ExceptionNode
 
 
@@ -96,7 +97,7 @@ class IntStar(ps.backend.topology.Topology):
 
 # Define custom Optimizer class
 class IntOptimizerPSO(ps.base.SwarmOptimizer):
-    def __init__(self, n_particles, dimensions, options, bounds=None):
+    def __init__(self, n_particles, dimensions, options, bounds=None, init_pos=None):
         super(IntOptimizerPSO, self).__init__(
             n_particles=n_particles,
             dimensions=dimensions,
@@ -114,6 +115,10 @@ class IntOptimizerPSO(ps.base.SwarmOptimizer):
         self.rep = ps.utils.Reporter(logger=logging.getLogger(__name__))
         self.name = __name__
 
+        #Ensure that if init_pos is passed, one of the swarm positions is the init_pos
+        if init_pos is not None:
+            self.swarm.position[0] = init_pos
+
     # More or less copy-paste of the optimize method of the GeneralOptimizerPSO
     def optimize(self, func, iters):
         self.bh.memory = self.swarm.position
@@ -125,7 +130,7 @@ class IntOptimizerPSO(ps.base.SwarmOptimizer):
             self.swarm.best_pos, self.swarm.best_cost = self.top.compute_gbest(self.swarm, **self.options)
             self.rep.hook(best_cost=self.swarm.best_cost)
             hist = self.ToHistory(
-                best_cost=self.swarm.best_cost,
+                best_cost=self.swarm.current_cost,
                 mean_pbest_cost=np.mean(self.swarm.pbest_cost),
                 mean_neighbor_cost=self.swarm.best_cost,
                 position=self.swarm.position,
@@ -232,7 +237,7 @@ def create_world(EW_time, NS_time):
 
 
 @trace.bundle(trainable=False, allow_external_dependencies=True)
-def analyze_world(W):
+def analyze_world(W, verbose=True):
     """
     Analyzes the statistics recorded at traffic intersection. Returns a dictionary containing the following statistics:
     - Average delay computed across all vehicles that arrived at the intersection and subsequently completed their trip.
@@ -264,6 +269,11 @@ def analyze_world(W):
 
     score = outputDict["Best-Case Estimated Delay"] + np.sqrt(variance / num_vehicles)
     outputDict["OVERALL SCORE"] = score
+
+    if not verbose:
+        for k in list(outputDict.keys()):
+            if k != "OVERALL SCORE":
+                del outputDict[k]
     return outputDict
 
 
@@ -345,7 +355,9 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
             gp_f,  # the function to minimize
             dimensions,  # the bounds on each dimension of x
             n_calls=num_iter,
-            n_random_starts=trace_memory if num_iter > trace_memory else num_iter - 1,
+            n_initial_points=trace_memory if num_iter > trace_memory else num_iter - 1,
+            initial_point_generator="sobol",
+            x0 = [MIN_GREEN_TIME, MIN_GREEN_TIME],  # initial point
             verbose=True,
         )
         for i in range(num_iter):
@@ -353,7 +365,7 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
         return return_val
 
     elif method == "PSO":
-        return_val = np.zeros((num_iter, 3))
+        return_val = np.zeros((num_iter*trace_memory, 3))
 
         @ps.cost
         def ps_f(X):
@@ -368,15 +380,18 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
             dimensions=2,
             options={"c1": 0.5, "c2": 0.3, "w": 1.9},
             bounds=(MIN_GREEN_TIME * np.ones(2), MAX_GREEN_TIME * np.ones(2)),
+            init_pos=[MIN_GREEN_TIME, MIN_GREEN_TIME],
         )
 
         c, p = opt.optimize(ps_f, num_iter)
         for i in range(num_iter):
-            return_val[i] = (opt.pos_history[i][0][0], opt.pos_history[i][0][1], opt.cost_history[i])
+            for j in range(trace_memory):
+                return_val[i*trace_memory+j] = (opt.pos_history[i][j][0], opt.pos_history[i][j][1], opt.cost_history[i][j])
         return return_val
 
-    elif method == "Trace":
+    elif method.startswith("Trace") or method.startswith("OPRO"):
         return_val = np.zeros((num_iter, 3))
+        verbosity = "Verbose" in method
 
         def traffic_simulation(EW_green_time, NS_green_time):
             W = None
@@ -391,22 +406,25 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
                 )
                 return e_node
             W.data.exec_simulation()
-            return_dict = analyze_world(W)
+            return_dict = analyze_world(W, verbosity)
             return return_dict
 
         EW_x = trace.node(MIN_GREEN_TIME, trainable=True, constraint=f"[{MIN_GREEN_TIME},{MAX_GREEN_TIME}]")
         NS_x = trace.node(MIN_GREEN_TIME, trainable=True, constraint=f"[{MIN_GREEN_TIME},{MAX_GREEN_TIME}]")
-        optimizer = FunctionOptimizerV2Memory(
-            [EW_x, NS_x], memory_size=trace_memory, config_list=autogen.config_list_from_json(trace_config)
-        )
+        if method.startswith("OPRO"):
+            optimizer = OPRO([EW_x, NS_x], memory_size=trace_memory, config_list=autogen.config_list_from_json(trace_config))    
+        else:
+            optimizer = FunctionOptimizerV2Memory(
+                [EW_x, NS_x], memory_size=trace_memory, config_list=autogen.config_list_from_json(trace_config)
+            )
 
         optimizer.objective = (
-            "You should suggest values for the variables so that the OVERALL SCORE is as small as possible.\n"
-            + "There is a trade-off in setting the green light durations.\n"
-            + "If the green light duration for a given direction is set too low, then vehicles will queue up over time and experience delays, thereby lowering the score for the intersection.\n"
-            + "If the green light duration for a given direction is set too high, vehicles in the other direction will queue up and experience delays, thereby lowering the score for the intersection.\n"
-            + "The goal is to find a balance for each direction (East-West and North-South) that minimizes the overall score of the intersection.\n"
-            + optimizer.default_objective
+                "You should suggest values for the variables so that the OVERALL SCORE is as small as possible.\n"
+                + "There is a trade-off in setting the green light durations.\n"
+                + "If the green light duration for a given direction is set too low, then vehicles will queue up over time and experience delays, thereby lowering the score for the intersection.\n"
+                + "If the green light duration for a given direction is set too high, vehicles in the other direction will queue up and experience delays, thereby lowering the score for the intersection.\n"
+                + "The goal is to find a balance for each direction (East-West and North-South) that minimizes the overall score of the intersection.\n"
+                + optimizer.default_objective
         )
 
         for i in range(num_iter):
@@ -425,14 +443,16 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
 
             optimizer.zero_feedback()
             optimizer.backward(result, feedback, visualize=True)
-            optimizer.step(verbose=True)
-
+            if "Mask" in method:
+                optimizer.step(verbose=True, mask = ["#Documentation", "#Code", "#Inputs", "#Others"])
+            else:
+                optimizer.step(verbose=True)
         return return_val
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Traffic simulation experiment.")
-    parser.add_argument("--replications", type=int, default=15, help="Number of replications.")
+    parser.add_argument("--replications", type=int, default=20, help="Number of replications.")
     parser.add_argument("--demand", type=float, default=0.25, help="Demand for traffic simulation.")
     parser.add_argument("--trace_mem", type=int, default=5, help="Memory for trace optimization.")
     parser.add_argument(
@@ -448,28 +468,46 @@ if __name__ == "__main__":
 
     results = []
     for i in range(args.replications):
-        # seed = 42 + i
-        # demand_dict = create_demand(seed, args.demand)
+        seed = 42 + i
+        demand_dict = create_demand(seed, args.demand)
 
-        # returned_val = run_approach('SCATS', args.iter, args.trace_mem, args.trace_config)
-        # pkled_dict = {'SCATS': returned_val}
+        pkled_dict = None
+        if os.path.exists(args.output_prefix + str(i)):
+            pkl = open(args.output_prefix + str(i), "rb")
+            pkled_dict = pickle.load(pkl)
+            pkl.close()
+        else:
+            returned_val = run_approach('SCATS', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict = {'SCATS': returned_val}
 
-        # returned_val = run_approach('GP', args.iter, args.trace_mem, args.trace_config)
-        # pkled_dict['GP'] = returned_val
+            returned_val = run_approach('GP', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['GP'] = returned_val
 
-        # returned_val = run_approach('PSO', args.iter, args.trace_mem, args.trace_config)
-        # pkled_dict['PSO'] = returned_val
+            returned_val = run_approach('PSO', args.iter // args.trace_mem, args.trace_mem, args.trace_config)
+            pkled_dict['PSO'] = returned_val
 
-        # returned_val = run_approach('Trace', args.iter, args.trace_mem, args.trace_config)
-        # pkled_dict['Trace'] = returned_val
+            returned_val = run_approach('TraceVerbose', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['Trace'] = returned_val
 
-        # if args.trace_mem > 0:
-        #    returned_val = run_approach('Trace', args.iter, 0, args.trace_config)
-        #    pkled_dict['TraceNoMem'] = returned_val
+            returned_val = run_approach('OPROVerbose', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['OPRO'] = returned_val
 
-        pkl = open(args.output_prefix + str(i), "rb")
-        pkled_dict = pickle.load(pkl)
-        pkl.close()
+            returned_val = run_approach('TraceMaskVerbose', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['TraceMask'] = returned_val
+
+            returned_val = run_approach('Trace', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['TraceScalar'] = returned_val
+
+            if args.trace_mem > 0:
+                returned_val = run_approach('TraceVerbose', args.iter, 0, args.trace_config)
+                pkled_dict['TraceNoMem'] = returned_val
+
+                returned_val = run_approach('TraceMaskVerbose', args.iter, 0, args.trace_config)
+                pkled_dict['TraceNoMemScalar'] = returned_val
+
+            pkl = open(args.output_prefix + str(i), "wb")
+            pickle.dump(pkled_dict, pkl)
+            pkl.close()
 
         results.append(pkled_dict)
 
@@ -482,7 +520,7 @@ if __name__ == "__main__":
     def extract_mean_ste(result, method):
         method_results = np.zeros((args.replications, x_axis_len))
         for i in range(args.replications):
-            method_results[i, :] = results[i][method][:, 2]
+            method_results[i, :] = result[i][method][:, 2]
         # If nan or inf values are present, replace them with nan
         method_results[np.isnan(method_results)] = np.nan
         method_results[np.isinf(method_results)] = np.nan
@@ -509,10 +547,26 @@ if __name__ == "__main__":
     plt.plot(x_axis, mean_trace, label="Trace")
     plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
 
+    mean_opro, ste_opro = extract_mean_ste(results, "OPRO")
+    plt.plot(x_axis, mean_opro, label="OPRO")
+    plt.fill_between(x_axis, mean_opro - ste_opro, mean_opro + ste_opro, alpha=0.2)
+
+    mean_tracem, ste_tracem = extract_mean_ste(results, "TraceMask")
+    plt.plot(x_axis, mean_tracem, label="TraceMasked")
+    plt.fill_between(x_axis, mean_tracem - ste_tracem, mean_tracem + ste_tracem, alpha=0.2)
+
+    mean_traces, ste_traces = extract_mean_ste(results, "TraceScalar")
+    plt.plot(x_axis, mean_traces, label="TraceScalar")
+    plt.fill_between(x_axis, mean_traces - ste_traces, mean_traces + ste_traces, alpha=0.2)
+
     if "TraceNoMem" in results[0]:
         mean_trace_nomem, ste_trace_nomem = extract_mean_ste(results, "TraceNoMem")
         plt.plot(x_axis, mean_trace_nomem, label="TraceNoMem")
         plt.fill_between(x_axis, mean_trace_nomem - ste_trace_nomem, mean_trace_nomem + ste_trace_nomem, alpha=0.2)
+
+        mean_trace_nomems, ste_trace_nomems = extract_mean_ste(results, "TraceNoMem")
+        plt.plot(x_axis, mean_trace_nomems, label="TraceNoMem")
+        plt.fill_between(x_axis, mean_trace_nomems - ste_trace_nomems, mean_trace_nomems + ste_trace_nomems, alpha=0.2)
 
     plt.title("Traffic Optimization -- GPT4-0125-Preview")
     plt.legend()
