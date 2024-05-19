@@ -254,9 +254,9 @@ class Node(AbstractNode[T]):
 
         """
         if propagator is None:
-            from autogen.trace.propagators.propagators import SumPropagator  # this avoids circular import
+            from autogen.trace.propagators.node_propagator import NodePropagator  # this avoids circular import
 
-            propagator = SumPropagator()
+            propagator = NodePropagator()
 
         # assert type(feedback) == str, f"Feedback must be a string, but got {type(feedback)}."
 
@@ -576,6 +576,7 @@ class Node(AbstractNode[T]):
             raise AttributeError(f"{type(self._data)} object has no attribute 'format'.")
 
         import autogen.trace.operators as ops
+
         return ops.format(self, *args, **kwargs)
 
     def capitalize(self):
@@ -643,6 +644,7 @@ class Node(AbstractNode[T]):
     def pop(self, __index=-1):
         # python does hidden type checks
         import autogen.trace.operators as ops
+
         return ops.pop(self, node(__index))
 
     def append(self, *args, **kwargs):
