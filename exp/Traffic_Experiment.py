@@ -535,38 +535,41 @@ if __name__ == "__main__":
     plt.plot(x_axis, mean_scats, label="SCATS")
     plt.fill_between(x_axis, mean_scats - ste_scats, mean_scats + ste_scats, alpha=0.2)
 
-    #mean_gp, ste_gp = extract_mean_ste(results, "GP")
-    #plt.plot(x_axis, mean_gp, label="GP")
-    #plt.fill_between(x_axis, mean_gp - ste_gp, mean_gp + ste_gp, alpha=0.2)
+    ### FOR FIGURE 1
+    """
+    mean_gp, ste_gp = extract_mean_ste(results, "GP")
+    plt.plot(x_axis, mean_gp, label="GP")
+    plt.fill_between(x_axis, mean_gp - ste_gp, mean_gp + ste_gp, alpha=0.2)
 
-    #mean_pso, ste_pso = extract_mean_ste(results, "PSO")
-    #plt.plot(x_axis, mean_pso, label="PSO")
-    #plt.fill_between(x_axis, mean_pso - ste_pso, mean_pso + ste_pso, alpha=0.2)
+    mean_pso, ste_pso = extract_mean_ste(results, "PSO")
+    plt.plot(x_axis, mean_pso, label="PSO")
+    plt.fill_between(x_axis, mean_pso - ste_pso, mean_pso + ste_pso, alpha=0.2)
 
     mean_trace, ste_trace = extract_mean_ste(results, "Trace")
     plt.plot(x_axis, mean_trace, label="Trace")
     plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
 
-    #mean_opro, ste_opro = extract_mean_ste(results, "OPRO")
-    #plt.plot(x_axis, mean_opro, label="OPRO")
-    #plt.fill_between(x_axis, mean_opro - ste_opro, mean_opro + ste_opro, alpha=0.2)
+    mean_opro, ste_opro = extract_mean_ste(results, "OPRO")
+    plt.plot(x_axis, mean_opro, label="OPRO")
+    plt.fill_between(x_axis, mean_opro - ste_opro, mean_opro + ste_opro, alpha=0.2)
+    """
+    ### END FOR FIGURE 1
+
+    ### FOR FIGURE 2
+    mean_trace, ste_trace = extract_mean_ste(results, "Trace")
+    plt.plot(x_axis, mean_trace, label="Trace")
+    plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
 
     mean_tracem, ste_tracem = extract_mean_ste(results, "TraceMask")
-    plt.plot(x_axis, mean_tracem, label="TraceMasked")
+    plt.plot(x_axis, mean_tracem, label="TraceMask")
     plt.fill_between(x_axis, mean_tracem - ste_tracem, mean_tracem + ste_tracem, alpha=0.2)
 
-    mean_traces, ste_traces = extract_mean_ste(results, "TraceScalar")
-    plt.plot(x_axis, mean_traces, label="TraceScalar")
-    plt.fill_between(x_axis, mean_traces - ste_traces, mean_traces + ste_traces, alpha=0.2)
+    if "TraceNoMem" in results[0]:
+        mean_trace_nomem, ste_trace_nomem = extract_mean_ste(results, "TraceNoMem")
+        plt.plot(x_axis, mean_trace_nomem, label="TraceNoMem")
+        plt.fill_between(x_axis, mean_trace_nomem - ste_trace_nomem, mean_trace_nomem + ste_trace_nomem, alpha=0.2)
 
-    #if "TraceNoMem" in results[0]:
-    #    mean_trace_nomem, ste_trace_nomem = extract_mean_ste(results, "TraceNoMem")
-    #    plt.plot(x_axis, mean_trace_nomem, label="TraceNoMem")
-    #    plt.fill_between(x_axis, mean_trace_nomem - ste_trace_nomem, mean_trace_nomem + ste_trace_nomem, alpha=0.2)
-
-    #    mean_trace_nomems, ste_trace_nomems = extract_mean_ste(results, "TraceNoMemScalar")
-    #    plt.plot(x_axis, mean_trace_nomems, label="TraceNoMemScalar")
-    #    plt.fill_between(x_axis, mean_trace_nomems - ste_trace_nomems, mean_trace_nomems + ste_trace_nomems, alpha=0.2)
+    ### END FOR FIGURE 2    
 
     plt.title("Traffic Optimization -- GPT4-0125-Preview")
     plt.legend()
