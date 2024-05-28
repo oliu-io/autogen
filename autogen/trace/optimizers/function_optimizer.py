@@ -410,7 +410,7 @@ class FunctionOptimizer(Optimizer):
         if len(suggestion) == 0:
             # we try to extract key/value separately and return it as a dictionary
             pattern = r'"suggestion"\s*:\s*\{(.*?)\}'
-            suggestion_match = re.search(pattern, response, re.DOTALL)
+            suggestion_match = re.search(pattern, str(response), re.DOTALL)
             if suggestion_match:
                 suggestion = {}
                 # Extract the entire content of the suggestion dictionary
