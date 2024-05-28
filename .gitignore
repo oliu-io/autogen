@@ -187,3 +187,12 @@ Digraph*
 key.sh
 
 trace_docs/_build/*
+<<<<<<< Updated upstream
+exp/results_*
+=======
+
+*results*
+final_exps
+plots
+new_mw*
+>>>>>>> Stashed changes

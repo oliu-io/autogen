@@ -22,7 +22,7 @@ obj = 1
 print("outside obj id", id(obj))
 
 
-@trace.trace_op(trainable=True)
+@trace.bundle(trainable=True)
 def test():
     x = random.random()
     x = obj + x

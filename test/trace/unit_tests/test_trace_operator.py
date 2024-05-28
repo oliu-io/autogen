@@ -1,5 +1,5 @@
 from autogen import trace
-from autogen.trace.trace_ops import trace_op, TraceMissingInputsError
+from autogen.trace.bundle import bundle, TraceMissingInputsError
 from autogen.trace.nodes import Node, node
 from autogen.trace.utils import for_all_methods, contain
 
@@ -9,7 +9,7 @@ condition = Node(True)
 
 
 # Test node_dict==None
-@trace_op("[auto_cond] This selects x if condition is True, otherwise y.", node_dict=None)
+@bundle("[auto_cond] This selects x if condition is True, otherwise y.", node_dict=None)
 def auto_cond(condition: Node, x: Node, y: Node):
     """
     A function that selects x if condition is True, otherwise y.
@@ -26,7 +26,7 @@ assert output._inputs[x.name] is x and output._inputs[y.name] is y and output._i
 
 # Test node_dict=='auto'
 # here we use the signature to get the keys of message_node._inputs
-@trace_op("[cond] This selects x if condition is True, otherwise y.", node_dict="auto")
+@bundle("[cond] This selects x if condition is True, otherwise y.", node_dict="auto")
 def cond(condition: Node, x: Node, y: Node):
     x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
@@ -38,7 +38,7 @@ assert output._inputs["x"] is x and output._inputs["y"] is y and output._inputs[
 
 
 # Test dot is okay for operator name
-@trace_op("[fancy.cond] This selects x if condition is True, otherwise y.", node_dict="auto")
+@bundle("[fancy.cond] This selects x if condition is True, otherwise y.", node_dict="auto")
 def fancy_cond(condition: Node, x: Node, y: Node):
     x, y, condition = x, y, condition  # This makes sure all data are read
     return x if condition else y
@@ -50,7 +50,7 @@ assert output._inputs["x"] is x and output._inputs["y"] is y and output._inputs[
 
 
 # Test wrapping a function that returns a node
-@trace_op("[add_1] Add input x and input y")
+@bundle("[add_1] Add input x and input y")
 def foo(x, y):
     z = x + y
     return z
@@ -63,7 +63,7 @@ assert set(z.parents) == {x, y}
 
 # Test tracing class method
 class Foo:
-    @trace_op("[Foo.add] Add input x and input y")
+    @bundle("[Foo.add] Add input x and input y")
     def add(self, x, y):
         z = x + y
         return z
@@ -73,7 +73,7 @@ foo = Foo()
 z = foo.add(x, y)
 
 
-# Test composition of trace_op with for all_all_methods
+# Test composition of bundle with for all_all_methods
 @for_all_methods
 def test_cls_decorator(fun):
     def wrapper(*args, **kwargs):
@@ -85,7 +85,7 @@ def test_cls_decorator(fun):
 @test_cls_decorator
 class Foo:
     # Test automatic description generation
-    @trace_op()
+    @bundle()
     def add(self, x, y):
         z = x + y
         return z
@@ -96,7 +96,7 @@ z = foo.add(x, y)
 
 
 # Test functions with *args and *kwargs and node_dict=None
-@trace_op(node_dict=None, unpack_input=False)
+@bundle(node_dict=None, unpack_input=False)
 def fun(a, args, kwargs, *_args, **_kwargs):
     print(a.data)
     print(args.data)
@@ -112,7 +112,7 @@ assert len(x.inputs) == 3
 
 
 # Test functions with *args and *kwargs and node_dict='auto'
-@trace_op(node_dict="auto")  # This is the default behavior
+@bundle(node_dict="auto")  # This is the default behavior
 def fun(a, args, kwargs, *_args, **_kwargs):
     print(a)
     print(args)
@@ -139,17 +139,17 @@ assert z.inputs == {}
 assert z == 3
 
 
-# Test trace_op as an inline decorator
+# Test bundle as an inline decorator
 def fun(a, b):
     return a + b
 
 
-tfun = trace_op()(fun)
+tfun = bundle()(fun)
 assert tfun(node(1), node(2)) == 3
 
 
 # Test multi-output function
-@trace_op(n_outputs=2)
+@bundle(n_outputs=2)
 def fun(a, b):
     return a + b, a - b
 
@@ -157,7 +157,7 @@ def fun(a, b):
 x, y = fun(node(1), node(2))
 
 
-@trace_op()  # single output
+@bundle()  # single output
 def fun(a, b):
     return a + b, a - b
 
@@ -173,7 +173,7 @@ assert x == x_y[0] and y == x_y[1]
 # Test trace codes using nodes
 
 
-@trace_op(traceable_code=True)  # set unpack_input=False to run node-based codes
+@bundle(traceable_code=True)  # set unpack_input=False to run node-based codes
 def test(a: Node, b: Node):
     """Complex function."""
     return a + b + 10
@@ -197,7 +197,7 @@ assert "add" in z0.name
 external_var = node(0)
 
 
-@trace_op()  # set unpack_input=False to run node-based codes
+@bundle()  # set unpack_input=False to run node-based codes
 def test(a: Node, b: Node):
     """Complex function."""
     return a + b + 10 + external_var.data
@@ -211,7 +211,7 @@ except TraceMissingInputsError:
     print("This usage throws an error because external_var is not provided as part of the inputs")
 
 
-@trace_op(node_dict={"x": external_var})
+@bundle(node_dict={"x": external_var})
 def test(a: Node, b: Node):
     """Complex function."""
     return a + b + 10 + external_var.data
@@ -223,7 +223,7 @@ assert contain(z.parents, x) and contain(z.parents, y) and contain(z.parents, ex
 assert "a" in z.inputs and "b" in z.inputs and "x" in z.inputs
 
 
-@trace_op(allow_external_dependencies=True)
+@bundle(allow_external_dependencies=True)
 def test(a: Node, b: Node):
     """Complex function."""
     return a + b + 10 + external_var.data

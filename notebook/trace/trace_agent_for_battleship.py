@@ -60,16 +60,18 @@ If we wrap the function to a class, has access to "self", it can learn to store 
 # Scenario 4: Learning to self-play (both agents set own board)
 
 from battleship import BattleshipBoard
-from autogen.trace.trace_ops import trace_op, trace_class
+from autogen.trace.bundle import bundle, trace_class
 from autogen.trace.nodes import node
 
+
 # ===== Scenario 0 ===== #
-@trace_op("[select_coordinate] Given a map, select a valid coordinate.", trainable=True)
+@bundle("[select_coordinate] Given a map, select a valid coordinate.", trainable=True)
 def select_coordinate(map):
     """
     Given a map, select a valid coordinate.
     """
     return map
+
 
 def user_fb_for_coords_validity(board, coords):
     try:
@@ -77,13 +79,15 @@ def user_fb_for_coords_validity(board, coords):
     except Exception as e:
         return str(e), 0
 
+
 # ==== Scenario 1 ==== #
-@trace_op("[select_coordinate] Given a map, select a valid coordinate to see if we can earn reward.", trainable=True)
+@bundle("[select_coordinate] Given a map, select a valid coordinate to see if we can earn reward.", trainable=True)
 def select_coordinate(map):
     """
     Given a map, select a valid coordinate. We might earn reward from this coordinate.
     """
     return [0, 0]
+
 
 def user_fb_for_placing_shot(board, coords):
     # this is already a multi-step cumulative reward problem
@@ -96,6 +100,7 @@ def user_fb_for_placing_shot(board, coords):
     except Exception as e:
         return board.get_shots(), 0, False, str(e)
 
+
 # ==== Scenario 2 ==== #
 
 # To make scenario 2 more efficient, we use a smaller board
@@ -104,10 +109,10 @@ def user_fb_for_placing_shot(board, coords):
 # 1. Understand their own board
 # 2.
 
+
 @trace_class
 class Agent:
-    @trace_op(trainable=True,
-              allow_external_dependencies=True)
+    @bundle(trainable=True, allow_external_dependencies=True)
     def select_coordinate(self, map):
         """
         Given a map, select a coordinate to see if we can earn reward.
@@ -117,6 +122,7 @@ class Agent:
 
     def understand_own_board(self, board):
         return ""
+
 
 def user_fb_for_placing_shot(board, coords):
     # this is already a multi-step cumulative reward problem
@@ -128,6 +134,7 @@ def user_fb_for_placing_shot(board, coords):
         return new_map, reward, terminal, f"Got {reward} reward."
     except Exception as e:
         return board.get_shots(), 0, False, str(e)
+
 
 # ==== Scenario 3 ==== #
 
@@ -148,7 +155,7 @@ failed JSON extraction
 
 """
 LLM returns invalid format, cannot extract suggestions from JSON
-{"reasoning": "The select_coordinate function was defined to always return [0, 0] regardless of the input map. If the reward is dependent on the chosen coordinates and [0, 0] always results in False reward, this means that [0, 0] is not a valid coordinate in the context of the reward system. Let"s assume that a valid coordinate where we might get a True reward is [1, 1]. Therefore, the code for select_coordinate must be modified to select [1, 1] as the coordinate.", 
+{"reasoning": "The select_coordinate function was defined to always return [0, 0] regardless of the input map. If the reward is dependent on the chosen coordinates and [0, 0] always results in False reward, this means that [0, 0] is not a valid coordinate in the context of the reward system. Let"s assume that a valid coordinate where we might get a True reward is [1, 1]. Therefore, the code for select_coordinate must be modified to select [1, 1] as the coordinate.",
  "suggestion": {"__code0": "def select_coordinate(map):\n\
     \"\"\"\n\
     Given a map, select a valid coordinate. We might earn reward from this coordinate.\n\
@@ -161,6 +168,6 @@ LLM returns invalid format, cannot extract suggestions from JSON
 """
 __code:0 def select_coordinate(map):
     return [reward_x, reward_y]
-    
+
 TypeError: select_coordinate() missing 2 required positional arguments: 'reward_x' and 'reward_y'
 """

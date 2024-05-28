@@ -9,7 +9,7 @@ from datasets import load_dataset
 
 from typing import List
 import copy
-from autogen.trace.trace_ops import FunModule, trace_op, trace_class, TraceExecutionError
+from autogen.trace.bundle import FunModule, bundle, trace_class, TraceExecutionError
 from autogen.trace.nodes import Node
 
 import re
@@ -39,7 +39,7 @@ class LLMCallable:
         self.max_tokens = max_tokens
         self.verbose = verbose
 
-    @trace_op(catch_execution_error=False)
+    @bundle(catch_execution_error=False)
     def call_llm(self, user_prompt):
         """
         Sends the constructed prompt (along with specified request) to an LLM.
@@ -48,8 +48,7 @@ class LLMCallable:
         if self.verbose not in (False, "output"):
             print("Prompt\n", system_prompt + user_prompt)
 
-        messages = [{"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}]
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
         try:
             response = self.llm.create(
@@ -71,7 +70,8 @@ class Predict(LLMCallable):
         super().__init__()
 
         self.demos = []
-        self.prompt_template = dedent("""
+        self.prompt_template = dedent(
+            """
         Given the fields `question`, produce the fields `answer`.
 
         ---
@@ -84,14 +84,15 @@ class Predict(LLMCallable):
         ---
         Question: {}
         Answer:
-        """)
+        """
+        )
 
         self.prompt_template = ParameterNode(self.prompt_template, trainable=True,
                                              description="[ParameterNode] This is the Prompt Template to the LLM. " + \
                                                          "Need to include information about what the format of answers LLM should output. " + \
                                                          "They can be (A)/(B), a number like 8, or a string, or Yes/No.")
 
-    @trace_op(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
+    @bundle(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
     def extract_answer(self, prompt_template, question, response):
         """
         Need to read in the response, which can contain additional thought, delibration and an answer.
@@ -109,7 +110,7 @@ class Predict(LLMCallable):
         answer = response.split("Answer:")[1].strip()
         return answer
 
-    @trace_op(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
+    @bundle(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
     def create_prompt(self, prompt_template, question):
         """
         The function takes in a question and then add to the prompt for LLM to answer.
@@ -157,7 +158,7 @@ class PredictCoT(LLMCallable):
                                                          "Need to include information about what the format of answers LLM should output. " + \
                                                          "They can be (A)/(B), a number like 8, or a string, or Yes/No.")
 
-    @trace_op(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
+    @bundle(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
     def extract_answer(self, prompt_template, question, response):
         """
         Need to read in the response, which can contain additional thought, delibration and an answer.
@@ -174,7 +175,7 @@ class PredictCoT(LLMCallable):
         answer = response.split("Answer:")[1].strip()
         return answer
 
-    @trace_op(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
+    @bundle(trainable=True, catch_execution_error=True, allow_external_dependencies=True)
     def create_prompt(self, prompt_template, question):
         """
         The function takes in a question and then add to the prompt for LLM to answer.
@@ -199,7 +200,6 @@ class PredictCoT(LLMCallable):
 
 def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
     # optimizer.objective = "Be mindful of the type of answer you need to produce." + optimizer.default_objective
-
     cum_reward = 0
     epochs = 1
 
@@ -236,8 +236,8 @@ def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
                     correctness = False
                     no_error = False
 
-            print(example['question'])
-            print("Expected answer:", example['answer'])
+            print(example["question"])
+            print("Expected answer:", example["answer"])
             print("Answer:", response.data)
 
             cum_reward += correctness
@@ -285,14 +285,15 @@ def learn_predict(dp, optimizer, examples, val_examples, task_name, save_dir):
     return dp, cum_reward
 
 
+
 def evaluate_dp(dp, examples):
     rewards = 0
     responses = []
     for example in tqdm(examples):
         try:
-            response = dp.forward(example['question'])
+            response = dp.forward(example["question"])
             responses.append(response.data)
-            correctness = eval_metric(example['answer'], response.data)
+            correctness = eval_metric(example["answer"], response.data)
         except:
             correctness = False
             responses.append(None)
@@ -362,16 +363,17 @@ if __name__ == '__main__':
 
     # tasks = ['logical_deduction_five_objects']
 
+
     assert args.task in tasks, f"Task {args.task} not found in tasks."
     # note 0:27 covers all tasks
-    run_tasks = tasks[args.task_start:args.task_end] if args.task_start != -1 and args.task_end != -1 else [args.task]
+    run_tasks = tasks[args.task_start : args.task_end] if args.task_start != -1 and args.task_end != -1 else [args.task]
 
     for task in run_tasks:
-
         print(f"Running task {task}")
 
         save_name = f""
         ckpt_save_name = f"bigbench_trace_ckpt"
+
         if args.train:
             save_name += "trained_"
             ckpt_save_name += "_trained"

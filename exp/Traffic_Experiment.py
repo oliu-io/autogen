@@ -14,7 +14,7 @@ import logging
 import autogen
 import autogen.trace as trace
 from autogen.trace.optimizers import FunctionOptimizerV2Memory, OPRO
-# from autogen.trace.bundle import ExceptionNode
+from autogen.trace.bundle import ExceptionNode
 
 
 #####
@@ -178,7 +178,7 @@ def create_demand(seed, demand=0.25):
     return demandDict
 
 
-@trace.trace_op(trainable=False, allow_external_dependencies=True)
+@trace.bundle(trainable=False, allow_external_dependencies=True)
 def create_world(EW_time, NS_time):
     """
     Creates a traffic intersection with the given green light durations (variables: EW_time and NS_time)
@@ -236,7 +236,7 @@ def create_world(EW_time, NS_time):
     return W
 
 
-@trace.trace_op(trainable=False, allow_external_dependencies=True)
+@trace.bundle(trainable=False, allow_external_dependencies=True)
 def analyze_world(W, verbose=True):
     """
     Analyzes the statistics recorded at traffic intersection. Returns a dictionary containing the following statistics:
@@ -614,3 +614,112 @@ if __name__ == "__main__":
     plt.legend(loc='upper right')  #
     plt.savefig("Traffic_OtherOptCompare.pdf", bbox_inches='tight', dpi=300)
     # plt.show()
+
+    results = []
+    for i in range(args.replications):
+        seed = 42 + i
+        demand_dict = create_demand(seed, args.demand)
+
+        pkled_dict = None
+        if os.path.exists(args.output_prefix + str(i)):
+            pkl = open(args.output_prefix + str(i), "rb")
+            pkled_dict = pickle.load(pkl)
+            pkl.close()
+        else:
+            returned_val = run_approach('SCATS', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict = {'SCATS': returned_val}
+
+            returned_val = run_approach('GP', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['GP'] = returned_val
+
+            returned_val = run_approach('PSO', args.iter // args.trace_mem, args.trace_mem, args.trace_config)
+            pkled_dict['PSO'] = returned_val
+
+            returned_val = run_approach('TraceVerbose', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['Trace'] = returned_val
+
+            returned_val = run_approach('OPROVerbose', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['OPRO'] = returned_val
+
+            returned_val = run_approach('TraceMaskVerbose', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['TraceMask'] = returned_val
+
+            returned_val = run_approach('Trace', args.iter, args.trace_mem, args.trace_config)
+            pkled_dict['TraceScalar'] = returned_val
+
+            if args.trace_mem > 0:
+                returned_val = run_approach('TraceVerbose', args.iter, 0, args.trace_config)
+                pkled_dict['TraceNoMem'] = returned_val
+
+                returned_val = run_approach('TraceMaskVerbose', args.iter, 0, args.trace_config)
+                pkled_dict['TraceNoMemScalar'] = returned_val
+
+            pkl = open(args.output_prefix + str(i), "wb")
+            pickle.dump(pkled_dict, pkl)
+            pkl.close()
+
+        results.append(pkled_dict)
+
+    import matplotlib.pyplot as plt
+
+    x_axis_len = results[0]["GP"].shape[0]
+    x_axis = range(x_axis_len)
+    #plt.axis([0, x_axis_len, 30, 200])
+
+    def extract_mean_ste(result, method):
+        method_results = np.zeros((args.replications, x_axis_len))
+        for i in range(args.replications):
+            method_results[i, :] = result[i][method][:, 2]
+        # If nan or inf values are present, replace them with nan
+        method_results[np.isnan(method_results)] = np.nan
+        method_results[np.isinf(method_results)] = np.nan
+
+        mean_results = np.nanmean(method_results, axis=0)
+        std_results = np.nanstd(method_results, axis=0)
+        non_nan = np.count_nonzero(~np.isnan(method_results), axis=0)
+        ste_results = std_results / np.sqrt(non_nan)
+        return mean_results, ste_results
+
+    mean_scats, ste_scats = extract_mean_ste(results, "SCATS")
+    plt.plot(x_axis, mean_scats, label="SCATS")
+    plt.fill_between(x_axis, mean_scats - ste_scats, mean_scats + ste_scats, alpha=0.2)
+
+    ### FOR FIGURE 1
+    """
+    mean_gp, ste_gp = extract_mean_ste(results, "GP")
+    plt.plot(x_axis, mean_gp, label="GP")
+    plt.fill_between(x_axis, mean_gp - ste_gp, mean_gp + ste_gp, alpha=0.2)
+
+    mean_pso, ste_pso = extract_mean_ste(results, "PSO")
+    plt.plot(x_axis, mean_pso, label="PSO")
+    plt.fill_between(x_axis, mean_pso - ste_pso, mean_pso + ste_pso, alpha=0.2)
+
+    mean_trace, ste_trace = extract_mean_ste(results, "Trace")
+    plt.plot(x_axis, mean_trace, label="Trace")
+    plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
+
+    mean_opro, ste_opro = extract_mean_ste(results, "OPRO")
+    plt.plot(x_axis, mean_opro, label="OPRO")
+    plt.fill_between(x_axis, mean_opro - ste_opro, mean_opro + ste_opro, alpha=0.2)
+    """
+    ### END FOR FIGURE 1
+
+    ### FOR FIGURE 2
+    mean_trace, ste_trace = extract_mean_ste(results, "Trace")
+    plt.plot(x_axis, mean_trace, label="Trace")
+    plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
+
+    mean_tracem, ste_tracem = extract_mean_ste(results, "TraceMask")
+    plt.plot(x_axis, mean_tracem, label="TraceMask")
+    plt.fill_between(x_axis, mean_tracem - ste_tracem, mean_tracem + ste_tracem, alpha=0.2)
+
+    if "TraceNoMem" in results[0]:
+        mean_trace_nomem, ste_trace_nomem = extract_mean_ste(results, "TraceNoMem")
+        plt.plot(x_axis, mean_trace_nomem, label="TraceNoMem")
+        plt.fill_between(x_axis, mean_trace_nomem - ste_trace_nomem, mean_trace_nomem + ste_trace_nomem, alpha=0.2)
+
+    ### END FOR FIGURE 2    
+
+    plt.title("Traffic Optimization -- GPT4-0125-Preview")
+    plt.legend()
+    plt.show()

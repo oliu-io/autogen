@@ -1,6 +1,6 @@
 from autogen.trace.nodes import node, Node, MessageNode
 from typing import TYPE_CHECKING, Any
-from autogen.trace.trace_ops import trace_op
+from autogen.trace.bundle import bundle
 import autogen.trace.operators as ops
 
 
@@ -27,7 +27,7 @@ class SeqIterable:
             raise StopIteration
 
 
-@trace_op("[to_list] This converts x to a list.", node_dict="auto")
+@bundle("[to_list] This converts x to a list.", node_dict="auto")
 def to_list_implicit(x: Any):
     return list(x)
 

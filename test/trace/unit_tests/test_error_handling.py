@@ -1,4 +1,4 @@
-from autogen.trace.trace_ops import trace_op, TraceExecutionError
+from autogen.trace.bundle import bundle, TraceExecutionError
 from autogen.trace.nodes import Node, node, ExceptionNode
 from autogen.trace.utils import for_all_methods
 
@@ -29,7 +29,7 @@ def bug_progam(x):
 """
 
 
-@trace_op(trainable=True)
+@bundle(trainable=True)
 def bug_progam(x):
     x + 10
     return

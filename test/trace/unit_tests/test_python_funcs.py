@@ -4,11 +4,11 @@ To make sure things work
 """
 from autogen.trace.nodes import node, Node
 from autogen.trace import operators as ops
-from autogen.trace.trace_ops import trace_op
+from autogen.trace.bundle import bundle
 import math
 
 
-@trace_op(
+@bundle(
     description="[get_env] Return a new env inside env with params mapped to their corresponding args, and env as the new env's outer env.",
     trainable=True,
 )
@@ -26,7 +26,7 @@ def test_get_env():
 
 
 # import must be local, otherwise we can't lazy execute
-@trace_op(
+@bundle(
     description="[get_math] Get a dictionary mapping math library function names to their functions.", trainable=True
 )
 def get_math():
@@ -47,7 +47,7 @@ def test_empty_inputs():
     result.backward()
 
 
-@trace_op(
+@bundle(
     description="[get_ops] Get a dictionary mapping math library function names to their functions.", trainable=True
 )
 def get_ops():
@@ -64,7 +64,7 @@ def get_ops():
     }
 
 
-@trace_op(
+@bundle(
     description="[apply_fn_dict_key] Return the value of fn_dict_generator()[key](*args_list) in standard_env.",
     unpack_input=False,
     trainable=True,
@@ -91,7 +91,7 @@ test_empty_inputs()
 test_apply_fn_dict_key()
 
 
-@trace_op(
+@bundle(
     description="[get_simple_math] Get a dictionary mapping 'abs', 'min', 'max', 'not', 'round' to their functions.",
     trainable=True,
 )
@@ -99,7 +99,7 @@ def get_simple_math():
     return {"abs": abs, "min": min, "max": max, "not": lambda x: not x, "round": round}
 
 
-@trace_op(
+@bundle(
     description="[standard_env] An environment with some Scheme standard procedures. Start with an environment and update it with standard functions.",
     node_dict=None,
     trainable=True,
@@ -126,7 +126,7 @@ test_standard_env()
 
 try:
     # tracing recursive functions
-    @trace_op(trainable=True, catch_execution_error=False, unpack_input=False)
+    @bundle(trainable=True, catch_execution_error=False, unpack_input=False)
     def recurse(dic, var):
         "Simple recursion"
         if var in dic:
@@ -141,7 +141,7 @@ try:
 
     test_recurse()
 
-    @trace_op(
+    @bundle(
         description="[find] Find the value of var in the innermost env where var appears.",
         trainable=True,
         catch_execution_error=False,

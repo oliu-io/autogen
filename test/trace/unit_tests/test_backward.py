@@ -1,5 +1,5 @@
 import copy
-from autogen.trace import node, trace_op
+from autogen.trace import node, bundle
 from autogen.trace.nodes import GRAPH, Node
 from autogen.trace.propagators import NodePropagator
 from autogen.trace.optimizers.function_optimizer import node_to_function_feedback
@@ -42,7 +42,7 @@ for k, v in y.feedback.items():
         print(f"  {kk}: {vv}")
 
 
-@trace_op(trainable=True)
+@bundle(trainable=True)
 def my_fun(x):
     """Test function"""
     return x**2 + 1
