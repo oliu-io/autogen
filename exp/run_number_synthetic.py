@@ -1,7 +1,7 @@
 import autogen
 from autogen.trace import trace_op, node
 from autogen.trace.trace_ops import TraceExecutionError
-from autogen.trace.optimizers import FunctionOptimizer, LlmAsOptimizer
+from autogen.trace.optimizers import FunctionOptimizerV2, OPRO
 from autogen.trace.nodes import GRAPH
 
 from number_synthetic import NumericalProgramSampler
@@ -108,9 +108,9 @@ def run_exp(masking=False, optimizer_name=None):
                                           seed=problem_ids[i])
         x = node(-1.0, "input_x", trainable=True)
         if optimizer_name == 'opro':
-            optimizer = LlmAsOptimizer([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
+            optimizer = OPRO([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
         else:
-            optimizer = FunctionOptimizer([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
+            optimizer = FunctionOptimizerV2([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
 
         mask = ['#Documentation', '#Code', '#Inputs', '#Others'] if masking else None
         try:

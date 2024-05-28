@@ -4,15 +4,17 @@ import dspy
 from datasets import load_dataset
 from dspy.evaluate import Evaluate
 
-from dspy.teleprompt import BootstrapFewShotWithRandomSearch
+from dspy.teleprompt import BootstrapFewShotWithRandomSearch, COPRO
 
 import re
 from tqdm import tqdm
 
 
-def eval_metric(true, prediction):
+def eval_metric(true, prediction, trace=None):
     # two types of answers:
     # (A)/(B) or "syndrome therefrom"/8/No/invalid
+    prediction = prediction.answer
+    true = true.answer
     matches = re.findall(r"\([A-Z]\)", true)
     if matches:
         pred = prediction
@@ -41,7 +43,6 @@ class CoT(dspy.Module):
     def forward(self, question):
         return self.prog(question=question)
 
-
 def evaluate_dp(dp, examples):
     rewards = 0
     responses = []
@@ -65,6 +66,7 @@ if __name__ == '__main__':
     parser.add_argument("--task_start", type=int, default=-1, help="Start from a specific task")
     parser.add_argument("--task_end", type=int, default=-1, help="End at a specific task")
     parser.add_argument("--train", action="store_true", help="Enabled few-shot optimization over training samples")
+    parser.add_argument("--copro", action="store_true", help="Do prompt template optimization")
     parser.add_argument("--cot", action="store_true", help="Use and train CoT model instead")
     parser.add_argument("--save_path", type=str, default="results/bigbench_dspy")
     args = parser.parse_args()
@@ -83,9 +85,11 @@ if __name__ == '__main__':
              'tracking_shuffled_objects_five_objects', 'penguins_in_a_table', 'movie_recommendation',
              'date_understanding']  # 27 tasks
 
-    rerun_tasks = ['object_counting', 'word_sorting', 'sports_understanding', 'multistep_arithmetic_two',
-                   'causal_judgement', 'formal_fallacies',
-                   'boolean_expressions', 'dyck_languages', 'navigate', 'web_of_lies']
+    # rerun_tasks = ['object_counting', 'word_sorting', 'sports_understanding', 'multistep_arithmetic_two',
+    #                'causal_judgement', 'formal_fallacies',
+    #                'boolean_expressions', 'dyck_languages', 'navigate', 'web_of_lies']
+    # rerun_tasks = ['salient_translation_error_detection']
+    rerun_tasks = []
 
     assert args.task in tasks, f"Task {args.task} not found in tasks."
     # note 0:27 covers all tasks
@@ -99,6 +103,9 @@ if __name__ == '__main__':
             save_name += "trained_"
         if args.cot:
             save_name += "cot_"
+        if args.copro:
+            save_name += "copro_"
+
         save_name += f"{task}.pkl"
 
         if os.path.exists(f"{args.save_path}/{save_name}") and task not in rerun_tasks:
@@ -122,17 +129,25 @@ if __name__ == '__main__':
         else:
             basic_qa = BasicQA()
 
-        if args.train:
-            config = dict(max_bootstrapped_demos=2, max_labeled_demos=4, num_candidate_programs=2, num_threads=6)
+        try:
+            if args.train:
+                config = dict(max_bootstrapped_demos=2, max_labeled_demos=4, num_candidate_programs=2, num_threads=6)
 
-            teleprompter = BootstrapFewShotWithRandomSearch(metric=eval_metric, **config)
-            # train on first 15, val on the next 5
-            optimized_qa = teleprompter.compile(basic_qa, trainset=trainset[:15], valset=trainset[15:])
+                teleprompter = BootstrapFewShotWithRandomSearch(metric=eval_metric, **config)
+                # train on first 15, val on the next 5
+                optimized_qa = teleprompter.compile(basic_qa, trainset=trainset[:15], valset=trainset[15:])
+            elif args.copro:
+                teleprompter = COPRO(metric=eval_metric)
+                kwargs = dict(num_threads=3, display_progress=True,
+                              display_table=10)  # Used in Evaluate class in the optimization process
+                optimized_qa = teleprompter.compile(basic_qa, trainset=trainset, eval_kwargs=kwargs)
 
-        evaluate = Evaluate(devset=valset, metric=eval_metric, num_threads=6, display_progress=True, display_table=10,
-                            return_outputs=True)
+            evaluate = Evaluate(devset=valset, metric=eval_metric, num_threads=6, display_progress=True, display_table=10, return_outputs=True)
+        except:
+            continue
 
-        if args.train:
+        if args.train or args.copro:
+            print("Evaluating optimized model")
             val_acc, return_outputs = evaluate(optimized_qa)
         else:
             val_acc, return_outputs = evaluate(basic_qa)
@@ -154,6 +169,9 @@ if __name__ == '__main__':
             save_name += "trained_"
         if args.cot:
             save_name += "cot_"
+        if args.copro:
+            save_name += "copro_"
+
         save_name += f"{task}.pkl"
         with open(f"{args.save_path}/{save_name}", "wb") as f:
             pickle.dump(stats, f)
