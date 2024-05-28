@@ -10,4 +10,5 @@ parts:
     - glob: tutorials/*
   - caption: 📖 API Reference
     chapters:
-    - glob: api/trace/*
+    - file: api/trace/trace
+    # - glob: api/trace/*
