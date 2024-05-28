@@ -1,8 +1,9 @@
 # Book settings
 # Learn more at https://jupyterbook.org/customize/config.html
 
-title: AutoTrace
+title: Trace
 author: Ching-An Cheng, Allen Nie, Adith Swaminathan
+copyright: "2023"
 logo: logo.png
 
 # Force re-execution of notebooks on each build.
@@ -34,16 +35,14 @@ html:
 sphinx:
   extra_extensions:
   - autodoc2
-  local_extensions:
-    set_version: .
   config:
     nb_merge_streams: true
     autodoc2_index_template: null
     autodoc2_output_dir: api
     autodoc2_module_all_regexes:
-      - "autotrace.*(throttler|store|utils|search_op|data|compactbars|components).*"
+      - "autogen.trace.*(nodes|bundle|trace).*"
     autodoc2_packages:
-      - "../sammo"
+      - "../autogen/trace"
     autodoc2_hidden_objects:
       - inherited
       - private

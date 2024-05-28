@@ -3,7 +3,11 @@
 
 format: jb-book
 root: intro
-chapters:
-- file: markdown
-- file: notebooks
-- file: markdown-notebooks
+parts:
+  - caption: 💡 Tutorials
+    numbered: true
+    chapters:
+    - glob: tutorials/*
+  - caption: 📖 API Reference
+    chapters:
+    - glob: api/trace/*
