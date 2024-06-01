@@ -415,7 +415,7 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
         EW_x = trace.node(MIN_GREEN_TIME, trainable=True, constraint=f"[{MIN_GREEN_TIME},{MAX_GREEN_TIME}]")
         NS_x = trace.node(MIN_GREEN_TIME, trainable=True, constraint=f"[{MIN_GREEN_TIME},{MAX_GREEN_TIME}]")
         if method.startswith("OPRO"):
-            optimizer = OPRO([EW_x, NS_x], memory_size=trace_memory, config_list=autogen.config_list_from_json(trace_config))    
+            optimizer = OPRO([EW_x, NS_x], memory_size=trace_memory, config_list=autogen.config_list_from_json(trace_config))
         else:
             optimizer = FunctionOptimizerV2Memory(
                 [EW_x, NS_x], memory_size=trace_memory, config_list=autogen.config_list_from_json(trace_config)
@@ -468,6 +468,155 @@ if __name__ == "__main__":
 
     global seed
     global demand_dict
+
+    # results = []
+    # for i in range(args.replications):
+    #     seed = 42 + i
+    #     demand_dict = create_demand(seed, args.demand)
+    #
+    #     pkled_dict = None
+    #     if os.path.exists(args.output_prefix + str(i)):
+    #         pkl = open(args.output_prefix + str(i), "rb")
+    #         pkled_dict = pickle.load(pkl)
+    #         pkl.close()
+    #     else:
+    #         returned_val = run_approach('SCATS', args.iter, args.trace_mem, args.trace_config)
+    #         pkled_dict = {'SCATS': returned_val}
+    #
+    #         returned_val = run_approach('GP', args.iter, args.trace_mem, args.trace_config)
+    #         pkled_dict['GP'] = returned_val
+    #
+    #         returned_val = run_approach('PSO', args.iter // args.trace_mem, args.trace_mem, args.trace_config)
+    #         pkled_dict['PSO'] = returned_val
+    #
+    #         returned_val = run_approach('TraceVerbose', args.iter, args.trace_mem, args.trace_config)
+    #         pkled_dict['Trace'] = returned_val
+    #
+    #         returned_val = run_approach('OPROVerbose', args.iter, args.trace_mem, args.trace_config)
+    #         pkled_dict['OPRO'] = returned_val
+    #
+    #         returned_val = run_approach('TraceMaskVerbose', args.iter, args.trace_mem, args.trace_config)
+    #         pkled_dict['TraceMask'] = returned_val
+    #
+    #         returned_val = run_approach('Trace', args.iter, args.trace_mem, args.trace_config)
+    #         pkled_dict['TraceScalar'] = returned_val
+    #
+    #         if args.trace_mem > 0:
+    #             returned_val = run_approach('TraceVerbose', args.iter, 0, args.trace_config)
+    #             pkled_dict['TraceNoMem'] = returned_val
+    #
+    #             returned_val = run_approach('TraceMaskVerbose', args.iter, 0, args.trace_config)
+    #             pkled_dict['TraceNoMemScalar'] = returned_val
+    #
+    #         pkl = open(args.output_prefix + str(i), "wb")
+    #         pickle.dump(pkled_dict, pkl)
+    #         pkl.close()
+    #
+    #     results.append(pkled_dict)
+
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    def latexify():
+        """Sets matplotlib params to appear more like LaTeX.
+
+        Based on https://nipunbatra.github.io/blog/2014/latexify.html
+        """
+        params = {
+                  'axes.titlesize': 18,
+                  'axes.labelsize': 18,
+                  'font.size': 18,
+                  'legend.fontsize': 16,
+                  'xtick.labelsize': 16,
+                  'ytick.labelsize': 16,
+                  'font.family': 'DejaVu Serif',
+                  'font.serif': 'Computer Modern',
+                  }
+        matplotlib.rcParams.update(params)
+
+    latexify()
+
+    color_map = {
+        'trace': '#D62827',
+        'trace_mask': '#2BA02B',
+        'opro': '#FF7F0F',
+        'scats': '#9467BD'
+    }
+
+    plt.figure(figsize=(8, 6))
+
+    import pickle
+    results = []
+    for i in range(20):
+        pkl = open("traffic_results/results_" + str(i), "rb")
+        pkled_dict = pickle.load(pkl)
+        pkl.close()
+        results.append(pkled_dict)
+
+    x_axis_len = results[0]["GP"].shape[0]
+    x_axis = range(x_axis_len)
+    #plt.axis([0, x_axis_len, 30, 200])
+
+    def extract_mean_ste(result, method):
+        method_results = np.zeros((args.replications, x_axis_len))
+        for i in range(args.replications):
+            method_results[i, :] = result[i][method][:, 2]
+        # If nan or inf values are present, replace them with nan
+        method_results[np.isnan(method_results)] = np.nan
+        method_results[np.isinf(method_results)] = np.nan
+
+        mean_results = np.nanmean(method_results, axis=0)
+        std_results = np.nanstd(method_results, axis=0)
+        non_nan = np.count_nonzero(~np.isnan(method_results), axis=0)
+        ste_results = std_results / np.sqrt(non_nan)
+        return mean_results, ste_results
+
+    mean_scats, ste_scats = extract_mean_ste(results, "SCATS")
+    plt.plot(x_axis, mean_scats, label="SCATS", c=color_map['scats'])
+    plt.fill_between(x_axis, mean_scats - ste_scats, mean_scats + ste_scats, alpha=0.2, color=color_map['scats'])
+
+    ### FOR FIGURE 1
+
+    mean_gp, ste_gp = extract_mean_ste(results, "GP")
+    plt.plot(x_axis, mean_gp, label="GP", color='#8c564b')
+    plt.fill_between(x_axis, mean_gp - ste_gp, mean_gp + ste_gp, alpha=0.2, color='#8c564b')
+
+    mean_pso, ste_pso = extract_mean_ste(results, "PSO")
+    plt.plot(x_axis, mean_pso, label="PSO", color='#e377c2')
+    plt.fill_between(x_axis, mean_pso - ste_pso, mean_pso + ste_pso, alpha=0.2, color="#e377c2")
+
+    mean_trace, ste_trace = extract_mean_ste(results, "Trace")
+    plt.plot(x_axis, mean_trace, label="Trace", c=color_map['trace'])
+    plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2, color=color_map['trace'])
+
+    mean_opro, ste_opro = extract_mean_ste(results, "OPRO")
+    plt.plot(x_axis, mean_opro, label="OPRO", c=color_map['opro'])
+    plt.fill_between(x_axis, mean_opro - ste_opro, mean_opro + ste_opro, alpha=0.2, color=color_map['opro'])
+
+    ### END FOR FIGURE 1
+
+    ### FOR FIGURE 2
+    # mean_trace, ste_trace = extract_mean_ste(results, "Trace")
+    # plt.plot(x_axis, mean_trace, label="Trace", c=color_map['trace'])
+    # plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2, color=color_map['trace'])
+    #
+    # mean_tracem, ste_tracem = extract_mean_ste(results, "TraceMask")
+    # plt.plot(x_axis, mean_tracem, label="Trace Masked", c=color_map['trace_mask'])
+    # plt.fill_between(x_axis, mean_tracem - ste_tracem, mean_tracem + ste_tracem, alpha=0.2, color=color_map['trace_mask'])
+    #
+    # if "TraceNoMem" in results[0]:
+    #     mean_trace_nomem, ste_trace_nomem = extract_mean_ste(results, "TraceNoMem")
+    #     plt.plot(x_axis, mean_trace_nomem, label="Trace NoMem")
+    #     plt.fill_between(x_axis, mean_trace_nomem - ste_trace_nomem, mean_trace_nomem + ste_trace_nomem, alpha=0.2)
+
+    ### END FOR FIGURE 2
+
+    plt.title("Traffic Optimization")
+    plt.xlabel("Iterations")
+    plt.ylabel("Delay in Traffic")
+    plt.legend(loc='upper right')  #
+    plt.savefig("Traffic_OtherOptCompare.pdf", bbox_inches='tight', dpi=300)
+    # plt.show()
 
     results = []
     for i in range(args.replications):

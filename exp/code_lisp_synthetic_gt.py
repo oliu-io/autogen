@@ -18,9 +18,9 @@ We are making this task harder
 from autogen.trace.nodes import node, GRAPH
 from autogen.trace.bundle import FunModule, bundle, trace_class
 from autogen.trace.nodes import Node
+
 import math
 import random
-
 
 def get_math():
     d = {}
@@ -113,7 +113,6 @@ We ignore the case where self-test fails the model but the model passes the hidd
 We are doing adversarial training.
 """
 
-
 def get_math():
     d = {}
     for name in dir(math):
@@ -184,6 +183,18 @@ class Environment(dict):
 global_env = Environment()
 global_env.update(standard_env())
 
+@bundle(description="[tokenize] Convert a string of characters into a list of tokens.")
+def tokenize(chars):
+    "Convert a string of characters into a list of tokens."
+    return chars.replace('(', ' ( ').replace(')', ' ) ').split()
+
+def parse(program):
+    return read_from_tokens(tokenize(program))
+
+@bundle(description="[read_from_tokens] Read an expression from a sequence of tokens.")
+def read_from_tokens(tokens):
+    if len(tokens) == 0:
+        raise SyntaxError('unexpected EOF while reading')
 
 @trace_class
 class CodingAgent:
@@ -199,10 +210,15 @@ class CodingAgent:
         token = ")"
         self.atom(token)
 
-    def true_test_atom(self):
-        assert repr(str(self.atom("1"))) == repr(str(1)) or (self.atom("1") == 1)
-        assert repr(str(self.atom("a"))) == repr(str("a")) or (self.atom("a") == "a")
-        assert repr(str(self.atom("1.2"))) == repr(str(1.2)) or (self.atom("1.2") == 1.2)
+    @bundle(description="[atom] Numbers become numbers; every other token is a symbol.")
+    def atom(token):
+        try:
+            return int(token)
+        except ValueError:
+            try:
+                return float(token)
+            except ValueError:
+                return token
 
     @bundle(description="[tokenize] Convert a string of characters into a list of tokens.", trainable=True)
     def tokenize(self, chars):
@@ -267,11 +283,8 @@ def eval_expression(x, env=global_env):
     "Evaluate an expression in an environment."
     # we first unpack
 
-    if isinstance(x, Node):
-        x = x.data
-
     if isinstance(x, str):
-        return env.data.find(x)[x]
+        return env.find(x)[x]
     elif not isinstance(x, list):
         return x
 
@@ -280,11 +293,11 @@ def eval_expression(x, env=global_env):
         return args[0]
     elif op == "define":
         (name, exp) = args
-        env.data[name] = eval_expression(exp, env)
-    elif op == "lambda":
+        env[name] = eval_expression(exp, env)
+    elif op == 'lambda':
         (parms, body) = args
-        return lambda *args: eval_expression(body, node(Environment(parms, args, env)))
-    elif op == "if":
+        return lambda *args: eval_expression(body, Environment(parms, args, env))
+    elif op == 'if':
         (test, conseq, alt) = args
         exp = conseq if eval_expression(test, env) else alt
         return eval_expression(exp, env)
@@ -294,20 +307,32 @@ def eval_expression(x, env=global_env):
         return proc(*vals)
 
 
+@bundle(description="[interpreter] Interpret the result of Lisp parser", allow_external_dependencies=True)
+def interpreter(x, env=global_env):
+    x = recursive_unpack(x)
+    result = eval_expression(x, env)
+    return result
+
+def recursive_unpack(parsed_exp):
+    # can be of structure Node([Node(), Node()]) or Node(Node())
+    # but can go very deep
+    if isinstance(parsed_exp, Node):
+        parsed_exp = parsed_exp.data
+    if not isinstance(parsed_exp, list):
+        return parsed_exp
+    return [recursive_unpack(exp) for exp in parsed_exp]
+
 test_program = [
-    "(define r 10)",
-    "(define circle-area (lambda (r) (* pi (* r r))))",
-    "(circle-area 3)",
-    "(quote (1 2 3))",
-    "(if (> 10 20) (quote true) (quote false))",
+    node("(define r 10)"),
+    node("(define circle-area (lambda (r) (* pi (* r r))))"),
+    node("(circle-area 3)"),
+    # node("(quote (1 2 3))"),
+    # "(if (> 10 20) (quote true) (quote false))"
 ]
 
 global_env = node(global_env)
 
 for expr in test_program:
-    parsed_expr = parse(expr)
-    result = eval_expression(parsed_expr, global_env)
-    if isinstance(result, list):
-        print([x.data for x in result])
-    else:
-        print(result)  # Outputs for each expression
+    parsed_exp = parse(expr)
+    result = interpreter(parsed_exp, global_env)
+    print(result)  # Outputs for each expression

@@ -50,7 +50,7 @@ unary_string_ops_programs = {
 # split, replace, concat
 string_mutation_ops = ["split", "replace", "concat"]
 string_mutation_ops_programs = {
-    "split": reformat("""lambda s, t: s.split(t) if type(s) == str and type(t) == str else s"""),  # 2 inputs
+    "split": reformat("""lambda s, t: s.split(t) if type(s) == str and type(t) == str else [s, s]"""),  # 2 inputs
     "concat": reformat("""lambda s, t: s + t if type(s) == str and type(t) == str else s"""),  # 2 inputs
     "replace": reformat("""lambda s, a, b: s.replace(a, b) if type(s) == str and type(t) == str else s"""),  # 3 inputs
 }
@@ -238,7 +238,7 @@ class StringProgramSampler:
 
         Returns: op, (vars), is_gen_var
         """
-        type_of_ops = ["unary_string_ops", "string_mutation_ops"]
+        type_of_ops = ["unary_string_ops"]  # string_mutation_ops
         op_type = np.random.choice(type_of_ops, p=self.op_mixture)
         op_name = np.random.choice(eval(str(op_type)))
         op = eval(str(op_type) + "_programs")[op_name]

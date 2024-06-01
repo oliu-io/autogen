@@ -150,11 +150,8 @@ def eval_expression(x, env=global_env):
     "Evaluate an expression in an environment."
     # we first unpack
 
-    if isinstance(x, Node):
-        x = x.data
-
     if isinstance(x, str):
-        return env.data.find(x)[x]
+        return env.find(x)[x]
     elif not isinstance(x, list):
         return x
 
@@ -163,11 +160,11 @@ def eval_expression(x, env=global_env):
         return args[0]
     elif op == "define":
         (name, exp) = args
-        env.data[name] = eval_expression(exp, env)
-    elif op == "lambda":
+        env[name] = eval_expression(exp, env)
+    elif op == 'lambda':
         (parms, body) = args
-        return lambda *args: eval_expression(body, node(Environment(parms, args, env)))
-    elif op == "if":
+        return lambda *args: eval_expression(body, Environment(parms, args, env))
+    elif op == 'if':
         (test, conseq, alt) = args
         exp = conseq if eval_expression(test, env) else alt
         return eval_expression(exp, env)
@@ -185,11 +182,19 @@ test_program = [
     "(if (> 10 20) (quote true) (quote false))",
 ]
 
-global_env = node(global_env)
+# global_env = node(global_env)
+def recursive_unpack(parsed_exp):
+    # can be of structure Node([Node(), Node()]) or Node(Node())
+    # but can go very deep
+    if isinstance(parsed_exp, Node):
+        parsed_exp = parsed_exp.data
+    if not isinstance(parsed_exp, list):
+        return parsed_exp
+    return [recursive_unpack(exp) for exp in parsed_exp]
 
 for expr in test_program:
-    result = eval_expression(parse(expr), global_env)
-    if isinstance(result, list):
-        print([x.data for x in result])
-    else:
-        print(result)  # Outputs for each expression
+    parsed_exp = parse(expr)
+    unpacked_exp = recursive_unpack(parsed_exp)  # Outputs for each expression
+    print(unpacked_exp)
+    result = eval_expression(unpacked_exp, global_env)
+    print(result)  # Outputs for each expression
