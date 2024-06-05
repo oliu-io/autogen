@@ -277,7 +277,7 @@ def analyze_world(W, verbose=True):
     return outputDict
 
 
-def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST"):
+def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST", rng=None):
     W = None
     return_val = None
     if method == "SanityCheck":
@@ -356,9 +356,11 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
             dimensions,  # the bounds on each dimension of x
             n_calls=num_iter,
             n_initial_points=trace_memory if num_iter > trace_memory else num_iter - 1,
-            initial_point_generator="sobol",
             x0 = [MIN_GREEN_TIME, MIN_GREEN_TIME],  # initial point
             verbose=True,
+            noise=1e-10,
+            acq_func="gp_hedge",
+            random_state = rng,
         )
         for i in range(num_iter):
             return_val[i] = (res.x_iters[i][0], res.x_iters[i][1], res.func_vals[i])
@@ -387,6 +389,7 @@ def run_approach(method, num_iter, trace_memory=0, trace_config="OAI_CONFIG_LIST
         for i in range(num_iter):
             for j in range(trace_memory):
                 return_val[i*trace_memory+j] = (opt.pos_history[i][j][0], opt.pos_history[i][j][1], opt.cost_history[i][j])
+                #return_val[i*trace_memory+j] = (opt.pos_history[i][j][0], opt.pos_history[i][j][1], opt.mean_neighbor_history[i])
         return return_val
 
     elif method.startswith("Trace") or method.startswith("OPRO"):
@@ -458,7 +461,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--trace_config", type=str, default="OAI_CONFIG_LIST", help="Configuration file for trace optimization."
     )
-    parser.add_argument("--iter", type=int, default=50, help="Number of iterations for optimization methods.")
+    parser.add_argument("--iter", type=int, default=100, help="Number of iterations for optimization methods.")
     parser.add_argument("--output_prefix", type=str, default="results_", help="Output file for results.")
 
     args = parser.parse_args()
@@ -629,7 +632,7 @@ if __name__ == "__main__":
             returned_val = run_approach('SCATS', args.iter, args.trace_mem, args.trace_config)
             pkled_dict = {'SCATS': returned_val}
 
-            returned_val = run_approach('GP', args.iter, args.trace_mem, args.trace_config)
+            returned_val = run_approach('GP', args.iter, args.trace_mem, args.trace_config, np.random.RandomState(seed))
             pkled_dict['GP'] = returned_val
 
             returned_val = run_approach('PSO', args.iter // args.trace_mem, args.trace_mem, args.trace_config)
@@ -652,6 +655,9 @@ if __name__ == "__main__":
                 pkled_dict['TraceNoMem'] = returned_val
 
                 returned_val = run_approach('TraceMaskVerbose', args.iter, 0, args.trace_config)
+                pkled_dict['TraceNoMemMask'] = returned_val
+
+                returned_val = run_approach('Trace', args.iter, 0, args.trace_config)
                 pkled_dict['TraceNoMemScalar'] = returned_val
 
             pkl = open(args.output_prefix + str(i), "wb")
@@ -685,7 +691,7 @@ if __name__ == "__main__":
     plt.fill_between(x_axis, mean_scats - ste_scats, mean_scats + ste_scats, alpha=0.2)
 
     ### FOR FIGURE 1
-    """
+    
     mean_gp, ste_gp = extract_mean_ste(results, "GP")
     plt.plot(x_axis, mean_gp, label="GP")
     plt.fill_between(x_axis, mean_gp - ste_gp, mean_gp + ste_gp, alpha=0.2)
@@ -693,7 +699,7 @@ if __name__ == "__main__":
     mean_pso, ste_pso = extract_mean_ste(results, "PSO")
     plt.plot(x_axis, mean_pso, label="PSO")
     plt.fill_between(x_axis, mean_pso - ste_pso, mean_pso + ste_pso, alpha=0.2)
-
+    
     mean_trace, ste_trace = extract_mean_ste(results, "Trace")
     plt.plot(x_axis, mean_trace, label="Trace")
     plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
@@ -701,10 +707,11 @@ if __name__ == "__main__":
     mean_opro, ste_opro = extract_mean_ste(results, "OPRO")
     plt.plot(x_axis, mean_opro, label="OPRO")
     plt.fill_between(x_axis, mean_opro - ste_opro, mean_opro + ste_opro, alpha=0.2)
-    """
+    
     ### END FOR FIGURE 1
 
     ### FOR FIGURE 2
+    """
     mean_trace, ste_trace = extract_mean_ste(results, "Trace")
     plt.plot(x_axis, mean_trace, label="Trace")
     plt.fill_between(x_axis, mean_trace - ste_trace, mean_trace + ste_trace, alpha=0.2)
@@ -717,7 +724,7 @@ if __name__ == "__main__":
         mean_trace_nomem, ste_trace_nomem = extract_mean_ste(results, "TraceNoMem")
         plt.plot(x_axis, mean_trace_nomem, label="TraceNoMem")
         plt.fill_between(x_axis, mean_trace_nomem - ste_trace_nomem, mean_trace_nomem + ste_trace_nomem, alpha=0.2)
-
+    """    
     ### END FOR FIGURE 2    
 
     plt.title("Traffic Optimization -- GPT4-0125-Preview")
