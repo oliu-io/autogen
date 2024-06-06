@@ -111,6 +111,9 @@ class BattleshipBoard(object):
         self.hits = 0
         self.misses = 0
 
+    def get_life_points(self):
+        return sum(self.ships.values())
+
     def check_shot(self, row, col):
         is_hit = check_hit(self.board, row, col)
         if is_hit:

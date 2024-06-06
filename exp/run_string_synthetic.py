@@ -1,7 +1,7 @@
 import autogen
 from autogen.trace import bundle, node
 from autogen.trace.bundle import TraceExecutionError
-from autogen.trace.optimizers import FunctionOptimizer
+from autogen.trace.optimizers import FunctionOptimizerV2, OPRO
 from autogen.trace.nodes import GRAPH
 
 from string_synthetic import StringProgramSampler
@@ -28,7 +28,7 @@ def get_dataset(n=100, init_seed=1111):
     return seeds
 
 
-def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
+def optimize(program, program_id, optimizer, x, n_steps, verbose=False, mask=None):
     GRAPH.clear()
 
     history = []
@@ -53,13 +53,16 @@ def optimize(program, program_id, optimizer, x, n_steps, verbose=False):
         optimizer.backward(output, feedback)
         if verbose:
             print(f"variable={x.data}, output={output.data}, feedback={feedback}")  # logging
-        optimizer.step()
+        if mask is None:
+            optimizer.step(verbose=False)
+        else:
+            optimizer.step(verbose=False, mask=mask)
 
     history.append((x.data, output.data, program.goal_input, program.goal_output, feedback))  # logging
     return history
 
 
-def run_exp():
+def run_exp(masking=False, optimizer_name=None):
     problem_ids = get_dataset(n=args.n)
     n_steps = args.steps  # we allow 10 optimization steps
 
@@ -67,14 +70,27 @@ def run_exp():
     for i in tqdm(range(len(problem_ids))):
         # multi-param might be interesting but I don't know how to adapt this pipeline for it
         program = StringProgramSampler(chain_length=args.c, max_gen_var=args.g, seed=i, param_num=args.p, verbose=False)
-        x = node("aaaaa", "input_x", trainable=True)
-        optimizer = FunctionOptimizer([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
+        x = node('aaaaa', "input_x", trainable=True)
+        if optimizer_name == 'opro':
+            optimizer = OPRO([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
+        else:
+            optimizer = FunctionOptimizerV2([x], config_list=autogen.config_list_from_json("OAI_CONFIG_LIST"))
 
-        history = optimize(program, problem_ids[i], optimizer, x, n_steps, verbose=args.verbose)
+        optimizer.objective = "Make a guess if information is lacking." + optimizer.default_objective
+        mask = ['#Documentation', '#Code', '#Inputs', '#Others'] if masking else None
+        try:
+            history = optimize(program, problem_ids[i], optimizer, x, n_steps, verbose=args.verbose, mask=mask)
+        except:
+            print("skipping this problem due to an optimization error")
+            continue
         traj_for_all_problems.append(history)
 
     os.makedirs("results", exist_ok=True)
-    with open(f"results/trace_agent_string_synth_traj_{args.n}_c_{args.c}_g_{args.g}_p_{args.p}.pkl", "wb") as f:
+    agent_name = 'trace_agent' if not masking else 'masked_trace_agent'
+    if optimizer_name:
+        agent_name = agent_name + f'_{optimizer_name}'
+
+    with open(f"results/{agent_name}_string_synth_traj_{args.n}_c_{args.c}_g_{args.g}_p_{args.p}.pkl", "wb") as f:
         pickle.dump(traj_for_all_problems, f)
 
 
@@ -180,3 +196,7 @@ if __name__ == "__main__":
         run_basic_agent_exp(args.agent_type)
     elif args.setup == "trace":
         run_exp()
+    elif args.setup == 'opro':
+        run_exp(optimizer_name='opro')
+    elif args.setup == 'masked':
+        run_exp(masking=True)
